@@ -1,0 +1,50 @@
+{
+  "run_id": 31546192768,
+  "artifact_id": 9123125899,
+  "setup": {
+    "num_ues": 4,
+    "channel": "UMi",
+    "mcs": 14,
+    "dmrs_port_sets": [[0], [1], [2], [3]],
+    "base_checkpoint": "nrx_large_weights",
+    "training_steps_each_variant": 1200,
+    "training_batch_size": 8,
+    "training_ebno_db": [0.0, 10.0],
+    "base_learning_rate": 2e-5,
+    "pair_head_learning_rate": 1e-3,
+    "evaluation_ebno_db": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12],
+    "evaluation_target_errors": 80,
+    "evaluation_max_batches": 20,
+    "dynamic_pair_weighting": "Scalar softmax weights over the three other UEs, recomputed from current-round UE hidden summaries each CGNN iteration; no recurrent or cross-TB edge state."
+  },
+  "smoke_test": {
+    "status": "passed",
+    "b_shape": [1, 4, 40976],
+    "b_hat_shape": [1, 4, 40976]
+  },
+  "k1": {
+    "cold": {
+      "snr_at_10pct_tbler_db": null,
+      "tbler": {"0": 0.854167, "1": 0.885417, "2": 0.854167, "3": 0.843750, "4": 0.812500, "5": 0.854167, "6": 0.833333, "7": 0.732143, "8": 0.785714, "9": 0.794643, "10": 0.750000, "11": 0.732143, "12": 0.732143}
+    },
+    "weighted": {
+      "snr_at_10pct_tbler_db": null,
+      "tbler": {"0": 0.843750, "1": 0.885417, "2": 0.854167, "3": 0.821429, "4": 0.839286, "5": 0.843750, "6": 0.843750, "7": 0.741071, "8": 0.741071, "9": 0.794643, "10": 0.703125, "11": 0.723214, "12": 0.723214},
+      "pair_parameters": 3649,
+      "pair_weight_diagnostic": {"mean": 0.33333334, "std": 0.06170006, "min": 0.21742143, "max": 0.44619220, "equal_weight_reference": 0.33333333}
+    }
+  },
+  "k2": {
+    "cold": {
+      "snr_at_10pct_tbler_db": null,
+      "tbler": {"0": 0.895833, "1": 0.839286, "2": 0.812500, "3": 0.830357, "4": 0.864583, "5": 0.776786, "6": 0.785714, "7": 0.821429, "8": 0.732143, "9": 0.767857, "10": 0.750000, "11": 0.703125, "12": 0.714286}
+    },
+    "weighted": {
+      "snr_at_10pct_tbler_db": null,
+      "tbler": {"0": 0.895833, "1": 0.830357, "2": 0.821429, "3": 0.812500, "4": 0.843750, "5": 0.750000, "6": 0.767857, "7": 0.794643, "8": 0.732143, "9": 0.758929, "10": 0.732143, "11": 0.687500, "12": 0.679688},
+      "pair_parameters": 7298,
+      "pair_weight_diagnostic": {"mean": 0.33333334, "std": 0.12718606, "min": 0.04840902, "max": 0.67415059, "equal_weight_reference": 0.33333333}
+    }
+  },
+  "verdict": "Technically feasible but scientifically inconclusive for iteration reduction. The pair head learned non-uniform UE-pair weights, especially at K=2, but neither the cold nor weighted 4-UE receiver reached 10% TBLER anywhere from 0 to 12 dB. The original backbone was trained for at most two UEs and 1200 matched 4-UE fine-tuning steps were insufficient to establish a usable 4-UE baseline. A properly trained 4-UE cold NRX baseline is required before judging whether dynamic pair weighting can close K=1 toward K=2."
+}
