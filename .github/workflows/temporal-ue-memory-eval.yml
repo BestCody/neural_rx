@@ -1,0 +1,159 @@
+name: Temporal UE Memory Evaluation
+
+on:
+  push:
+    branches:
+      - experiment/temporal-ue-memory-training
+    paths:
+      - .github/workflows/temporal-ue-memory-eval.yml
+  workflow_dispatch:
+
+jobs:
+  train-and-evaluate:
+    runs-on: self-hosted
+    timeout-minutes: 360
+
+    steps:
+      - name: Checkout temporal-memory branch
+        uses: actions/checkout@v4
+        with:
+          ref: experiment/temporal-ue-memory-training
+          fetch-depth: 1
+          lfs: true
+          submodules: recursive
+
+      - name: Verify GPU research environment
+        shell: bash
+        run: |
+          set -euo pipefail
+          hostname
+          nvidia-smi --query-gpu=name,memory.total --format=csv,noheader
+          python --version
+          python - <<'PY'
+          import tensorflow as tf
+          import sionna
+          print("tensorflow", tf.__version__)
+          print("gpus", tf.config.list_physical_devices("GPU"))
+          print("sionna_import_ok")
+          PY
+
+      - name: Train mean-pooling learned writer if no matching checkpoint exists
+        working-directory: scripts
+        shell: bash
+        run: |
+          set -euo pipefail
+          OUT="$HOME/sionna-srsran/temporal_reuse/ue_memory/mean/writer"
+          CKPT="$OUT/ue_memory_mean_writer_idaware_d32_k2.weights.h5"
+          SUMMARY="$OUT/training_summary.json"
+          mkdir -p "$OUT"
+
+          VALID=0
+          if [[ -f "$CKPT" && -f "$SUMMARY" ]]; then
+            if python - "$SUMMARY" <<'PY'
+          import json, sys
+          p = sys.argv[1]
+          s = json.load(open(p))
+          checks = [
+              s.get("architecture") == "ue_identity_aware_temporal_memory_v4_pooling",
+              s.get("pooling") == "mean",
+              s.get("compression") == "writer",
+              int(s.get("d_mem", -1)) == 32,
+              int(s.get("num_it", -1)) == 2,
+              int(s.get("train_steps", -1)) == 6000,
+              int(s.get("memory_only_steps", -1)) == 1000,
+              int(s.get("batch_size", -1)) == 8,
+              int(s.get("seq_len", -1)) == 4,
+              s.get("dynamic_scheduling") is False,
+          ]
+          if not all(checks):
+              raise SystemExit(1)
+          print("MATCHING_TRAINED_CHECKPOINT_FOUND")
+          PY
+            then
+              VALID=1
+            fi
+          fi
+
+          if [[ "$VALID" -ne 1 ]]; then
+            rm -rf "$OUT"
+            mkdir -p "$OUT"
+            python train_temporal_ue_memory_v4.py \
+              --pooling mean \
+              --compression writer \
+              --d-mem 32 \
+              --num-it 2 \
+              --train-steps 6000 \
+              --memory-only-steps 1000 \
+              --batch-size 8 \
+              --seq-len 4 \
+              --min-ebno-db 1.0 \
+              --max-ebno-db 5.0 \
+              --memory-lr 1e-3 \
+              --joint-lr 2e-5 \
+              --ue-pool-size 4 \
+              --fixed-scheduling \
+              --seed 20260816 \
+              --output-dir "$OUT"
+          fi
+
+          test -f "$CKPT"
+          test -f "$SUMMARY"
+          echo "TEMPORAL_WRITER_CHECKPOINT=$CKPT" >> "$GITHUB_ENV"
+          echo "TEMPORAL_WRITER_DIR=$OUT" >> "$GITHUB_ENV"
+
+      - name: Evaluate cold K2, cold K8, and temporal K2 on identical sequences
+        working-directory: scripts
+        shell: bash
+        run: |
+          set -euo pipefail
+          EVAL_OUT="$TEMPORAL_WRITER_DIR/evaluation_fixed"
+          rm -rf "$EVAL_OUT"
+          python evaluate_temporal_ue_memory.py \
+            --checkpoint "$TEMPORAL_WRITER_CHECKPOINT" \
+            --config nrx_large.cfg \
+            --compression writer \
+            --pooling mean \
+            --d-mem 32 \
+            --num-it 2 \
+            --seq-len 4 \
+            --batch-size 16 \
+            --snr-min 1.5 \
+            --snr-max 3.75 \
+            --snr-step 0.25 \
+            --target-errors 120 \
+            --max-batches 32 \
+            --ue-pool-size 4 \
+            --seed 20260816 \
+            --output-dir "$EVAL_OUT"
+          test -f "$EVAL_OUT/evaluation.json"
+          test -f "$EVAL_OUT/curves.csv"
+          echo "TEMPORAL_EVAL_OUT=$EVAL_OUT" >> "$GITHUB_ENV"
+
+      - name: Print concise research result
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - "$TEMPORAL_EVAL_OUT/evaluation.json" <<'PY'
+          import json, sys
+          s = json.load(open(sys.argv[1]))
+          print("SNR@10% TBLER (TB2+)")
+          for k, v in s["snr_db_at_10pct_tbler"].items():
+              print(f"  {k}: {v}")
+          print("cold_iteration_gap_db:", s["cold_iteration_gap_db"])
+          print("temporal_improvement_over_cold_k2_db:", s["temporal_improvement_over_cold_k2_db"])
+          print("gap_recovered_percent:", s["gap_recovered_percent"])
+          PY
+
+      - name: Upload training and evaluation evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: temporal-ue-memory-writer-d32-evaluation-${{ github.run_id }}
+          path: |
+            ${{ env.TEMPORAL_WRITER_DIR }}/training_summary.json
+            ${{ env.TEMPORAL_WRITER_CHECKPOINT }}
+            ${{ env.TEMPORAL_EVAL_OUT }}/evaluation.json
+            ${{ env.TEMPORAL_EVAL_OUT }}/curves.csv
+            ${{ env.TEMPORAL_EVAL_OUT }}/tbler_vs_snr.png
+            ${{ env.TEMPORAL_EVAL_OUT }}/tbler_vs_snr.pdf
+          if-no-files-found: error
+          retention-days: 30
