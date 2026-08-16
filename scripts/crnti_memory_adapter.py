@@ -28,14 +28,15 @@ import numpy as np
 from ue_memory_manager import RuntimeUEMemoryManager
 
 
-# C-RNTI is carried by the gNB as a 16-bit RNTI value. Keep validation at the
-# integration boundary so the generic memory manager can remain ID-agnostic.
+# This boundary checks only that the scheduler supplied a non-zero 16-bit key.
+# The gNB/RRC owns semantic RNTI-type validity and reserved-value handling; the
+# temporal-memory layer should not duplicate or drift from those rules.
 _MIN_CRNTI = 0x0001
-_MAX_CRNTI = 0xFFFE
+_MAX_CRNTI = 0xFFFF
 
 
 def normalize_crnti(value) -> int:
-    """Return a canonical integer C-RNTI suitable as a stable dictionary key."""
+    """Return a canonical non-zero 16-bit C-RNTI key."""
     if isinstance(value, np.generic):
         value = value.item()
     if isinstance(value, bool) or not isinstance(value, (int, np.integer)):
@@ -43,8 +44,7 @@ def normalize_crnti(value) -> int:
     value = int(value)
     if not _MIN_CRNTI <= value <= _MAX_CRNTI:
         raise ValueError(
-            f"C-RNTI must be in 0x{_MIN_CRNTI:04X}..0x{_MAX_CRNTI:04X}, "
-            f"got 0x{value & 0xFFFF:04X} ({value})"
+            f"C-RNTI key must be a non-zero 16-bit value, got {value}"
         )
     return value
 
