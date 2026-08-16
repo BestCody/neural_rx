@@ -1,17 +1,18 @@
 #!/usr/bin/env python3
-"""Train NRX over correlated TB sequences with persistent per-UE memory.
+"""Train Neural RX over correlated TBs with UE-identity-aware temporal memory.
 
-The shipped NVIDIA training loop samples one independent TB per optimizer step.
-This experiment changes the sampling/training unit to a short ordered sequence:
+Architecture:
+  current TB -> shipped NRX initialization
+             + memory gathered by stable physical UE ID
+             + scheduling-gap / memory-validity context
+             -> K NRX iterations
+             -> decode + per-UE memory writer
+             -> scatter updated memories back by the same UE IDs
 
-    TB1 -> memory -> TB2 -> memory -> TB3 -> ...
-
-A single GradientTape spans the full sequence, so a later TB loss can update the
-memory writer that produced an earlier TB's memory. The base NRX remains the
-pretrained CGNN; this wrapper only adds a compact per-UE memory read/write path.
-
-Run from neural_rx/scripts, or copy next to temporal_training_data.py and run
-with neural_rx/scripts as the working directory.
+The neural model learns *what* to remember.  The external memory manager owns
+*whose* memory it is.  During training, differentiable gather/scatter routing
+keeps the computation graph connected across TBs even when UEs enter, leave, or
+change input position.
 """
 
 import argparse
@@ -40,6 +41,13 @@ def parse_args():
     p.add_argument("--seed", type=int, default=20260816)
     p.add_argument("--output-dir", type=str, default=None)
     p.add_argument("--log-every", type=int, default=25)
+
+    # New UE-aware architecture.
+    p.add_argument("--ue-pool-size", type=int, default=4)
+    p.add_argument("--memory-expiry-slots", type=int, default=8)
+    p.add_argument("--fixed-scheduling", action="store_true")
+    p.add_argument("--schedule-switch-prob", type=float, default=0.65)
+    p.add_argument("--schedule-reorder-prob", type=float, default=0.50)
     return p.parse_args()
 
 
@@ -61,6 +69,7 @@ sys.path.insert(0, str(HERE))
 sys.path.insert(0, "..")
 
 from temporal_training_data import TemporalTrainingDataGenerator
+from ue_memory_manager import DifferentiableUEMemoryManager
 from utils import Parameters, E2E_Model, load_weights
 
 
@@ -73,8 +82,8 @@ class TemporalUEMemoryCGNN(tf.keras.Model):
         self.d_mem = int(d_mem)
         self.d_s = int(d_s)
 
-        # Read old memory into the current TB state. Start with a small gate so
-        # the untrained memory path does not destroy the pretrained cold NRX.
+        # Read old memory into the current-TB state. The gate starts nearly shut
+        # so the untrained path stays close to the pretrained cold receiver.
         self.mem_in = Dense(d_s, activation="tanh", name="ue_mem_in")
         self.mem_gate = Dense(
             d_s,
@@ -84,7 +93,7 @@ class TemporalUEMemoryCGNN(tf.keras.Model):
             name="ue_mem_gate",
         )
 
-        # Write the final current-TB state back into a compact per-UE vector.
+        # Write the final current-TB state into a compact UE memory.
         self.mem_hidden = Dense(64, activation="relu", name="ue_mem_hidden")
         self.mem_candidate = Dense(
             d_mem, activation="tanh", name="ue_mem_candidate")
@@ -111,9 +120,6 @@ class TemporalUEMemoryCGNN(tf.keras.Model):
         layers = [self.mem_hidden, self.mem_candidate, self.mem_keep]
         return [v for layer in layers for v in layer.trainable_variables]
 
-    def zero_memory(self, batch_size, num_tx, dtype=tf.float32):
-        return tf.zeros([batch_size, num_tx, self.d_mem], dtype=dtype)
-
     def _initial_state(self, y, pe, h_hat, mcs_ue_mask):
         base = self.base
 
@@ -135,7 +141,13 @@ class TemporalUEMemoryCGNN(tf.keras.Model):
                     tf.gather(mcs_ue_mask, indices=idx, axis=2), 5, axis=-1)
         return s
 
-    def call(self, inputs, prev_memory=None):
+    def call(
+        self,
+        inputs,
+        prev_memory=None,
+        memory_gap=None,
+        memory_valid=None,
+    ):
         y, pe, h_hat, active_tx, mcs_ue_mask = inputs
         base = self.base
         s = self._initial_state(y, pe, h_hat, mcs_ue_mask)
@@ -143,24 +155,53 @@ class TemporalUEMemoryCGNN(tf.keras.Model):
         batch_size = tf.shape(s)[0]
         num_tx = tf.shape(s)[1]
         if prev_memory is None:
-            prev_memory = self.zero_memory(batch_size, num_tx, s.dtype)
+            prev_memory = tf.zeros(
+                [batch_size, num_tx, self.d_mem], dtype=s.dtype)
         else:
             prev_memory = tf.cast(prev_memory, s.dtype)
 
-        # Read: combine old compact memory with the fresh state initialized from
-        # the current signal/LS estimate. Memory is broadcast over the grid.
+        if memory_valid is None:
+            memory_valid = tf.zeros([batch_size, num_tx], tf.bool)
+        else:
+            memory_valid = tf.cast(memory_valid, tf.bool)
+
+        if memory_gap is None:
+            memory_gap = tf.zeros([batch_size, num_tx], tf.int32)
+        else:
+            memory_gap = tf.cast(memory_gap, tf.int32)
+
+        valid_f = tf.cast(memory_valid, s.dtype)
+        safe_memory = tf.where(
+            memory_valid[..., None],
+            prev_memory,
+            tf.zeros_like(prev_memory),
+        )
+        # A compact monotonic age feature: 1,2,4,... slots do not explode the
+        # gate input numerically. New/invalid memory has age feature 0.
+        age_feature = tf.math.log1p(
+            tf.cast(tf.maximum(memory_gap, 0), s.dtype))
+        age_feature *= valid_f
+
+        # Read path: the gate sees fresh state, old memory, whether that memory
+        # exists, and how many slots ago the UE was last scheduled.
         pooled_init = tf.reduce_mean(s, axis=[2, 3])
-        gate_in = tf.concat([pooled_init, prev_memory], axis=-1)
-        gate = self.mem_gate(gate_in)
-        mem_delta = self.mem_in(prev_memory)
+        gate_in = tf.concat(
+            [
+                pooled_init,
+                safe_memory,
+                age_feature[..., None],
+                valid_f[..., None],
+            ],
+            axis=-1,
+        )
+        gate = self.mem_gate(gate_in) * valid_f[..., None]
+        mem_delta = self.mem_in(safe_memory)
         s = s + gate[:, :, None, None, :] * mem_delta[:, :, None, None, :]
 
-        # Preserve the normal NRX iteration blocks. Only the requested first
-        # num_it blocks are active (K=2 in the primary experiment).
+        # Shipped NRX iteration blocks. K=2 is the main experiment.
         for i in range(base._num_it):
             s = base._iterations[i]([s, pe, active_tx])
 
-        # Standard final readouts for the single-MCS experiment.
         if base._var_mcs_masking:
             llr_grid = base._readout_llrs[0](s)
             llr_grid = tf.gather(
@@ -172,16 +213,27 @@ class TemporalUEMemoryCGNN(tf.keras.Model):
             llr_grid = base._readout_llrs[0](s)
         h_refined = base._readout_chest(s)
 
-        # Write: summarize the final state of each UE and update only that UE's
-        # own compact memory. This tensor stays connected to the graph so later
-        # TB losses can backpropagate into this writer.
+        # Write path. If no old memory exists, force keep=0 so the first memory
+        # becomes a fresh candidate rather than mixing with an invalid zero row.
         pooled_final = tf.reduce_mean(s, axis=[2, 3])
-        write_in = tf.concat([pooled_final, prev_memory], axis=-1)
+        write_in = tf.concat(
+            [
+                pooled_final,
+                safe_memory,
+                age_feature[..., None],
+                valid_f[..., None],
+            ],
+            axis=-1,
+        )
         z = self.mem_hidden(write_in)
         candidate = self.mem_candidate(z)
-        keep = self.mem_keep(z)
-        next_memory = keep * prev_memory + (1.0 - keep) * candidate
-        next_memory *= tf.cast(active_tx[..., None], next_memory.dtype)
+        keep = self.mem_keep(z) * valid_f[..., None]
+        next_memory = keep * safe_memory + (1.0 - keep) * candidate
+
+        # Inactive receiver positions never overwrite their historical memory.
+        active_bool = tf.cast(active_tx, tf.bool)
+        next_memory = tf.where(
+            active_bool[..., None], next_memory, safe_memory)
 
         return llr_grid, h_refined, next_memory
 
@@ -201,7 +253,16 @@ def demap_llr(ofdm, llr_grid, num_tx, mcs_idx=0):
     return llr
 
 
-def temporal_forward(receiver, temporal_model, y, h_hat, active_tx, memory):
+def temporal_forward(
+    receiver,
+    temporal_model,
+    y,
+    h_hat,
+    active_tx,
+    memory,
+    memory_gap,
+    memory_valid,
+):
     """Shipped OFDM preprocessing -> temporal CGNN -> shipped demapping."""
     ofdm = receiver._neural_rx
     num_tx = tf.shape(active_tx)[1]
@@ -218,39 +279,60 @@ def temporal_forward(receiver, temporal_model, y, h_hat, active_tx, memory):
     mcs_mask = tf.ones([tf.shape(y2)[0], num_tx, 1], tf.float32)
 
     llr_grid, h_ref, next_memory = temporal_model(
-        [y2, pe, h_hat, active, mcs_mask], memory)
+        [y2, pe, h_hat, active, mcs_mask],
+        prev_memory=memory,
+        memory_gap=memory_gap,
+        memory_valid=memory_valid,
+    )
     llr = demap_llr(ofdm, llr_grid, num_tx, 0)
     return llr, tf.cast(h_ref, tf.float32), next_memory
 
 
 def build():
-    # Use the same small training resource grid as the shipped NRX training.
-    # The temporal generator replaces the independent UMi draw with continuous
-    # TDL sequences, but transmitter/receiver preprocessing stays NRX-native.
+    # Keep the shipped NRX transmitter, receiver, preprocessing, and weights.
     p = Parameters(ARGS.config, training=True, system="nrx")
     e2e = E2E_Model(p, training=True)
-    e2e(1, 1.0)  # build variables before loading the pretrained checkpoint
+    e2e(1, 1.0)
     load_weights(e2e, f"../weights/{p.label}_weights")
 
     base = e2e._receiver._neural_rx._cgnn
     base.num_it = ARGS.num_it
     temporal_model = TemporalUEMemoryCGNN(
-        base, d_mem=ARGS.d_mem, d_s=p.d_s,
-        name=f"temporal_ue_memory_d{ARGS.d_mem}")
-    generator = TemporalTrainingDataGenerator(p, e2e)
-    return p, e2e, temporal_model, generator
+        base,
+        d_mem=ARGS.d_mem,
+        d_s=p.d_s,
+        name=f"temporal_ue_memory_d{ARGS.d_mem}",
+    )
+    generator = TemporalTrainingDataGenerator(
+        p,
+        e2e,
+        ue_pool_size=ARGS.ue_pool_size,
+        dynamic_scheduling=not ARGS.fixed_scheduling,
+        schedule_switch_prob=ARGS.schedule_switch_prob,
+        schedule_reorder_prob=ARGS.schedule_reorder_prob,
+    )
+    memory_manager = DifferentiableUEMemoryManager(
+        capacity=ARGS.ue_pool_size,
+        d_mem=ARGS.d_mem,
+        expiry_slots=ARGS.memory_expiry_slots,
+    )
+    return p, e2e, temporal_model, generator, memory_manager
 
 
-def make_losses(receiver, temporal_model, batch):
-    """One connected forward pass over every TB in the sequence."""
+def make_losses(receiver, temporal_model, memory_manager, batch):
+    """One connected forward pass over every TB using stable UE identity."""
     batch_size = tf.shape(batch["bits"])[0]
     seq_len = batch["bits"].shape[1]
-    num_tx = tf.shape(batch["active"])[2]
-    memory = temporal_model.zero_memory(batch_size, num_tx)
+    if seq_len is None:
+        raise ValueError("Sequence length must be statically known")
+
+    state = memory_manager.zero_state(batch_size, tf.float32)
 
     data_losses = []
     chest_losses = []
     memory_norms = []
+    memory_valid_fractions = []
+    memory_gap_means = []
 
     for t in range(seq_len):
         bits_t = batch["bits"][:, t]
@@ -258,13 +340,34 @@ def make_losses(receiver, temporal_model, batch):
         ls_t = batch["ls"][:, t]
         h_t = batch["h"][:, t]
         active_t = batch["active"][:, t]
+        ue_ids_t = batch["ue_ids"][:, t]
 
-        # Labels match the shipped NRX training loss: re-encode payload bits.
+        # Resolve ownership before the neural receiver sees the memory.
+        state, prev_memory, memory_gap, memory_valid = memory_manager.gather(
+            state, ue_ids_t, t)
+
         coded_t = receiver._tb_encoders[0](bits_t)
         h_true_t = receiver.preprocess_channel_ground_truth(h_t)
 
-        llr_t, h_ref_t, memory = temporal_forward(
-            receiver, temporal_model, y_t, ls_t, active_t, memory)
+        llr_t, h_ref_t, updated_memory = temporal_forward(
+            receiver,
+            temporal_model,
+            y_t,
+            ls_t,
+            active_t,
+            prev_memory,
+            memory_gap,
+            memory_valid,
+        )
+
+        # Write back under stable physical IDs, not input positions.
+        state = memory_manager.scatter(
+            state,
+            ue_ids_t,
+            updated_memory,
+            active_t,
+            t,
+        )
 
         data_loss_t = tf.reduce_mean(
             tf.nn.sigmoid_cross_entropy_with_logits(
@@ -273,48 +376,183 @@ def make_losses(receiver, temporal_model, batch):
 
         data_losses.append(data_loss_t)
         chest_losses.append(chest_loss_t)
-        memory_norms.append(tf.reduce_mean(tf.norm(memory, axis=-1)))
+        memory_norms.append(
+            tf.reduce_mean(tf.norm(updated_memory, axis=-1)))
+        memory_valid_fractions.append(
+            tf.reduce_mean(tf.cast(memory_valid, tf.float32)))
+        valid_gap = tf.where(
+            memory_valid,
+            tf.cast(memory_gap, tf.float32),
+            tf.zeros_like(tf.cast(memory_gap, tf.float32)),
+        )
+        denom = tf.maximum(
+            tf.reduce_sum(tf.cast(memory_valid, tf.float32)), 1.0)
+        memory_gap_means.append(tf.reduce_sum(valid_gap) / denom)
 
     loss_data = tf.add_n(data_losses) / float(seq_len)
     loss_chest = tf.add_n(chest_losses) / float(seq_len)
     total = loss_data + ARGS.chest_weight * loss_chest
-    return total, loss_data, loss_chest, data_losses, memory_norms
+    diagnostics = {
+        "memory_norms": memory_norms,
+        "memory_valid_fractions": memory_valid_fractions,
+        "memory_gap_means": memory_gap_means,
+    }
+    return total, loss_data, loss_chest, data_losses, diagnostics
 
 
-def temporal_gradient_check(receiver, temporal_model, generator):
-    """Verify TB2 loss reaches the memory writer used after TB1."""
-    batch = generator.sample_batch(2, 2, 3.0)
+def identity_routing_check(d_mem, capacity):
+    """Prove memory follows physical UE IDs when positions/users change."""
+    manager = DifferentiableUEMemoryManager(
+        capacity=capacity, d_mem=d_mem, expiry_slots=8)
+    state = manager.zero_state(1)
+
+    a = tf.ones([d_mem], tf.float32) * 1.0
+    b = tf.ones([d_mem], tf.float32) * 2.0
+
+    ids0 = tf.constant([[0, 1]], tf.int32)
+    state = manager.scatter(
+        state,
+        ids0,
+        tf.stack([tf.stack([a, b], axis=0)], axis=0),
+        tf.ones([1, 2], tf.float32),
+        0,
+    )
+
+    if capacity >= 3:
+        # UE B moves from position 1 -> 0; UE C is new at position 1.
+        ids1 = tf.constant([[1, 2]], tf.int32)
+        state, gathered, gaps, valid = manager.gather(state, ids1, 1)
+        route_ok = (
+            np.allclose(gathered.numpy()[0, 0], 2.0)
+            and np.allclose(gathered.numpy()[0, 1], 0.0)
+            and valid.numpy().tolist() == [[True, False]]
+            and gaps.numpy().tolist() == [[1, 0]]
+        )
+
+        b_new = tf.ones([d_mem], tf.float32) * 20.0
+        c_new = tf.ones([d_mem], tf.float32) * 30.0
+        state = manager.scatter(
+            state,
+            ids1,
+            tf.stack([tf.stack([b_new, c_new], axis=0)], axis=0),
+            tf.ones([1, 2], tf.float32),
+            1,
+        )
+        ids2 = tf.constant([[0, 1]], tf.int32)
+        _, gathered2, gaps2, valid2 = manager.gather(state, ids2, 2)
+        persistence_ok = (
+            np.allclose(gathered2.numpy()[0, 0], 1.0)
+            and np.allclose(gathered2.numpy()[0, 1], 20.0)
+            and valid2.numpy().tolist() == [[True, True]]
+            and gaps2.numpy().tolist() == [[2, 1]]
+        )
+    else:
+        # No spare UE exists; position swap alone must preserve identity.
+        ids1 = tf.constant([[1, 0]], tf.int32)
+        _, gathered, gaps, valid = manager.gather(state, ids1, 1)
+        route_ok = (
+            np.allclose(gathered.numpy()[0, 0], 2.0)
+            and np.allclose(gathered.numpy()[0, 1], 1.0)
+            and valid.numpy().tolist() == [[True, True]]
+            and gaps.numpy().tolist() == [[1, 1]]
+        )
+        persistence_ok = route_ok
+
+    # Separate expiration check: last seen at 0, queried at 2 with TTL 1.
+    exp = DifferentiableUEMemoryManager(
+        capacity=capacity, d_mem=d_mem, expiry_slots=1)
+    exp_state = exp.zero_state(1)
+    exp_state = exp.scatter(
+        exp_state,
+        ids0,
+        tf.stack([tf.stack([a, b], axis=0)], axis=0),
+        tf.ones([1, 2], tf.float32),
+        0,
+    )
+    _, expired_memory, _, expired_valid = exp.gather(exp_state, ids0, 2)
+    expiration_ok = (
+        not np.any(expired_valid.numpy())
+        and np.allclose(expired_memory.numpy(), 0.0)
+    )
+
+    return {
+        "route_across_positions": bool(route_ok),
+        "unscheduled_memory_persists": bool(persistence_ok),
+        "expiration_zeroes_stale_memory": bool(expiration_ok),
+        "passed": bool(route_ok and persistence_ok and expiration_ok),
+    }
+
+
+def temporal_gradient_check(receiver, temporal_model, generator, memory_manager):
+    """Verify TB2 loss reaches TB1's writer after identity remapping."""
+    batch_size = 2
+
+    if generator.ue_pool_size >= 3:
+        one = [[0, 1], [1, 2]]
+    else:
+        one = [[0, 1], [1, 0]]
+    schedule = tf.constant([one] * batch_size, tf.int32)
+    batch = generator.sample_batch(
+        batch_size, 2, 3.0, ue_ids=schedule)
+
     with tf.GradientTape() as tape:
-        memory = temporal_model.zero_memory(2, 2)
+        state = memory_manager.zero_state(batch_size)
 
-        bits0 = batch["bits"][:, 0]
-        _, _, memory = temporal_forward(
+        # TB1: both memories are new.
+        state, memory0, gap0, valid0 = memory_manager.gather(
+            state, batch["ue_ids"][:, 0], 0)
+        _, _, updated0 = temporal_forward(
             receiver,
             temporal_model,
             batch["y"][:, 0],
             batch["ls"][:, 0],
             batch["active"][:, 0],
-            memory,
+            memory0,
+            gap0,
+            valid0,
+        )
+        state = memory_manager.scatter(
+            state,
+            batch["ue_ids"][:, 0],
+            updated0,
+            batch["active"][:, 0],
+            0,
         )
 
-        bits1 = batch["bits"][:, 1]
-        coded1 = receiver._tb_encoders[0](bits1)
+        # TB2: UE 1 is deliberately moved to another input position.
+        state, memory1, gap1, valid1 = memory_manager.gather(
+            state, batch["ue_ids"][:, 1], 1)
+        coded1 = receiver._tb_encoders[0](batch["bits"][:, 1])
         llr1, _, _ = temporal_forward(
             receiver,
             temporal_model,
             batch["y"][:, 1],
             batch["ls"][:, 1],
             batch["active"][:, 1],
-            memory,
+            memory1,
+            gap1,
+            valid1,
         )
         future_loss = tf.reduce_mean(
             tf.nn.sigmoid_cross_entropy_with_logits(
                 labels=tf.cast(coded1, tf.float32), logits=llr1))
 
-    grads = tape.gradient(future_loss, temporal_model.memory_writer_variables)
-    valid = [g for g in grads if g is not None]
-    norm = tf.linalg.global_norm(valid) if valid else tf.constant(0.0)
-    return float(future_loss.numpy()), float(norm.numpy())
+    grads = tape.gradient(
+        future_loss, temporal_model.memory_writer_variables)
+    valid_grads = [g for g in grads if g is not None]
+    norm = (
+        tf.linalg.global_norm(valid_grads)
+        if valid_grads
+        else tf.constant(0.0)
+    )
+    return {
+        "tb2_only_loss": float(future_loss.numpy()),
+        "memory_writer_grad_norm": float(norm.numpy()),
+        "tb2_memory_valid": valid1.numpy().tolist(),
+        "tb2_memory_gap": gap1.numpy().tolist(),
+        "forced_schedule": schedule.numpy().tolist(),
+        "passed": bool(float(norm.numpy()) > 0.0),
+    }
 
 
 def set_seed(seed):
@@ -326,29 +564,46 @@ def set_seed(seed):
         pass
 
 
+def schedule_change_fraction(ue_ids):
+    ids = ue_ids.numpy()
+    if ids.shape[1] < 2:
+        return 0.0
+    changes = [
+        np.mean(np.any(ids[:, t] != ids[:, t + 1], axis=-1))
+        for t in range(ids.shape[1] - 1)
+    ]
+    return float(np.mean(changes))
+
+
 def main():
     set_seed(ARGS.seed)
-    p, e2e, model, generator = build()
+    p, e2e, model, generator, memory_manager = build()
     receiver = e2e._receiver
 
-    # Build the new memory layers once before selecting variable groups.
+    # Build the memory layers once before selecting variable groups.
     warmup = generator.sample_batch(1, ARGS.seq_len, 3.0)
-    _ = make_losses(receiver, model, warmup)
+    _ = make_losses(receiver, model, memory_manager, warmup)
 
-    future_loss, temporal_grad_norm = temporal_gradient_check(
-        receiver, model, generator)
+    identity_check = identity_routing_check(
+        d_mem=ARGS.d_mem, capacity=ARGS.ue_pool_size)
     print(
-        "TEMPORAL_GRADIENT_CHECK=" + json.dumps({
-            "tb2_only_loss": future_loss,
-            "memory_writer_grad_norm": temporal_grad_norm,
-            "passed": temporal_grad_norm > 0.0,
-        }),
+        "IDENTITY_ROUTING_CHECK=" + json.dumps(identity_check),
         flush=True,
     )
-    if not temporal_grad_norm > 0.0:
+    if not identity_check["passed"]:
+        raise RuntimeError("UE identity/memory routing correctness check failed")
+
+    gradient_check = temporal_gradient_check(
+        receiver, model, generator, memory_manager)
+    print(
+        "TEMPORAL_GRADIENT_CHECK=" + json.dumps(gradient_check),
+        flush=True,
+    )
+    if not gradient_check["passed"]:
         raise RuntimeError(
-            "Temporal gradient check failed: later TB loss did not reach "
-            "the earlier memory writer.")
+            "Later-TB loss did not reach the earlier memory writer through "
+            "UE-ID gather/scatter routing."
+        )
 
     memory_opt = tf.keras.optimizers.Adam(ARGS.memory_lr)
     joint_opt = tf.keras.optimizers.Adam(ARGS.joint_lr)
@@ -359,16 +614,22 @@ def main():
 
     history = []
     start = time.time()
-    # Reset after layer construction/check so experiment streams are repeatable.
     set_seed(ARGS.seed)
 
     for step in range(ARGS.train_steps):
-        ebno = float(np.random.uniform(ARGS.min_ebno_db, ARGS.max_ebno_db))
-        batch = generator.sample_batch(ARGS.batch_size, ARGS.seq_len, ebno)
+        ebno = float(np.random.uniform(
+            ARGS.min_ebno_db, ARGS.max_ebno_db))
+        batch = generator.sample_batch(
+            ARGS.batch_size, ARGS.seq_len, ebno)
 
         with tf.GradientTape() as tape:
-            total, loss_data, loss_chest, per_tb, memory_norms = make_losses(
-                receiver, model, batch)
+            (
+                total,
+                loss_data,
+                loss_chest,
+                per_tb,
+                diagnostics,
+            ) = make_losses(receiver, model, memory_manager, batch)
 
         if step < ARGS.memory_only_steps:
             variables = model.memory_variables
@@ -384,7 +645,8 @@ def main():
         if not pairs:
             raise RuntimeError("No gradients reached the selected variables.")
         optimizer.apply_gradients(pairs)
-        grad_norm = float(tf.linalg.global_norm([g for g, _ in pairs]).numpy())
+        grad_norm = float(
+            tf.linalg.global_norm([g for g, _ in pairs]).numpy())
 
         if step % ARGS.log_every == 0 or step == ARGS.train_steps - 1:
             row = {
@@ -395,17 +657,33 @@ def main():
                 "loss_data": float(loss_data.numpy()),
                 "loss_chest": float(loss_chest.numpy()),
                 "loss_per_tb": [float(x.numpy()) for x in per_tb],
-                "memory_norm_per_tb": [float(x.numpy()) for x in memory_norms],
+                "memory_norm_per_tb": [
+                    float(x.numpy())
+                    for x in diagnostics["memory_norms"]
+                ],
+                "memory_valid_fraction_per_tb": [
+                    float(x.numpy())
+                    for x in diagnostics["memory_valid_fractions"]
+                ],
+                "memory_gap_mean_per_tb": [
+                    float(x.numpy())
+                    for x in diagnostics["memory_gap_means"]
+                ],
+                "schedule_change_fraction": schedule_change_fraction(
+                    batch["ue_ids"]),
+                "schedule_example": batch["ue_ids"][0].numpy().tolist(),
                 "gradient_norm": grad_norm,
                 "seconds": time.time() - start,
             }
             history.append(row)
             print("TRAIN=" + json.dumps(row), flush=True)
 
-    checkpoint = out / f"ue_memory_d{ARGS.d_mem}_k{ARGS.num_it}.weights.h5"
+    checkpoint = out / (
+        f"ue_memory_idaware_d{ARGS.d_mem}_k{ARGS.num_it}.weights.h5")
     model.save_weights(str(checkpoint))
 
     summary = {
+        "architecture": "ue_identity_aware_temporal_memory_v2",
         "config": ARGS.config,
         "d_mem": ARGS.d_mem,
         "num_it": ARGS.num_it,
@@ -413,17 +691,22 @@ def main():
         "memory_only_steps": ARGS.memory_only_steps,
         "batch_size": ARGS.batch_size,
         "seq_len": ARGS.seq_len,
-        "temporal_gradient_check": {
-            "tb2_only_loss": future_loss,
-            "memory_writer_grad_norm": temporal_grad_norm,
-            "passed": temporal_grad_norm > 0.0,
-        },
+        "ue_pool_size": ARGS.ue_pool_size,
+        "dynamic_scheduling": not ARGS.fixed_scheduling,
+        "memory_expiry_slots": ARGS.memory_expiry_slots,
+        "schedule_switch_prob": ARGS.schedule_switch_prob,
+        "schedule_reorder_prob": ARGS.schedule_reorder_prob,
+        "identity_routing_check": identity_check,
+        "temporal_gradient_check": gradient_check,
         "checkpoint": str(checkpoint),
         "history": history,
     }
     (out / "training_summary.json").write_text(
         json.dumps(summary, indent=2) + "\n")
-    print("TRAINING_SUMMARY=" + json.dumps(summary, indent=2), flush=True)
+    print(
+        "TRAINING_SUMMARY=" + json.dumps(summary, indent=2),
+        flush=True,
+    )
 
 
 if __name__ == "__main__":
