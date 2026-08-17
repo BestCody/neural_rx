@@ -1,12 +1,12 @@
 name: One-shot Temporal Research Suite V3
 
 on:
-  issues:
+  pull_request:
     types: [opened]
 
 jobs:
   exhaustive-v3:
-    if: github.event.issue.title == '[run] temporal research suite v3 dual-gpu'
+    if: github.event.pull_request.title == '[run] temporal research suite v3 dual-gpu'
     runs-on: self-hosted
     timeout-minutes: 4320
 
