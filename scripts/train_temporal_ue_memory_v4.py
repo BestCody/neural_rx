@@ -53,10 +53,13 @@ def _extract_pooling(argv):
 POOLING, _CLEAN_ARGV = _extract_pooling(sys.argv)
 sys.argv[:] = _CLEAN_ARGV
 
+# Import v3 first. v3 parses --gpu and sets CUDA_VISIBLE_DEVICES before it
+# imports TensorFlow, which is required for true one-process-per-GPU isolation.
+import train_temporal_ue_memory_v3 as v3
+
 import tensorflow as tf
 from sionna.utils import expand_to_rank
 
-import train_temporal_ue_memory_v3 as v3
 from temporal_pooling import build_pooler
 
 
