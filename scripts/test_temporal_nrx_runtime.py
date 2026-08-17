@@ -9,12 +9,7 @@ from temporal_nrx_runtime import TemporalInferenceOutput, TemporalNRXRuntime
 
 
 class FakeTemporalInference:
-    """Small deterministic stand-in for TemporalUEMemoryCGNN.
-
-    `received_grid` is a vector with one scalar per UE. The fake model writes
-    that scalar into every memory dimension after adding the previous memory.
-    This makes identity/order mistakes visible without TensorFlow or a GPU.
-    """
+    """Deterministic stand-in for TemporalUEMemoryCGNN."""
 
     def __init__(self, d_mem):
         self.d_mem = int(d_mem)
@@ -32,6 +27,7 @@ class FakeTemporalInference:
         memory_valid,
         **_,
     ):
+        del ls_estimate
         if self.fail_next:
             self.fail_next = False
             raise RuntimeError("synthetic inference failure")
@@ -50,13 +46,10 @@ class FakeTemporalInference:
                 "active_tx": np.asarray(active_tx).copy(),
             }
         )
-
         write = signal[..., None] * np.ones(
             (1, signal.shape[1], self.d_mem), dtype=np.float32
         )
         next_memory = np.asarray(prev_memory, dtype=np.float32) + write
-        # Inactive positions return their old state. Runtime commit also guards
-        # inactive positions, mirroring the real temporal model.
         next_memory = np.where(
             np.asarray(active_tx, dtype=bool)[..., None],
             next_memory,
@@ -73,17 +66,13 @@ def main():
     d_mem = 4
     infer = FakeTemporalInference(d_mem)
     runtime = TemporalNRXRuntime(
-        infer,
-        d_mem=d_mem,
-        initial_capacity=2,
-        expiry_slots=8,
+        infer, d_mem=d_mem, initial_capacity=2, expiry_slots=8
     )
 
     a = 0x4601
     b = 0x4602
     c = 0x4603
 
-    # Slot 100: A/B are new.
     first = runtime.process(
         received_grid=np.array([1.0, 2.0], np.float32),
         ls_estimate=None,
@@ -99,8 +88,6 @@ def main():
         and np.allclose(first.next_memory[1], 2.0)
     )
 
-    # Slot 101: receiver order changes to B/C. B must receive B's row even
-    # though it moved from position 1 to position 0; C must cold-start.
     second = runtime.process(
         received_grid=np.array([10.0, 30.0], np.float32),
         ls_estimate=None,
@@ -117,7 +104,6 @@ def main():
         and np.allclose(second.next_memory[1], 30.0)
     )
 
-    # Slot 103: A returns after a gap and B returns after a shorter gap.
     third = runtime.process(
         received_grid=np.array([4.0, 5.0], np.float32),
         ls_estimate=None,
@@ -133,8 +119,6 @@ def main():
         and np.allclose(third.next_memory[1], 17.0)
     )
 
-    # Inactive B must not overwrite its old row even if the inference function
-    # produces something for that receiver position.
     inactive = runtime.process(
         received_grid=np.array([1.0, 1000.0], np.float32),
         ls_estimate=None,
@@ -155,7 +139,7 @@ def main():
         and np.allclose(b_after_inactive.previous_memory[0], 17.0)
     )
 
-    # A failed inference must not commit a new network-produced memory value.
+    # Existing UE: failed inference must not change the stored value.
     before_fail = runtime.process(
         received_grid=np.array([0.0], np.float32),
         ls_estimate=None,
@@ -180,14 +164,42 @@ def main():
         slot_index=108,
     )
     failure_no_commit = bool(
-        failed
-        and np.allclose(
-            after_fail.previous_memory,
-            before_fail.next_memory,
-        )
+        failed and np.allclose(after_fail.previous_memory, before_fail.next_memory)
     )
 
-    # Release invalidates immediately and returns zero/invalid state next time.
+    # Brand-new UE: lookup during a failed inference must not leave an empty slot.
+    new_failed_crnti = 0x4610
+    infer.fail_next = True
+    new_failed = False
+    try:
+        runtime.process(
+            received_grid=np.array([7.0], np.float32),
+            ls_estimate=None,
+            crntis=[new_failed_crnti],
+            slot_index=108,
+        )
+    except RuntimeError:
+        new_failed = True
+    snapshot_after_new_failure = runtime.snapshot()
+    new_failure_no_allocation = bool(
+        new_failed and new_failed_crnti not in snapshot_after_new_failure["ue_to_slot"]
+    )
+
+    # A brand-new inactive position also must not acquire a persistent slot.
+    inactive_new_crnti = 0x4611
+    inactive_new = runtime.process(
+        received_grid=np.array([123.0], np.float32),
+        ls_estimate=None,
+        crntis=[inactive_new_crnti],
+        slot_index=108,
+        active=[False],
+    )
+    inactive_new_no_allocation = bool(
+        not inactive_new.memory_valid[0]
+        and np.allclose(inactive_new.previous_memory, 0.0)
+        and inactive_new_crnti not in runtime.snapshot()["ue_to_slot"]
+    )
+
     runtime.release(b)
     b_released = runtime.process(
         received_grid=np.array([0.0], np.float32),
@@ -222,8 +234,10 @@ def main():
         "new_ues_receive_zero_invalid_memory": cold_start,
         "receiver_reorder_routes_by_crnti": reorder_routing,
         "scheduling_gap_and_memory_persistence": gap_and_persistence,
-        "inactive_position_does_not_overwrite": inactive_guard,
-        "failed_inference_does_not_commit_memory": failure_no_commit,
+        "inactive_existing_position_does_not_overwrite": inactive_guard,
+        "failed_existing_inference_does_not_commit_memory": failure_no_commit,
+        "failed_new_inference_does_not_allocate": new_failure_no_allocation,
+        "inactive_new_ue_does_not_allocate": inactive_new_no_allocation,
         "release_zeroes_memory": release_zeroes,
         "temporal_model_batch_shape_contract": shape_contract,
         "duplicate_crnti_guard": duplicate_guard,
