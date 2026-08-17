@@ -1,11 +1,6 @@
 name: Temporal UE Memory Evaluation
 
 on:
-  push:
-    branches:
-      - experiment/temporal-ue-memory-training
-    paths:
-      - .github/workflows/temporal-ue-memory-eval.yml
   workflow_dispatch:
 
 jobs:
@@ -37,7 +32,7 @@ jobs:
           print("sionna_import_ok")
           PY
 
-      - name: Train mean-pooling learned writer if no matching checkpoint exists
+      - name: Train mean-pooling learned writer if no exact checkpoint exists
         working-directory: scripts
         shell: bash
         run: |
@@ -51,10 +46,10 @@ jobs:
           if [[ -f "$CKPT" && -f "$SUMMARY" ]]; then
             if python - "$SUMMARY" <<'PY'
           import json, sys
-          p = sys.argv[1]
-          s = json.load(open(p))
+          s = json.load(open(sys.argv[1]))
           checks = [
               s.get("architecture") == "ue_identity_aware_temporal_memory_v4_pooling",
+              s.get("config") == "nrx_large.cfg",
               s.get("pooling") == "mean",
               s.get("compression") == "writer",
               int(s.get("d_mem", -1)) == 32,
@@ -63,6 +58,8 @@ jobs:
               int(s.get("memory_only_steps", -1)) == 1000,
               int(s.get("batch_size", -1)) == 8,
               int(s.get("seq_len", -1)) == 4,
+              int(s.get("seed", -1)) == 20260816,
+              int(s.get("ue_pool_size", -1)) == 4,
               s.get("dynamic_scheduling") is False,
           ]
           if not all(checks):
@@ -101,14 +98,14 @@ jobs:
           echo "TEMPORAL_WRITER_CHECKPOINT=$CKPT" >> "$GITHUB_ENV"
           echo "TEMPORAL_WRITER_DIR=$OUT" >> "$GITHUB_ENV"
 
-      - name: Evaluate cold K2, cold K8, and temporal K2 on identical sequences
+      - name: Evaluate corrected 132-PRB cold K2, cold K8, and temporal K2
         working-directory: scripts
         shell: bash
         run: |
           set -euo pipefail
-          EVAL_OUT="$TEMPORAL_WRITER_DIR/evaluation_fixed"
+          EVAL_OUT="$TEMPORAL_WRITER_DIR/evaluation_fixed_132prb"
           rm -rf "$EVAL_OUT"
-          python evaluate_temporal_ue_memory.py \
+          python evaluate_temporal_ue_memory_v2.py \
             --checkpoint "$TEMPORAL_WRITER_CHECKPOINT" \
             --config nrx_large.cfg \
             --compression writer \
@@ -126,7 +123,14 @@ jobs:
             --seed 20260816 \
             --output-dir "$EVAL_OUT"
           test -f "$EVAL_OUT/evaluation.json"
-          test -f "$EVAL_OUT/curves.csv"
+          python - "$EVAL_OUT/evaluation.json" <<'PY'
+          import json, sys
+          s = json.load(open(sys.argv[1]))
+          assert s["parameter_mode"] == "training=False"
+          assert int(s["n_size_bwp"]) == 132
+          assert str(s.get("crossing_method", "")).startswith("log-BLER interpolation")
+          print("CORRECTED_132PRB_EVALUATION_VERIFIED")
+          PY
           echo "TEMPORAL_EVAL_OUT=$EVAL_OUT" >> "$GITHUB_ENV"
 
       - name: Print concise research result
