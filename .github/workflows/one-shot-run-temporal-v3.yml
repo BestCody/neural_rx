@@ -2,7 +2,7 @@ name: One-shot Temporal Research Suite V3
 
 on:
   pull_request:
-    types: [opened]
+    types: [opened, ready_for_review, synchronize]
 
 jobs:
   exhaustive-v3:
