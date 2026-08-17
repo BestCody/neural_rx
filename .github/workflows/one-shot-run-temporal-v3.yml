@@ -1,0 +1,62 @@
+name: One-shot Temporal Research Suite V3
+
+on:
+  issues:
+    types: [opened]
+
+jobs:
+  exhaustive-v3:
+    if: github.event.issue.title == '[run] temporal research suite v3 dual-gpu'
+    runs-on: self-hosted
+    timeout-minutes: 4320
+
+    steps:
+      - name: Checkout temporal-memory branch
+        uses: actions/checkout@v4
+        with:
+          ref: experiment/temporal-ue-memory-training
+          fetch-depth: 1
+          lfs: true
+          submodules: recursive
+
+      - name: Verify two GPUs and research environment
+        shell: bash
+        run: |
+          set -euo pipefail
+          hostname
+          nvidia-smi --query-gpu=index,name,memory.total --format=csv,noheader
+          GPU_COUNT="$(nvidia-smi --query-gpu=index --format=csv,noheader | wc -l)"
+          [[ "$GPU_COUNT" -ge 2 ]] || { echo "Need at least 2 GPUs; found $GPU_COUNT" >&2; exit 1; }
+          python - <<'PY'
+          import tensorflow as tf
+          import sionna
+          gpus = tf.config.list_physical_devices("GPU")
+          print("tensorflow", tf.__version__)
+          print("gpus", gpus)
+          print("sionna_import_ok")
+          if len(gpus) < 2:
+              raise SystemExit(f"TensorFlow sees only {len(gpus)} GPU(s); need 2")
+          PY
+
+      - name: Run exhaustive V3 on GPU 0 and GPU 1
+        working-directory: scripts
+        shell: bash
+        env:
+          CUDA_VISIBLE_DEVICES: "0,1"
+        run: |
+          set -euo pipefail
+          python -u run_temporal_research_suite_exhaustive_v3.py \
+            --gpus 0,1 \
+            --train-steps 6000
+
+      - name: Upload suite summaries and graphs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: temporal-research-suite-v3-${{ github.run_id }}
+          path: |
+            ~/sionna-srsran/temporal_reuse/research_suite/suite_summary.json
+            ~/sionna-srsran/temporal_reuse/research_suite/all_results.csv
+            ~/sionna-srsran/temporal_reuse/research_suite/graphs/**
+          if-no-files-found: warn
+          retention-days: 30
