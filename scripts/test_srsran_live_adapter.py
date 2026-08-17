@@ -1,5 +1,19 @@
 #!/usr/bin/env python3
+import importlib.util
+import sys
+import types
+
 import numpy as np
+
+# The production live runtime eventually imports TensorFlow for the trained
+# model, but these regression tests intentionally exercise only the generic
+# NumPy C-RNTI transaction and tensor adapter. ue_memory_manager.py contains
+# both the TensorFlow training manager and NumPy runtime manager in one module,
+# so provide the one import-time default dtype when TensorFlow is absent.
+if importlib.util.find_spec("tensorflow") is None:
+    tensorflow_stub = types.ModuleType("tensorflow")
+    tensorflow_stub.float32 = np.float32
+    sys.modules["tensorflow"] = tensorflow_stub
 
 from srsran_live_adapter import (
     SrsranTemporalNRXAdapter,
