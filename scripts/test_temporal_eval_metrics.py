@@ -38,11 +38,12 @@ def main():
 
     ci_zero = wilson_interval(0, 100)
     ci_full = wilson_interval(100, 100)
+    eps = 1e-12
     wilson_ok = (
-        ci_zero[0] == 0.0
+        abs(ci_zero[0]) <= eps
         and 0.0 < ci_zero[1] < 0.1
         and 0.9 < ci_full[0] < 1.0
-        and ci_full[1] == 1.0
+        and abs(ci_full[1] - 1.0) <= eps
     )
 
     report = {
@@ -53,7 +54,9 @@ def main():
         "grid": grid,
         "zero_error_crossing": cross,
     }
-    report["passed"] = bool(all(v for k, v in report.items() if k not in {"grid", "zero_error_crossing"}))
+    report["passed"] = bool(
+        all(v for k, v in report.items() if k not in {"grid", "zero_error_crossing"})
+    )
     print("TEMPORAL_EVAL_METRICS_TEST=" + json.dumps(report, indent=2))
     if not report["passed"]:
         raise SystemExit(1)
