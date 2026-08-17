@@ -24,6 +24,7 @@ def main():
     first = bridge.lookup([a, b], 0)
     new_zero = bool(
         first.crntis == (a, b)
+        and first.slot_index == 0
         and not np.any(first.valid)
         and np.allclose(first.memory, 0.0)
         and np.all(first.gap_slots == 0)
@@ -42,6 +43,7 @@ def main():
     second = bridge.lookup([b, c], 1)
     identity_routing = bool(
         second.crntis == (b, c)
+        and second.slot_index == 1
         and second.valid.tolist() == [True, False]
         and second.gap_slots.tolist() == [1, 0]
         and np.allclose(second.memory[0], 2.0)
@@ -54,6 +56,27 @@ def main():
             np.ones(d_mem, np.float32) * 30.0,
         ]),
         1,
+    )
+
+    # A result looked up for one slot must never be committed as another slot.
+    slot_binding_guard = False
+    before_bad_commit = bridge.snapshot()
+    try:
+        bridge.process_result(
+            second,
+            np.stack([
+                np.ones(d_mem, np.float32) * 200.0,
+                np.ones(d_mem, np.float32) * 300.0,
+            ]),
+            2,
+        )
+    except ValueError:
+        slot_binding_guard = True
+    after_bad_commit = bridge.snapshot()
+    slot_binding_no_mutation = bool(
+        slot_binding_guard
+        and before_bad_commit["ue_to_slot"] == after_bad_commit["ue_to_slot"]
+        and before_bad_commit["last_seen"] == after_bad_commit["last_seen"]
     )
 
     # Slot 2: A was unscheduled for one slot and must retain its own memory.
@@ -74,15 +97,13 @@ def main():
     )
 
     # C last wrote in slot 1. At slot 4 its age is 3 > expiry_slots=2, so it
-    # must be expired and reallocated as a new zero state.
+    # must be expired and observed as a new zero state.
     c_after_expiry = bridge.lookup([c], 4)
     expiry_zeroes = bool(
         c_after_expiry.valid.tolist() == [False]
         and np.allclose(c_after_expiry.memory, 0.0)
     )
 
-    # Position-order mismatch is prevented by process_result using immutable
-    # lookup keys. The snapshot should contain canonical C-RNTI diagnostics.
     snapshot = bridge.snapshot()
     crnti_diagnostics = bool(
         all(key.startswith("0x") for key in snapshot["crnti_to_slot_hex"])
@@ -103,6 +124,8 @@ def main():
     report = {
         "new_ue_gets_zero_invalid_memory": new_zero,
         "identity_follows_crnti_across_positions": identity_routing,
+        "lookup_slot_bound_to_commit": slot_binding_guard,
+        "bad_slot_commit_does_not_mutate": slot_binding_no_mutation,
         "brief_absence_preserves_memory": absence_persistence,
         "explicit_release_zeroes_memory": release_zeroes,
         "expiry_zeroes_memory": expiry_zeroes,
