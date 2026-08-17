@@ -15,10 +15,20 @@ PCA, autoencoder, pooling, or other compressor is applied to the stored state.
 
 from __future__ import annotations
 
+import sys
+from pathlib import Path
+
 import numpy as np
 import tensorflow as tf
 from tensorflow.keras.layers import Dense
 from sionna.utils import expand_to_rank, flatten_last_dims
+
+HERE = Path(__file__).resolve().parent
+REPO_ROOT = HERE.parent
+if str(HERE) not in sys.path:
+    sys.path.insert(0, str(HERE))
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
 
 from temporal_training_data import TemporalTrainingDataGenerator
 from ue_memory_manager import DifferentiableUEMemoryManager
@@ -228,7 +238,7 @@ def memory_dim_for_batch(receiver, model, batch):
         batch["ls"][:, 0],
         batch["active"][:, 0],
     )
-    s = model._initial_state(*[inputs[0], inputs[1], inputs[2], inputs[4]])
+    s = model._initial_state(inputs[0], inputs[1], inputs[2], inputs[4])
     dims = s.shape[2:]
     if any(d is None for d in dims):
         dims = tuple(int(x) for x in tf.shape(s)[2:].numpy())
