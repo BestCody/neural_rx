@@ -14,7 +14,8 @@
 
 namespace {
 
-std::once_flag python_once;
+std::mutex     python_runtime_mutex;
+std::once_flag python_module_once;
 std::string    init_error;
 PyObject*      infer_callable = nullptr;
 
@@ -53,11 +54,27 @@ std::string python_error_string()
   return out;
 }
 
-void initialize_python()
+// Ensure CPython exists, but never execute Python/NumPy C-API operations here.
+// When this plugin is the component that initializes Python (the normal gNB
+// case), release the bootstrap GIL immediately so arbitrary PUSCH worker
+// threads can subsequently enter through PyGILState_Ensure().
+void ensure_python_runtime()
 {
+  if (Py_IsInitialized()) {
+    return;
+  }
+  std::lock_guard<std::mutex> lock(python_runtime_mutex);
   if (!Py_IsInitialized()) {
     Py_Initialize();
+    if (Py_IsInitialized()) {
+      PyEval_SaveThread();
+    }
   }
+}
+
+// Called exactly once while the caller holds the GIL.
+void initialize_python_module()
+{
   if (_import_array() < 0) {
     init_error = "NumPy C API initialization failed: " + python_error_string();
     return;
@@ -137,13 +154,20 @@ extern "C" int temporal_nrx_infer_v1(const temporal_nrx_request_v1* request,
     return 5;
   }
 
-  std::call_once(python_once, initialize_python);
-  if (!init_error.empty() || infer_callable == nullptr) {
-    set_error(response, init_error.empty() ? "embedded Python runtime unavailable" : init_error);
+  ensure_python_runtime();
+  if (!Py_IsInitialized()) {
+    set_error(response, "failed to initialize embedded Python runtime");
     return 6;
   }
 
   PyGILState_STATE gil = PyGILState_Ensure();
+  std::call_once(python_module_once, initialize_python_module);
+  if (!init_error.empty() || infer_callable == nullptr) {
+    set_error(response, init_error.empty() ? "embedded Python runtime unavailable" : init_error);
+    PyGILState_Release(gil);
+    return 6;
+  }
+
   int rc = 0;
   PyObject* rx = nullptr;
   PyObject* h = nullptr;
