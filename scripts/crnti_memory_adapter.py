@@ -11,7 +11,7 @@ Intended production call sequence per slot:
     crntis from scheduled PUSCH PDUs
         -> lookup(crntis, slot_index)
         -> NRX(prev_memory, gap, valid, current signal)
-        -> commit(crntis, next_memory, slot_index)
+        -> process_result(lookup, next_memory, same slot_index)
 
 On UE release, re-establishment with a new identity, handover, or any event that
 invalidates temporal state, call release(crnti). Expiration handles UEs that
@@ -28,9 +28,6 @@ import numpy as np
 from ue_memory_manager import RuntimeUEMemoryManager
 
 
-# This boundary checks only that the scheduler supplied a non-zero 16-bit key.
-# The gNB/RRC owns semantic RNTI-type validity and reserved-value handling; the
-# temporal-memory layer should not duplicate or drift from those rules.
 _MIN_CRNTI = 0x0001
 _MAX_CRNTI = 0xFFFF
 
@@ -58,9 +55,10 @@ def normalize_crntis(values: Iterable[int]) -> list[int]:
 
 @dataclass(frozen=True)
 class RuntimeMemoryInput:
-    """State handed from the C-RNTI adapter to the neural receiver."""
+    """Immutable state handed from the C-RNTI adapter to the neural receiver."""
 
     crntis: tuple[int, ...]
+    slot_index: int
     memory: np.ndarray
     gap_slots: np.ndarray
     valid: np.ndarray
@@ -94,9 +92,11 @@ class CRNTIMemoryAdapter:
     def lookup(self, crntis: Sequence[int], slot_index: int) -> RuntimeMemoryInput:
         """Resolve scheduled PUSCH C-RNTIs to previous memory/gap/valid tensors."""
         keys = normalize_crntis(crntis)
-        memory, gap, valid = self.manager.lookup(keys, int(slot_index))
+        slot = int(slot_index)
+        memory, gap, valid = self.manager.lookup(keys, slot)
         return RuntimeMemoryInput(
             crntis=tuple(keys),
+            slot_index=slot,
             memory=memory,
             gap_slots=gap,
             valid=valid,
@@ -125,15 +125,20 @@ class CRNTIMemoryAdapter:
         slot_index: int,
         active: Sequence[bool] | None = None,
     ) -> None:
-        """Commit using the immutable keys returned by lookup.
+        """Commit using the immutable keys and slot returned by lookup.
 
-        Runtime integrations should prefer this method because it prevents a
-        caller from accidentally looking up one UE order and committing another.
+        This prevents both UE-order mismatches and accidental cross-slot commits.
+        A result computed from slot N's previous memory must be committed as slot N.
         """
+        slot = int(slot_index)
+        if slot != int(lookup.slot_index):
+            raise ValueError(
+                f"lookup was for slot {lookup.slot_index}, cannot commit as slot {slot}"
+            )
         self.commit(
             lookup.crntis,
             next_memory,
-            slot_index,
+            slot,
             active=active,
         )
 
@@ -157,7 +162,6 @@ class CRNTIMemoryAdapter:
 
     def snapshot(self):
         snap = self.manager.snapshot()
-        # JSON/log-friendly canonical hexadecimal view alongside integer keys.
         snap["crnti_to_slot_hex"] = {
             f"0x{int(crnti):04X}": int(slot)
             for crnti, slot in self.manager.ue_to_slot.items()
