@@ -22,7 +22,7 @@ def main():
     users = 2
     d_s = 12
     d_mem = 4
-    pooled = tf.random.normal([batch, users, d_s])
+    pooled = tf.Variable(tf.random.normal([batch, users, d_s]))
     prev = tf.random.normal([batch, users, d_mem])
     age = tf.ones([batch, users], tf.float32)
     valid = tf.constant(
@@ -37,17 +37,36 @@ def main():
     )
 
     ae = AutoencoderCompression(d_s, d_mem)
-    with tf.GradientTape() as tape:
+    with tf.GradientTape(persistent=True) as tape:
         a = ae(pooled, prev, age, valid, training=True)
         ae_loss = a.aux_loss
+        temporal_probe = tf.reduce_sum(a.memory)
     ae_grads = tape.gradient(ae_loss, ae.trainable_variables)
     ae_grad_norm = tf.linalg.global_norm(
         [g for g in ae_grads if g is not None])
+    reconstruction_upstream_grad = tape.gradient(ae_loss, pooled)
+    temporal_upstream_grad = tape.gradient(temporal_probe, pooled)
+    del tape
+
+    memory_abs_max = float(tf.reduce_max(tf.abs(a.memory)).numpy())
+    reconstruction_detached = (
+        reconstruction_upstream_grad is None
+        or float(tf.linalg.global_norm([reconstruction_upstream_grad]).numpy()) == 0.0
+    )
+    temporal_connected = (
+        temporal_upstream_grad is not None
+        and float(tf.linalg.global_norm([temporal_upstream_grad]).numpy()) > 0.0
+    )
     autoencoder_ok = (
         tuple(a.memory.shape) == (batch, users, d_mem)
         and np.isfinite(float(a.reconstruction_mse.numpy()))
         and float(a.reconstruction_mse.numpy()) > 0.0
+        and np.isfinite(float(a.aux_loss.numpy()))
+        and float(a.aux_loss.numpy()) > 0.0
         and float(ae_grad_norm.numpy()) > 0.0
+        and memory_abs_max <= 1.000001
+        and reconstruction_detached
+        and temporal_connected
     )
 
     # Synthetic data with descending feature scales gives a well-defined PCA
@@ -82,8 +101,12 @@ def main():
         },
         "autoencoder": {
             "shape": list(a.memory.shape),
+            "memory_abs_max": memory_abs_max,
+            "normalized_reconstruction_loss": float(a.aux_loss.numpy()),
             "reconstruction_mse": float(a.reconstruction_mse.numpy()),
             "gradient_norm": float(ae_grad_norm.numpy()),
+            "reconstruction_detached_from_upstream_state": bool(reconstruction_detached),
+            "temporal_memory_connected_to_upstream_state": bool(temporal_connected),
             "passed": bool(autoencoder_ok),
         },
         "pca": {
