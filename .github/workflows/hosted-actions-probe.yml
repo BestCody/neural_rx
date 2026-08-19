@@ -8,7 +8,7 @@ on:
       - .github/workflows/hosted-actions-probe.yml
 
 permissions:
-  actions: read
+  actions: write
   contents: write
 
 jobs:
@@ -20,12 +20,29 @@ jobs:
         with:
           ref: experiment/temporal-ue-memory-training
           fetch-depth: 1
-      - name: Inspect recent workflow runs
+      - name: Cancel redundant queued self-hosted runs
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
+          tmp="$(mktemp)"
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs?branch=experiment%2Ftemporal-ue-memory-training&per_page=50" > "$tmp"
+
+          latest_diag="$(jq -r '[.workflow_runs[] | select(.name == "Diagnose Temporal Suite Results" and .status == "queued")] | sort_by(.run_number) | last | .id // empty' "$tmp")"
+
+          jq -r '.workflow_runs[] | select(.status == "queued") | [.id,.name] | @tsv' "$tmp" |
+          while IFS=$'\t' read -r id name; do
+            if [[ "$name" == "Run Temporal Research Suite V3" ]]; then
+              echo "Cancelling accidental exhaustive rerun $id"
+              gh api -X POST "repos/$GITHUB_REPOSITORY/actions/runs/$id/cancel" >/dev/null || true
+            elif [[ "$name" == "Diagnose Temporal Suite Results" && "$id" != "$latest_diag" ]]; then
+              echo "Cancelling stale diagnostic run $id"
+              gh api -X POST "repos/$GITHUB_REPOSITORY/actions/runs/$id/cancel" >/dev/null || true
+            fi
+          done
+
+          sleep 2
           mkdir -p results/temporal_suite_validation
           gh api \
             "repos/$GITHUB_REPOSITORY/actions/runs?branch=experiment%2Ftemporal-ue-memory-training&per_page=50" \
