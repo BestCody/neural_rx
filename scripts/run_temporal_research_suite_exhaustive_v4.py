@@ -24,6 +24,21 @@ GPUS = base.GPUS
 _ORIGINAL_CAPACITY_PCA_VALID = v3suite.capacity_pca_valid
 
 
+def _autoencoder_protocol_valid(summary):
+    protocol = summary.get("autoencoder_protocol")
+    if not isinstance(protocol, dict):
+        return False
+    return all(
+        [
+            int(protocol.get("version", -1)) == 2,
+            protocol.get("bounded_tanh_bottleneck") is True,
+            protocol.get("reconstruction_upstream_state_detached") is True,
+            protocol.get("scale_normalized_reconstruction_aux_loss") is True,
+            protocol.get("raw_reconstruction_mse_retained_for_diagnostics") is True,
+        ]
+    )
+
+
 def strict_training_valid(out, compression, pooling, d_mem, seed, dynamic):
     out = Path(out)
     summary = out / "training_summary.json"
@@ -47,6 +62,8 @@ def strict_training_valid(out, compression, pooling, d_mem, seed, dynamic):
             int(s.get("ue_pool_size", -1)) == 4,
             bool(s.get("dynamic_scheduling")) == bool(dynamic),
         ]
+        if compression == "autoencoder":
+            checks.append(_autoencoder_protocol_valid(s))
         if dynamic:
             checks += [
                 abs(float(s.get("schedule_switch_prob", -1.0)) - 0.65) < 1e-12,
@@ -237,6 +254,7 @@ def main():
     summary["strict_artifact_validation"] = {
         "training_seed_required": True,
         "training_config_batch_and_schedule_checked": True,
+        "autoencoder_protocol_v2_required": True,
         "pca_calibration_capacity_and_steps_checked": True,
         "full_state_provenance_checked": True,
         "evaluation_seed_scenario_grid_and_crossing_method_checked": True,
