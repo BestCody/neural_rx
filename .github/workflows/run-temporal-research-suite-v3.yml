@@ -13,6 +13,10 @@ jobs:
     runs-on: self-hosted
     timeout-minutes: 4320
 
+    env:
+      NRX_PYTHON: /home/h3lou/miniforge3/envs/neural_rx/bin/python
+      PYTHONUNBUFFERED: "1"
+
     steps:
       - name: Checkout temporal-memory branch
         uses: actions/checkout@v4
@@ -33,8 +37,9 @@ jobs:
             echo "Expected at least 2 GPUs, found $GPU_COUNT" >&2
             exit 1
           fi
-          python --version
-          python - <<'PY'
+          test -x "$NRX_PYTHON"
+          "$NRX_PYTHON" --version
+          "$NRX_PYTHON" - <<'PY'
           import tensorflow as tf
           import sionna
           gpus = tf.config.list_physical_devices("GPU")
@@ -52,7 +57,7 @@ jobs:
           CUDA_VISIBLE_DEVICES: "0,1"
         run: |
           set -euo pipefail
-          python -u run_temporal_research_suite_exhaustive_v3.py \
+          "$NRX_PYTHON" -u run_temporal_research_suite_exhaustive_v3.py \
             --gpus 0,1 \
             --train-steps 6000
 
