@@ -1,10 +1,5 @@
 #!/usr/bin/env python3
-"""Diagnose completed temporal autoencoder runs without retraining.
-
-Reads the existing research-suite training/evaluation artifacts on Atlas and
-summarizes whether null SNR@10% crossings are range misses, training failures,
-or signs of unstable/ineffective autoencoder memory.
-"""
+"""Diagnose completed temporal autoencoder runs without retraining."""
 
 from __future__ import annotations
 
@@ -42,9 +37,7 @@ def curve_status(points):
     vals = [float(p["bler_tb2plus"]) for p in points if p.get("bler_tb2plus") is not None]
     if not vals:
         return "no_valid_points"
-    above = any(v >= TARGET for v in vals)
-    below = any(v <= TARGET for v in vals)
-    if above and below:
+    if any(v >= TARGET for v in vals) and any(v <= TARGET for v in vals):
         return "bracketed"
     if all(v > TARGET for v in vals):
         return "above_10pct_at_snr_max"
@@ -53,41 +46,69 @@ def curve_status(points):
     return "unbracketed_nonmonotonic"
 
 
-def parse_json_markers(text: str):
-    rows = []
-    markers = (
-        "TRAIN_STEP=",
-        "TEMPORAL_COMPRESSION_GRADIENT_CHECK=",
-        "TRAINING_SUMMARY=",
-        "V3_TRAINING_SUMMARY=",
-        "V4_POOLING_SUMMARY=",
-    )
-    for line in text.splitlines():
-        for marker in markers:
-            idx = line.find(marker)
-            if idx < 0:
-                continue
-            raw = line[idx + len(marker):].strip()
-            try:
-                rows.append((marker[:-1], json.loads(raw)))
-            except Exception:
-                pass
-            break
-    return rows
-
-
-def choose_training_rows(markers):
-    step_rows = [obj for marker, obj in markers if marker == "TRAIN_STEP" and isinstance(obj, dict) and "step" in obj]
-    if not step_rows:
-        # Some trainer revisions print bare JSON rows with a different prefix.
-        step_rows = [obj for _, obj in markers if isinstance(obj, dict) and "step" in obj and "loss" in obj]
-    step_rows.sort(key=lambda x: int(x.get("step", -1)))
-    if not step_rows:
+def summarize_history(history):
+    rows = [r for r in history if isinstance(r, dict) and "step" in r]
+    rows.sort(key=lambda r: int(r.get("step", -1)))
+    if not rows:
         return {}
-    first = step_rows[0]
-    last = step_rows[-1]
-    joint = next((r for r in step_rows if str(r.get("phase")) == "joint"), None)
-    return {"first": first, "first_joint": joint, "last": last, "count": len(step_rows)}
+    first = rows[0]
+    first_joint = next((r for r in rows if r.get("phase") == "joint"), None)
+    last = rows[-1]
+
+    def selected(row):
+        if row is None:
+            return None
+        return {
+            k: row.get(k)
+            for k in (
+                "step", "phase", "loss", "loss_data", "loss_chest",
+                "compression_aux_loss", "reconstruction_mse_per_tb",
+                "loss_per_tb", "memory_norm_per_tb", "gradient_norm",
+            )
+        }
+
+    memory_norms = []
+    recon = []
+    aux = []
+    losses = []
+    for row in rows:
+        for x in row.get("memory_norm_per_tb", []) or []:
+            if finite(x):
+                memory_norms.append(float(x))
+        for x in row.get("reconstruction_mse_per_tb", []) or []:
+            if finite(x):
+                recon.append(float(x))
+        if finite(row.get("compression_aux_loss")):
+            aux.append(float(row["compression_aux_loss"]))
+        if finite(row.get("loss_data")):
+            losses.append(float(row["loss_data"]))
+
+    return {
+        "count": len(rows),
+        "first": selected(first),
+        "first_joint": selected(first_joint),
+        "last": selected(last),
+        "memory_norm_min": min(memory_norms) if memory_norms else None,
+        "memory_norm_max": max(memory_norms) if memory_norms else None,
+        "memory_norm_last_mean": (
+            sum(float(x) for x in (last.get("memory_norm_per_tb") or [])) /
+            len(last.get("memory_norm_per_tb") or [])
+            if last.get("memory_norm_per_tb") else None
+        ),
+        "reconstruction_mse_min": min(recon) if recon else None,
+        "reconstruction_mse_max": max(recon) if recon else None,
+        "reconstruction_mse_last_mean": (
+            sum(float(x) for x in (last.get("reconstruction_mse_per_tb") or [])) /
+            len(last.get("reconstruction_mse_per_tb") or [])
+            if last.get("reconstruction_mse_per_tb") else None
+        ),
+        "aux_loss_last": aux[-1] if aux else None,
+        "data_loss_last": losses[-1] if losses else None,
+        "weighted_reconstruction_over_data_last": (
+            0.1 * aux[-1] / losses[-1]
+            if aux and losses and losses[-1] != 0 else None
+        ),
+    }
 
 
 def summarize_case(root: Path, seed: int, pooling: str, d_mem: int):
@@ -120,10 +141,12 @@ def summarize_case(root: Path, seed: int, pooling: str, d_mem: int):
                 "architecture", "pooling", "compression", "d_mem", "num_it",
                 "train_steps", "memory_only_steps", "batch_size", "seq_len",
                 "seed", "dynamic_scheduling", "checkpoint",
-                "ae_reconstruction_weight", "temporal_gradient_check",
+                "ae_reconstruction_weight", "identity_routing_check",
+                "temporal_compression_gradient_check",
             )
             if k in s
         }
+        item["training_history"] = summarize_history(s.get("history", []))
 
     if log_path.exists():
         text = log_path.read_text(errors="replace")
@@ -131,9 +154,6 @@ def summarize_case(root: Path, seed: int, pooling: str, d_mem: int):
         item["log_has_traceback"] = "traceback (most recent call last)" in lower
         item["log_has_nan_token"] = bool(re.search(r"(?<![a-z])nan(?![a-z])", lower))
         item["log_has_inf_token"] = bool(re.search(r"(?<![a-z])inf(?:inity)?(?![a-z])", lower))
-        markers = parse_json_markers(text)
-        item["gradient_checks"] = [obj for marker, obj in markers if marker == "TEMPORAL_COMPRESSION_GRADIENT_CHECK"]
-        item["training_rows"] = choose_training_rows(markers)
 
     if eval_path.exists():
         e = load(eval_path)
@@ -154,12 +174,11 @@ def summarize_case(root: Path, seed: int, pooling: str, d_mem: int):
             }
             for p in temporal
         ]
-        if temporal:
-            valid = [p for p in temporal if p.get("bler_tb2plus") is not None]
-            if valid:
-                item["temporal_bler_at_snr_min"] = valid[0]["bler_tb2plus"]
-                item["temporal_bler_at_snr_max"] = valid[-1]["bler_tb2plus"]
-                item["temporal_min_bler"] = min(float(p["bler_tb2plus"]) for p in valid)
+        valid = [p for p in temporal if p.get("bler_tb2plus") is not None]
+        if valid:
+            item["temporal_bler_at_snr_min"] = valid[0]["bler_tb2plus"]
+            item["temporal_bler_at_snr_max"] = valid[-1]["bler_tb2plus"]
+            item["temporal_min_bler"] = min(float(p["bler_tb2plus"]) for p in valid)
         if temporal and cold2:
             tlast = temporal[-1].get("bler_tb2plus")
             c2last = cold2[-1].get("bler_tb2plus")
@@ -171,24 +190,31 @@ def summarize_case(root: Path, seed: int, pooling: str, d_mem: int):
             if finite(tlast) and finite(c8last):
                 item["temporal_minus_cold_k8_bler_at_snr_max"] = float(tlast) - float(c8last)
 
-    reasons = []
+    flags = []
     if not item["training_summary_exists"] or item["checkpoint_count"] == 0:
-        reasons.append("missing_training_artifact")
+        flags.append("missing_training_artifact")
     if not item["evaluation_exists"]:
-        reasons.append("missing_evaluation_artifact")
+        flags.append("missing_evaluation_artifact")
     if item.get("log_has_traceback"):
-        reasons.append("training_traceback_present")
+        flags.append("training_traceback_present")
     if item.get("log_has_nan_token") or item.get("log_has_inf_token"):
-        reasons.append("nonfinite_training_log_token")
-    grad = item.get("gradient_checks") or []
-    if grad and not all(bool(x.get("passed")) for x in grad if isinstance(x, dict)):
-        reasons.append("temporal_gradient_check_failed")
+        flags.append("nonfinite_training_log_token")
+    md = item.get("training_metadata", {})
+    grad = md.get("temporal_compression_gradient_check")
+    if isinstance(grad, dict) and not grad.get("passed"):
+        flags.append("temporal_gradient_check_failed")
     status = item.get("curve_status")
     if status == "above_10pct_at_snr_max":
-        reasons.append("evaluation_range_too_low_for_crossing_or_model_is_poor")
+        flags.append("still_above_10pct_at_3p75db")
     elif status == "below_10pct_at_snr_min":
-        reasons.append("evaluation_range_too_high_for_crossing")
-    item["flags"] = reasons
+        flags.append("already_below_10pct_at_1p5db")
+    hist = item.get("training_history", {})
+    if finite(hist.get("memory_norm_max")) and float(hist["memory_norm_max"]) > 50:
+        flags.append("very_large_memory_norm")
+    ratio = hist.get("weighted_reconstruction_over_data_last")
+    if finite(ratio) and float(ratio) > 0.5:
+        flags.append("reconstruction_term_large_vs_data_loss")
+    item["flags"] = flags
     return item
 
 
@@ -196,12 +222,12 @@ def main():
     a = args()
     root = Path(a.root).expanduser().resolve()
     cases = [summarize_case(root, a.seed, p, d) for p in POOLINGS for d in CAPS]
-
     null_cases = [c for c in cases if c.get("reported_crossings", {}).get("temporal_k2") is None]
     finite_cases = [c for c in cases if c.get("reported_crossings", {}).get("temporal_k2") is not None]
     status_counts = {}
     for c in cases:
-        status_counts[c.get("curve_status", "missing")] = status_counts.get(c.get("curve_status", "missing"), 0) + 1
+        status = c.get("curve_status", "missing")
+        status_counts[status] = status_counts.get(status, 0) + 1
 
     report = {
         "root": str(root),
