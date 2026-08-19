@@ -1,0 +1,22 @@
+name: Diagnose Temporal Suite Results
+
+on:
+  push:
+    branches:
+      - experiment/temporal-ue-memory-training
+    paths:
+      - .github/workflows/diagnose-temporal-suite-results.yml
+  workflow_dispatch:
+
+jobs:
+  diagnose:
+    runs-on: self-hosted
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: experiment/temporal-ue-memory-training
+          fetch-depth: 1
+      - name: Diagnose completed suite artifacts
+        working-directory: scripts
+        run: python diagnose_temporal_suite_results.py
