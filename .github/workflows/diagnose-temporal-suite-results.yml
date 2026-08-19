@@ -24,6 +24,7 @@ jobs:
           ref: experiment/temporal-ue-memory-training
           fetch-depth: 1
 
+      # Read-only with respect to model training/checkpoints.
       - name: Repair and diagnose completed suite artifacts
         shell: bash
         run: |
