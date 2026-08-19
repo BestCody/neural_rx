@@ -18,7 +18,9 @@ pca:
 autoencoder:
     Learned encoder bottleneck of width d_mem. A decoder is used only to define
     a reconstruction loss during training; the decoder is not part of the
-    persistent state passed between TBs.
+    persistent state passed between TBs. The persistent bottleneck is bounded
+    and the auxiliary reconstruction path is scale-normalized and detached from
+    the upstream NRX state so it cannot destabilize the pretrained receiver.
 """
 
 from __future__ import annotations
@@ -191,7 +193,23 @@ class PCACompression(tf.keras.layers.Layer):
 
 
 class AutoencoderCompression(tf.keras.layers.Layer):
-    """Learned autoencoder whose bottleneck is the temporal UE memory."""
+    """Stable learned autoencoder whose bottleneck is temporal UE memory.
+
+    Two invariants are important for the temporal receiver:
+
+    1. Persistent memory must have a controlled numerical scale because it is
+       consumed directly by the common tanh/sigmoid reader on the next TB.
+       The bottleneck therefore uses tanh and is bounded to [-1, 1].
+    2. Reconstruction is an auxiliary compressor objective, not a reason to
+       reshape or rescale the pretrained NRX state. The auxiliary branch is fed
+       a stop-gradient copy of the pooled state. Encoder/decoder weights still
+       learn reconstruction, while future-TB decoding loss remains free to
+       train the live memory path end-to-end.
+
+    The auxiliary loss is normalized by target power so its relative weight is
+    stable even if the NRX state scale varies. Raw MSE is still returned as a
+    diagnostic.
+    """
 
     mode = "autoencoder"
 
@@ -204,7 +222,7 @@ class AutoencoderCompression(tf.keras.layers.Layer):
         self.encoder_hidden = Dense(
             self.hidden_dim, activation="relu", name="ae_encoder_hidden")
         self.encoder_bottleneck = Dense(
-            self.d_mem, activation=None, name="ae_bottleneck")
+            self.d_mem, activation="tanh", name="ae_bottleneck")
         self.decoder_hidden = Dense(
             self.hidden_dim, activation="relu", name="ae_decoder_hidden")
         self.decoder_out = Dense(
@@ -218,6 +236,10 @@ class AutoencoderCompression(tf.keras.layers.Layer):
             + self.encoder_bottleneck.trainable_variables
         )
 
+    def _encode(self, x):
+        z = self.encoder_hidden(x)
+        return self.encoder_bottleneck(z)
+
     def call(
         self,
         pooled_final,
@@ -226,19 +248,31 @@ class AutoencoderCompression(tf.keras.layers.Layer):
         memory_valid,
         training=None,
     ):
-        z = self.encoder_hidden(pooled_final)
-        memory = self.encoder_bottleneck(z)
-        d = self.decoder_hidden(memory)
+        # Live temporal path. Future-TB decoding gradients can still propagate
+        # through this memory and back into the TB1 NRX state during joint fine
+        # tuning, exactly as they do for the learned writer.
+        memory = self._encode(pooled_final)
+
+        # Auxiliary reconstruction path. Stop only the upstream NRX-state
+        # gradient from the reconstruction objective; the shared encoder and
+        # decoder weights still receive reconstruction gradients.
+        target = tf.stop_gradient(pooled_final)
+        reconstruction_memory = self._encode(target)
+        d = self.decoder_hidden(reconstruction_memory)
         reconstructed = self.decoder_out(d)
 
-        # The target is fixed for the reconstruction objective. Gradients still
-        # flow through the encoder input, so joint fine-tuning may learn states
-        # that are both useful temporally and compressible.
-        target = tf.stop_gradient(pooled_final)
         reconstruction_mse = tf.reduce_mean(
             tf.square(reconstructed - target))
+        target_power = tf.reduce_mean(tf.square(target))
+        normalized_reconstruction = tf.math.divide_no_nan(
+            reconstruction_mse,
+            target_power + tf.cast(1e-6, target.dtype),
+        )
         return CompressionOutput(
-            memory, reconstruction_mse, reconstruction_mse)
+            memory,
+            normalized_reconstruction,
+            reconstruction_mse,
+        )
 
 
 def build_compressor(mode: str, d_s: int, d_mem: int):
