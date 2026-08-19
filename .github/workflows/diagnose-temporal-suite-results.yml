@@ -8,15 +8,46 @@ on:
       - .github/workflows/diagnose-temporal-suite-results.yml
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   diagnose:
     runs-on: self-hosted
     timeout-minutes: 20
+    env:
+      NRX_PYTHON: /home/h3lou/miniforge3/envs/neural_rx/bin/python
+      SUITE_ROOT: /home/h3lou/sionna-srsran/temporal_reuse/research_suite
     steps:
       - uses: actions/checkout@v4
         with:
           ref: experiment/temporal-ue-memory-training
           fetch-depth: 1
-      - name: Diagnose completed suite artifacts
-        working-directory: scripts
-        run: python diagnose_temporal_suite_results.py
+
+      - name: Repair and diagnose completed suite artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -x "$NRX_PYTHON"
+          test -f "$SUITE_ROOT/suite_summary.json"
+          mkdir -p results/temporal_suite_validation
+          "$NRX_PYTHON" scripts/repair_temporal_suite_summary.py \
+            --root "$SUITE_ROOT" \
+            --diagnostics-output results/temporal_suite_validation/diagnostics.json
+          cp "$SUITE_ROOT/suite_summary.json" \
+            results/temporal_suite_validation/suite_summary.corrected.json
+
+      - name: Persist validation evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add results/temporal_suite_validation/diagnostics.json \
+                  results/temporal_suite_validation/suite_summary.corrected.json
+          if git diff --cached --quiet; then
+            echo "No validation evidence changed"
+            exit 0
+          fi
+          git commit -m "results: validate completed temporal suite"
+          git push origin HEAD:experiment/temporal-ue-memory-training
