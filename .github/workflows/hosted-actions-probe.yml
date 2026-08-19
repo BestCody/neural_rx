@@ -8,6 +8,7 @@ on:
       - .github/workflows/hosted-actions-probe.yml
 
 permissions:
+  actions: read
   contents: write
 
 jobs:
@@ -19,14 +20,28 @@ jobs:
         with:
           ref: experiment/temporal-ue-memory-training
           fetch-depth: 1
-      - name: Persist probe marker
+      - name: Inspect recent workflow runs
         shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           mkdir -p results/temporal_suite_validation
+          gh api \
+            "repos/$GITHUB_REPOSITORY/actions/runs?branch=experiment%2Ftemporal-ue-memory-training&per_page=50" \
+            --jq '{workflow_runs: [.workflow_runs[] | {id,name,path,event,status,conclusion,head_sha,run_number,created_at,updated_at}]}' \
+            > results/temporal_suite_validation/actions_runs_probe.json
           printf 'hosted-actions-trigger-ok\n' > results/temporal_suite_validation/hosted_actions_probe.txt
+      - name: Persist probe evidence
+        shell: bash
+        run: |
+          set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add results/temporal_suite_validation/hosted_actions_probe.txt
-          git commit -m "results: record hosted actions probe"
+          git add results/temporal_suite_validation/hosted_actions_probe.txt \
+                  results/temporal_suite_validation/actions_runs_probe.json
+          if git diff --cached --quiet; then
+            exit 0
+          fi
+          git commit -m "results: record actions run probe"
           git push origin HEAD:experiment/temporal-ue-memory-training
