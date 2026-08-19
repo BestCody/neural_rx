@@ -1,0 +1,32 @@
+name: Hosted Actions Probe
+
+on:
+  push:
+    branches:
+      - experiment/temporal-ue-memory-training
+    paths:
+      - .github/workflows/hosted-actions-probe.yml
+
+permissions:
+  contents: write
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: experiment/temporal-ue-memory-training
+          fetch-depth: 1
+      - name: Persist probe marker
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p results/temporal_suite_validation
+          printf 'hosted-actions-trigger-ok\n' > results/temporal_suite_validation/hosted_actions_probe.txt
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add results/temporal_suite_validation/hosted_actions_probe.txt
+          git commit -m "results: record hosted actions probe"
+          git push origin HEAD:experiment/temporal-ue-memory-training
