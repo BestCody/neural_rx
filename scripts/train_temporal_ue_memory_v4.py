@@ -24,6 +24,9 @@ import sys
 from pathlib import Path
 
 
+AUTOENCODER_PROTOCOL_VERSION = 2
+
+
 # v3 owns the established CLI. Pull --pooling out before importing v3 so all
 # existing arguments remain source-compatible without duplicating its parser.
 def _extract_pooling(argv):
@@ -213,6 +216,14 @@ def _annotate_v4_summary():
         "attention": "learned softmax weighting over final NRX time/frequency locations",
         "cnn": "learned local 3x3 time/frequency features followed by global mean",
     }[POOLING]
+    if v3.ARGS.compression == "autoencoder":
+        summary["autoencoder_protocol"] = {
+            "version": AUTOENCODER_PROTOCOL_VERSION,
+            "bounded_tanh_bottleneck": True,
+            "reconstruction_upstream_state_detached": True,
+            "scale_normalized_reconstruction_aux_loss": True,
+            "raw_reconstruction_mse_retained_for_diagnostics": True,
+        }
     summary["checkpoint"] = str(new_checkpoint)
     summary_path.write_text(json.dumps(summary, indent=2) + "\n")
     print("V4_POOLING_SUMMARY=" + json.dumps({
@@ -220,6 +231,7 @@ def _annotate_v4_summary():
         "compression": v3.ARGS.compression,
         "d_mem": v3.ARGS.d_mem,
         "checkpoint": str(new_checkpoint),
+        "autoencoder_protocol": summary.get("autoencoder_protocol"),
     }), flush=True)
 
 
