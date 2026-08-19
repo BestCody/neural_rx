@@ -20,43 +20,29 @@ jobs:
         with:
           ref: experiment/temporal-ue-memory-training
           fetch-depth: 1
-      - name: Cancel accidental exhaustive rerun and inspect queue
+      - name: Inspect self-hosted runners and workflow queue
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          # This is the accidental rerun created while fixing the suite workflow.
-          gh api -X POST "repos/$GITHUB_REPOSITORY/actions/runs/32231380395/cancel" >/dev/null || true
-
-          tmp="$(mktemp)"
-          gh api "repos/$GITHUB_REPOSITORY/actions/runs?branch=experiment%2Ftemporal-ue-memory-training&per_page=50" > "$tmp"
-          latest_diag="$(jq -r '[.workflow_runs[] | select(.name == "Diagnose Temporal Suite Results" and (.status == "queued" or .status == "in_progress"))] | sort_by(.run_number) | last | .id // empty' "$tmp")"
-
-          jq -r '.workflow_runs[] | select(.name == "Diagnose Temporal Suite Results" and .status == "queued") | .id' "$tmp" |
-          while read -r id; do
-            if [[ -n "$id" && "$id" != "$latest_diag" ]]; then
-              gh api -X POST "repos/$GITHUB_REPOSITORY/actions/runs/$id/cancel" >/dev/null || true
-            fi
-          done
-
-          sleep 5
           mkdir -p results/temporal_suite_validation
-          gh api \
-            "repos/$GITHUB_REPOSITORY/actions/runs?branch=experiment%2Ftemporal-ue-memory-training&per_page=50" \
+          gh api "repos/$GITHUB_REPOSITORY/actions/runners?per_page=100" \
+            --jq '{total_count, runners: [.runners[] | {id,name,os,status,busy,labels:[.labels[].name]}]}' \
+            > results/temporal_suite_validation/runners_probe.json
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs?branch=experiment%2Ftemporal-ue-memory-training&per_page=50" \
             --jq '{workflow_runs: [.workflow_runs[] | {id,name,path,event,status,conclusion,head_sha,run_number,created_at,updated_at}]}' \
             > results/temporal_suite_validation/actions_runs_probe.json
-          printf 'hosted-actions-trigger-ok\n' > results/temporal_suite_validation/hosted_actions_probe.txt
       - name: Persist probe evidence
         shell: bash
         run: |
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add results/temporal_suite_validation/hosted_actions_probe.txt \
+          git add results/temporal_suite_validation/runners_probe.json \
                   results/temporal_suite_validation/actions_runs_probe.json
           if git diff --cached --quiet; then
             exit 0
           fi
-          git commit -m "results: record actions run probe"
+          git commit -m "results: record self-hosted runner state"
           git push origin HEAD:experiment/temporal-ue-memory-training
