@@ -1,17 +1,17 @@
 #!/usr/bin/env python3
-"""Active exhaustive suite with strict provenance and fail-fast scheduling.
+"""Strict exhaustive-suite resume layer with provenance checks and wave scheduling.
 
 Builds on v3 (capacity-tuned learned pooling for PCA), rejects stale or
-underspecified artifacts, and cancels queued experiment jobs after the first
-failure so a broken cell cannot waste the rest of the GPU sweep.
+underspecified artifacts, and runs at most one job per configured GPU. A new
+wave is launched only after every job in the current wave succeeds, preventing
+the race where a queued job could start after another cell had already failed.
 """
 
 from __future__ import annotations
 
 import json
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
-from queue import Queue
 
 from temporal_eval_metrics import make_snr_grid
 import run_temporal_research_suite_exhaustive_v3 as v3suite
@@ -63,7 +63,11 @@ def strict_training_valid(out, compression, pooling, d_mem, seed, dynamic):
             bool(s.get("dynamic_scheduling")) == bool(dynamic),
         ]
         if compression == "autoencoder":
-            checks.append(_autoencoder_protocol_valid(s))
+            checks += [
+                _autoencoder_protocol_valid(s),
+                int(s.get("memory_expiry_slots", -1)) == 8,
+                abs(float(s.get("ae_reconstruction_weight", -1.0)) - 0.1) < 1e-12,
+            ]
         if dynamic:
             checks += [
                 abs(float(s.get("schedule_switch_prob", -1.0)) - 0.65) < 1e-12,
@@ -168,8 +172,15 @@ def strict_eval_valid(out, compression=None, pooling=None, d_mem=None, full_stat
         expected_seed, scenario = _path_seed_and_scenario(out)
         if expected_seed is not None and int(s.get("seed", -1)) != expected_seed:
             return False
-        if scenario == "fixed" and bool(s.get("dynamic_scheduling")):
-            return False
+        if scenario == "fixed":
+            if bool(s.get("dynamic_scheduling")):
+                return False
+            if int(s.get("ue_pool_size", -1)) != 4:
+                return False
+            if abs(float(s.get("schedule_switch_prob", -1.0)) - 0.65) > 1e-12:
+                return False
+            if abs(float(s.get("schedule_reorder_prob", -1.0)) - 0.50) > 1e-12:
+                return False
         if scenario == "reorder_only":
             if not bool(s.get("dynamic_scheduling")):
                 return False
@@ -203,46 +214,59 @@ def strict_eval_valid(out, compression=None, pooling=None, d_mem=None, full_stat
         return False
 
 
-def fail_fast_parallel(stage_name, jobs):
-    """One job/GPU; after first failure cancel every not-yet-started job."""
+def wave_fail_fast_parallel(stage_name, jobs):
+    """Run one job/GPU in waves; launch no next wave unless all current jobs pass."""
     if not jobs:
         return {}
-    gpu_pool = Queue()
-    for gpu in GPUS:
-        gpu_pool.put(gpu)
-
-    def wrapped(name, fn):
-        gpu = gpu_pool.get()
-        try:
-            base.safe_print(f"{stage_name}: START {name} on GPU {gpu}", flush=True)
-            value = fn(gpu)
-            base.safe_print(f"{stage_name}: DONE  {name} on GPU {gpu}", flush=True)
-            return name, value
-        finally:
-            gpu_pool.put(gpu)
-
-    executor = ThreadPoolExecutor(max_workers=len(GPUS))
-    futures = [executor.submit(wrapped, name, fn) for name, fn in jobs]
     results = {}
-    try:
-        for future in as_completed(futures):
-            name, value = future.result()
-            results[name] = value
-    except BaseException:
-        for future in futures:
-            future.cancel()
-        executor.shutdown(wait=True, cancel_futures=True)
-        raise
-    else:
-        executor.shutdown(wait=True)
+    wave_size = len(GPUS)
+
+    for start in range(0, len(jobs), wave_size):
+        wave = jobs[start : start + wave_size]
+        base.safe_print(
+            f"{stage_name}: WAVE_START {[name for name, _ in wave]}",
+            flush=True,
+        )
+        failures = []
+        wave_results = {}
+
+        with ThreadPoolExecutor(max_workers=len(wave)) as executor:
+            futures = []
+            for gpu, (name, fn) in zip(GPUS, wave):
+                base.safe_print(f"{stage_name}: START {name} on GPU {gpu}", flush=True)
+                futures.append((name, gpu, executor.submit(fn, gpu)))
+
+            for name, gpu, future in futures:
+                try:
+                    wave_results[name] = future.result()
+                    base.safe_print(f"{stage_name}: DONE  {name} on GPU {gpu}", flush=True)
+                except BaseException as exc:
+                    failures.append((name, gpu, exc))
+                    base.safe_print(
+                        f"{stage_name}: FAIL  {name} on GPU {gpu}: "
+                        f"{type(exc).__name__}: {exc}",
+                        flush=True,
+                    )
+
+        if failures:
+            name, gpu, exc = failures[0]
+            raise RuntimeError(
+                f"{stage_name} failed at {name} on GPU {gpu}; no next wave started"
+            ) from exc
+
+        results.update(wave_results)
+        base.safe_print(
+            f"{stage_name}: WAVE_DONE completed={len(results)}/{len(jobs)}",
+            flush=True,
+        )
+
     return results
 
 
-# Existing functions resolve these module globals at execution time.
 base.valid_training_dir = strict_training_valid
 base.eval_valid = strict_eval_valid
 base.full_state_training_valid = strict_full_state_training_valid
-base.run_parallel = fail_fast_parallel
+base.run_parallel = wave_fail_fast_parallel
 v3suite.capacity_pca_valid = strict_capacity_pca_valid
 
 
@@ -255,13 +279,17 @@ def main():
         "training_seed_required": True,
         "training_config_batch_and_schedule_checked": True,
         "autoencoder_protocol_v2_required": True,
+        "autoencoder_reconstruction_weight_checked": True,
+        "autoencoder_memory_expiry_checked": True,
         "pca_calibration_capacity_and_steps_checked": True,
         "full_state_provenance_checked": True,
         "evaluation_seed_scenario_grid_and_crossing_method_checked": True,
+        "evaluation_fixed_schedule_metadata_checked": True,
         "evaluation_132prb_required": True,
     }
     summary["fail_fast_parallelism"] = {
-        "cancel_pending_jobs_after_first_failure": True,
+        "wave_scheduling": True,
+        "launch_next_wave_only_after_all_current_jobs_succeed": True,
         "max_simultaneous_jobs": len(GPUS),
     }
     summary_path.write_text(json.dumps(summary, indent=2) + "\n")
