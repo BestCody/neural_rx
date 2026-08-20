@@ -39,6 +39,83 @@ def _require_protocol_v2(training_dir: Path) -> dict:
     return summary
 
 
+def _repair_missing_seed_metadata() -> list[str]:
+    """Repair only protocol-v2 artifacts from this fresh corrected-AE run.
+
+    The pre-repair v4 trainer used ARGS.seed during training but inherited v3's
+    historical omission of that seed from training_summary.json. The strict
+    resume validator correctly rejects such summaries. For already-completed
+    protocol-v2 artifacts under this runner's exact seed-scoped output tree, we
+    can deterministically persist the seed that the runner supplied.
+
+    This does not make old pre-fix AE artifacts reusable: protocol-v2 and every
+    other training invariant must already match before the repair is applied.
+    """
+    repaired = []
+    for pooling in POOLINGS:
+        for d_mem in CAPACITIES:
+            out = (
+                ROOT
+                / "trained"
+                / "fixed"
+                / f"seed_{A.seed}"
+                / f"{pooling}_autoencoder_d{d_mem}"
+            )
+            summary_path = out / "training_summary.json"
+            ckpt = out / (
+                f"ue_memory_{pooling}_autoencoder_idaware_"
+                f"d{d_mem}_k2.weights.h5"
+            )
+            if not summary_path.is_file() or not ckpt.is_file():
+                continue
+
+            summary = base.load_json(summary_path)
+            if "seed" in summary:
+                continue
+
+            checks = [
+                summary.get("architecture")
+                == "ue_identity_aware_temporal_memory_v4_pooling",
+                summary.get("config") == A.config,
+                summary.get("pooling") == pooling,
+                summary.get("compression") == "autoencoder",
+                int(summary.get("d_mem", -1)) == int(d_mem),
+                int(summary.get("num_it", -1)) == 2,
+                int(summary.get("train_steps", -1)) == A.train_steps,
+                int(summary.get("memory_only_steps", -1))
+                == A.memory_only_steps,
+                int(summary.get("batch_size", -1)) == A.train_batch,
+                int(summary.get("seq_len", -1)) == A.seq_len,
+                int(summary.get("ue_pool_size", -1)) == 4,
+                bool(summary.get("dynamic_scheduling")) is False,
+                v4._autoencoder_protocol_valid(summary),
+            ]
+            if not all(checks):
+                raise RuntimeError(
+                    "refusing to repair seed metadata on incompatible artifact: "
+                    f"{out}"
+                )
+
+            summary["seed"] = int(A.seed)
+            summary["seed_provenance_repair"] = {
+                "reason": (
+                    "v4 protocol-v2 trainer used the runner seed but omitted "
+                    "the seed field from training_summary.json"
+                ),
+                "source": "corrected_autoencoder_factorial_resume",
+                "seed_scoped_output_directory": f"seed_{A.seed}",
+                "protocol_version_required": 2,
+            }
+            summary_path.write_text(json.dumps(summary, indent=2) + "\n")
+            repaired.append(str(out))
+            print(
+                "REPAIRED_PROTOCOL_V2_SEED_METADATA=" + str(out),
+                flush=True,
+            )
+
+    return repaired
+
+
 def _job(pooling: str, d_mem: int):
     def run(gpu: int):
         ckpt = v3suite.train_factorial(
@@ -109,6 +186,8 @@ def main():
         )
 
     ROOT.mkdir(parents=True, exist_ok=True)
+    repaired_seed_metadata = _repair_missing_seed_metadata()
+
     jobs = []
     for pooling in POOLINGS:
         for d_mem in CAPACITIES:
@@ -163,6 +242,7 @@ def main():
         "seed": A.seed,
         "train_steps": A.train_steps,
         "memory_only_steps": A.memory_only_steps,
+        "repaired_seed_metadata": repaired_seed_metadata,
         "evaluation": {
             "n_size_bwp": 132,
             "snr_min": A.snr_min,
