@@ -211,6 +211,10 @@ def _annotate_v4_summary():
 
     summary["architecture"] = "ue_identity_aware_temporal_memory_v4_pooling"
     summary["pooling"] = POOLING
+    # v3 historically omitted the seed from its persisted summary even though
+    # it was used to seed NumPy, TensorFlow, Sionna, and batch generation.
+    # Persist it here so strict resume/provenance validation can be exact.
+    summary["seed"] = int(v3.ARGS.seed)
     summary["pooling_semantics"] = {
         "mean": "uniform mean over final NRX time/frequency locations",
         "attention": "learned softmax weighting over final NRX time/frequency locations",
@@ -230,6 +234,7 @@ def _annotate_v4_summary():
         "pooling": POOLING,
         "compression": v3.ARGS.compression,
         "d_mem": v3.ARGS.d_mem,
+        "seed": int(v3.ARGS.seed),
         "checkpoint": str(new_checkpoint),
         "autoencoder_protocol": summary.get("autoencoder_protocol"),
     }), flush=True)
