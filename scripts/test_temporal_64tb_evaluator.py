@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""CPU-only tests for the 64-TB evaluator's methodology and metrics."""
+"""Test temporal 64tb evaluator."""
 
 from __future__ import annotations
 

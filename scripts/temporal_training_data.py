@@ -1,20 +1,5 @@
 #!/usr/bin/env python3
-"""Generate temporally correlated Neural RX TB sequences with stable UE identity.
-
-Each physical UE gets one continuous TDL trajectory over the full sequence.
-A scheduler then maps a subset of those physical UEs into the receiver's current
-input positions at each TB.  Payload bits and AWGN are freshly sampled per TB.
-
-This makes schedules such as
-
-    TB1: [A, B]
-    TB2: [B, C]
-    TB3: [A, C]
-
-physically meaningful: UE B's channel remains UE B's channel even when B moves
-from input position 1 to input position 0.  Returned ``ue_ids`` are the stable
-keys used by the external temporal-memory manager.
-"""
+"""Generate persistent-UE temporal training data."""
 
 import argparse
 import json
@@ -63,7 +48,7 @@ NUM_RX_ANT = 4
 
 
 class TemporalTrainingDataGenerator:
-    """Generate [batch, time, ...] TBs with persistent physical UE identities."""
+    """Generate TB sequences for stable UE IDs."""
 
     def __init__(
         self,
@@ -101,9 +86,6 @@ class TemporalTrainingDataGenerator:
             if not 0.0 <= value <= 1.0:
                 raise ValueError(f"{name} must be in [0, 1]")
 
-        # Preserve the original DoubleTDL-low channel family.  For pools larger
-        # than two physical UEs, independent TDL realizations alternate between
-        # the same B100/400-Hz and C300/100-Hz profiles used by the two-UE setup.
         fc = sys_parameters.carrier_frequency
         tx_corr = ue_correlation_matrix(sys_parameters.num_antenna_ports, 0)
         rx_corr = gnb_correlation_matrix(NUM_RX_ANT, 0)
@@ -135,12 +117,7 @@ class TemporalTrainingDataGenerator:
             })
 
     def sample_schedule(self, batch_size, seq_len):
-        """Return stable physical UE IDs for each receiver position.
-
-        Shape is [batch, time, max_num_tx].  Within one TB, IDs are unique.
-        Dynamic scheduling changes at most one user at a time and optionally
-        reorders positions, making identity routing observable during training.
-        """
+        """Sample scheduled UE IDs."""
         batch_size = int(batch_size)
         seq_len = int(seq_len)
         n = self.num_scheduled_tx
@@ -150,8 +127,6 @@ class TemporalTrainingDataGenerator:
             fixed = np.arange(n, dtype=np.int32)
             schedule = np.tile(fixed[None, None, :], [batch_size, seq_len, 1])
             if self.dynamic_scheduling and n > 1:
-                # Even with no spare UEs, reordering still tests that identity
-                # follows the UE rather than the current input position.
                 for b in range(batch_size):
                     for t in range(1, seq_len):
                         if np.random.random() < self.schedule_reorder_prob:
@@ -169,7 +144,6 @@ class TemporalTrainingDataGenerator:
                 current = current.copy()
 
                 if np.random.random() < self.schedule_switch_prob:
-                    # Replace one scheduled UE with one currently absent UE.
                     replace_pos = int(np.random.randint(0, n))
                     absent = np.setdiff1d(universe, current, assume_unique=False)
                     if len(absent):
@@ -185,41 +159,29 @@ class TemporalTrainingDataGenerator:
         return tf.convert_to_tensor(schedule, tf.int32)
 
     def sample_pool_channel(self, batch_size, seq_len):
-        """Draw a continuous TDL trajectory for every physical UE in the pool.
-
-        Returns
-        -------
-        tf.Tensor
-            [batch, time, num_rx, num_rx_ant, ue_pool, num_tx_ant,
-             num_ofdm_symbols, fft_size]
-        """
+        """Sample continuous per-UE channel trajectories."""
         num_sym = self.rg.num_ofdm_symbols
         sampling_frequency = 1.0 / self.rg.ofdm_symbol_duration
 
         h_users = []
         for tdl in self.tdls:
-            # One call spans the entire sequence for this physical UE.
             a, tau = tdl(batch_size, seq_len * num_sym, sampling_frequency)
             h_user = cir_to_ofdm_channel(
                 self.freqs, a, tau, normalize=False)
             h_users.append(h_user)
 
-        # The TDL user axis is axis=3 in Neural RX's channel convention.
         h_pool = tf.concat(h_users, axis=3)
         slots = tf.split(h_pool, seq_len, axis=5)
         return tf.stack(slots, axis=1)
 
     def gather_scheduled_channel(self, h_pool, ue_ids):
-        """Map physical-UE channel trajectories into current receiver positions."""
+        """Map stable UEs into receiver positions."""
         seq_len = ue_ids.shape[1]
         if seq_len is None:
             raise ValueError("seq_len must be statically known for sequence training")
 
         gathered = []
         for t in range(seq_len):
-            # h_pool[:,t] shape:
-            # [B, num_rx, num_rx_ant, ue_pool, num_tx_ant, sym, fft]
-            # batch_dims=1 applies each batch element's own schedule.
             h_t = tf.gather(
                 h_pool[:, t],
                 ue_ids[:, t],
@@ -245,11 +207,7 @@ class TemporalTrainingDataGenerator:
         ue_ids=None,
         include_pool_channel=False,
     ):
-        """Generate a full temporal training batch.
-
-        ``ue_ids`` may be supplied by a correctness test to force a known
-        schedule.  Otherwise it is sampled according to the configured scheduler.
-        """
+        """Generate a full temporal training batch."""
         if ue_ids is None:
             ue_ids = self.sample_schedule(batch_size, seq_len)
         else:
@@ -279,7 +237,6 @@ class TemporalTrainingDataGenerator:
                 self.tx._tb_size,
             ])
             x_t = self.tx(b_t)
-            # Fresh independent AWGN is drawn on every TB.
             y_t = self.apply_channel([x_t, h_t, no])
             ls_t = self.rx.estimate_channel(y_t, self.p.max_num_tx)
             active_t = tf.ones(
@@ -316,8 +273,6 @@ def _complex_corr(a, b):
 
 
 def validate_batch(batch, dynamic_scheduling=False):
-    # For dynamic schedules, validate temporal correlation on the physical pool,
-    # not on input positions whose UE identities may change.
     channel_key = "h_pool" if "h_pool" in batch else "h"
     h = batch[channel_key].numpy()
     bits = batch["bits"].numpy()

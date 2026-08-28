@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Unit checks for long-horizon streaming/TBPTT state handling."""
+"""Test temporal streaming training."""
 
 import json
 

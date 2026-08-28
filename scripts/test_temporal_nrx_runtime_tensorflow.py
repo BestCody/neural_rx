@@ -1,11 +1,5 @@
 #!/usr/bin/env python3
-"""GPU smoke test: actual K=2 TemporalUEMemoryCGNN through live runtime.
-
-This is a contract/integration test, not an accuracy experiment. It uses the
-pretrained cold NRX backbone plus newly initialized temporal-memory layers and
-checks that a real TensorFlow temporal forward pass consumes C-RNTI-owned
-previous memory on the next correlated TB.
-"""
+"""Test temporal NRX runtime tensorflow."""
 
 from __future__ import annotations
 

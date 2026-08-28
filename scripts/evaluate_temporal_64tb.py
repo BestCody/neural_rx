@@ -1,14 +1,5 @@
 #!/usr/bin/env python3
-"""Paired 64-TB evaluation for persistent K=1/K=2 temporal Neural RX.
-
-Every method sees the same payload bits, continuous TDL channel trajectory, and
-noise realization. Temporal memory is empty at TB1, persists through TB64, and
-is discarded before the next independently generated episode. The shipped
-Neural RX weights provide cold K=1, K=2, and K=8 reference receivers.
-
-The primary metric is TBLER over TB2--TB64. TB1 is reported separately because
-the temporal receiver is deliberately cold there.
-"""
+"""Evaluate K=1/K=2 temporal receivers over 64 TBs."""
 
 from __future__ import annotations
 
@@ -92,7 +83,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def make_snr_grid(start: float, stop: float, step: float) -> list[float]:
-    """Return an inclusive, floating-point-stable SNR grid."""
+    """Build an inclusive SNR grid."""
     if step <= 0:
         raise ValueError("snr-step must be positive")
     if stop < start:
@@ -119,14 +110,14 @@ def wilson_interval(errors: int, blocks: int, z: float = 1.959963984540054):
 
 
 def corrected_bler(errors: int, blocks: int) -> float | None:
-    """Jeffreys-style correction keeps log interpolation finite at zero errors."""
+    """Return a finite corrected BLER estimate."""
     if blocks <= 0:
         return None
     return (float(errors) + 0.5) / (float(blocks) + 1.0)
 
 
 def log_bler_crossing(points: list[dict], target: float = 0.10):
-    """Interpolate required SNR where corrected TB2+ TBLER crosses target."""
+    """Interpolate a BLER crossing in log space."""
     if target <= 0:
         raise ValueError("target must be positive")
     samples = []
@@ -158,7 +149,7 @@ def load_checkpoint_spec(
     expected_config: str,
     allow_nonstandard: bool = False,
 ) -> dict:
-    """Read and validate the provenance stored beside a temporal checkpoint."""
+    """Load and validate temporal checkpoint metadata."""
     checkpoint = Path(checkpoint_value).expanduser().resolve()
     if not checkpoint.is_file():
         raise FileNotFoundError(f"Temporal K={expected_k} checkpoint: {checkpoint}")
@@ -221,7 +212,7 @@ def load_checkpoint_spec(
 
 
 def architecture_signature(spec: dict) -> tuple:
-    """Properties that should differ only by receiver iteration count K."""
+    """Return the checkpoint architecture fields."""
     return (
         spec["config"],
         spec["pooling"],
@@ -517,9 +508,6 @@ def _make_plots(
 
 
 def run_evaluation(args: argparse.Namespace, snr_grid: list[float], specs: dict) -> dict:
-    # The upstream Parameters loader resolves config/ relative to scripts/.
-    # Resolve user paths first, then make the evaluator independent of its
-    # invocation directory.
     output_dir = Path(args.output_dir).expanduser().resolve()
     here = Path(__file__).resolve().parent
     os.chdir(here)
@@ -611,7 +599,6 @@ def run_evaluation(args: argparse.Namespace, snr_grid: list[float], specs: dict)
         schedule_reorder_prob=first_spec["schedule_reorder_prob"],
     )
 
-    # One paired warm-up batch creates all Keras variables before HDF5 loading.
     warm = generator.sample_batch(1, min(args.num_tbs, 2), 3.0)
     for k, spec in sorted(specs.items()):
         if k in prebuilt_temporal:
@@ -648,7 +635,6 @@ def run_evaluation(args: argparse.Namespace, snr_grid: list[float], specs: dict)
             "decode": make_temporal_decoder(e2e._receiver, model),
         }
 
-    # Compile each graph once outside the measured Monte Carlo batches.
     for method in methods.values():
         if method["kind"] == "cold":
             method["decode"](
@@ -731,7 +717,6 @@ def run_evaluation(args: argparse.Namespace, snr_grid: list[float], specs: dict)
                 ),
                 flush=True,
             )
-            # Synchronized stopping preserves the paired comparison.
             if all(value >= args.target_errors for value in progress.values()):
                 break
         for name in methods:

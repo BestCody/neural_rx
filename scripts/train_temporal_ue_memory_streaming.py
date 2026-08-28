@@ -1,20 +1,5 @@
 #!/usr/bin/env python3
-"""Train temporal Neural RX as a persistent K=1/K=2 streaming receiver.
-
-This method samples one genuinely continuous channel episode (64 TBs by
-default) and keeps each UE's numerical memory for that entire episode.
-Backpropagation is truncated to short windows:
-the state value crosses a window boundary, but ``stop_gradient`` prevents the
-training graph and GPU memory from growing with the episode length.
-
-At window boundaries, valid UE memories are independently cold-reset with a
-small probability. This teaches recovery from a discarded/stale state without
-giving the receiver an artificial transport-block-position feature.
-
-``--train-steps`` counts optimizer updates (TBPTT windows), not episodes.
-Only one or two receiver/GNN iterations are accepted because those are the
-deployment-latency operating points this experiment is intended to test.
-"""
+"""Train K=1/K=2 streaming temporal Neural RX."""
 
 from __future__ import annotations
 
@@ -116,7 +101,7 @@ def make_streaming_chunk_losses(
     start_tb: int,
     end_tb: int,
 ):
-    """Train on one window and return its final differentiable memory state."""
+    """Run one TBPTT training window."""
     if end_tb <= start_tb:
         raise ValueError("A TBPTT chunk must contain at least one TB")
 
@@ -136,8 +121,6 @@ def make_streaming_chunk_losses(
         active_t = episode["active"][:, t]
         ue_ids_t = episode["ue_ids"][:, t]
 
-        # The absolute episode index is important: gaps and expiry must not
-        # restart at every TBPTT window.
         state, prev_memory, memory_gap, memory_valid = memory_manager.gather(
             state, ue_ids_t, t
         )
@@ -211,7 +194,7 @@ def make_streaming_chunk_losses(
 
 
 def _calibrate_learned_pca_pooler(p, e2e, actual_model, generator):
-    """Capacity-tune a CNN/attention PCA pooler with streaming supervision."""
+    """Calibrate the learned PCA pooler."""
     if ARGS.pooler_calibration_steps <= 0:
         raise ValueError(
             "Learned pooling + PCA requires --pooler-calibration-steps > 0"
@@ -227,7 +210,6 @@ def _calibrate_learned_pca_pooler(p, e2e, actual_model, generator):
         pooling=ARGS.pooling,
         name=f"streaming_pooler_calibration_{ARGS.pooling}_d{ARGS.d_mem}",
     )
-    # The proxy and final PCA receiver use the exact same pooler object.
     calibration_model.pooler = actual_model.pooler
     calibration_memory = DifferentiableUEMemoryManager(
         capacity=ARGS.ue_pool_size,
@@ -340,7 +322,7 @@ def _calibrate_learned_pca_pooler(p, e2e, actual_model, generator):
 
 
 def build_training_components():
-    """Build the pretrained backbone, temporal model, data, and UE state table."""
+    """Build the temporal training stack."""
     parameters, e2e = build_backbone(
         ARGS.config, num_it=ARGS.num_it, training=True
     )
@@ -372,7 +354,7 @@ def build_training_components():
 
 
 def fit_pca(receiver, model, generator):
-    """Fit the frozen PCA compressor on cold K-step receiver states."""
+    """Fit the PCA compressor."""
     if ARGS.compression != "pca":
         return None
 
@@ -449,7 +431,6 @@ def main():
         )
         print("PCA_FIT=" + json.dumps(pca_stats), flush=True)
 
-    # Build reader/compressor variables using the same loss path as training.
     warmup = generator.sample_batch(1, ARGS.tbptt_window, 3.0)
     warm_state = memory_manager.zero_state(1, tf.float32)
     _ = make_streaming_chunk_losses(
@@ -503,8 +484,6 @@ def main():
         ebno = float(
             np.random.uniform(ARGS.min_ebno_db, ARGS.max_ebno_db)
         )
-        # One generator call produces one continuous TDL trajectory. Never
-        # carry memory into a separately sampled episode.
         episode = generator.sample_batch(
             ARGS.batch_size, ARGS.stream_len, ebno
         )

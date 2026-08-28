@@ -1,21 +1,5 @@
 #!/usr/bin/env python3
-"""Live C-RNTI-keyed runtime wrapper for temporal Neural RX.
-
-This module closes the receiver-side half of the live bridge:
-
-    srsRAN scheduled PUSCH context (C-RNTI + slot)
-        -> CRNTIMemoryAdapter.lookup(...)
-        -> temporal K-step NRX with prev_memory/gap/valid
-        -> CRNTIMemoryAdapter.process_result(...)
-
-UE identity is never inferred from RF samples. The caller must supply C-RNTIs
-in exactly the same UE/receiver-position order as the signal tensors passed to
-the neural receiver.
-
-The generic TemporalNRXRuntime is deliberately independent of TensorFlow so the
-identity/memory transaction can be tested without a GPU. TensorFlowTemporalInference
-adapts the existing TemporalUEMemoryCGNN interface used by the training scripts.
-"""
+"""Temporal NRX runtime."""
 
 from __future__ import annotations
 
@@ -34,7 +18,7 @@ from crnti_memory_adapter import (
 
 @dataclass(frozen=True)
 class TemporalInferenceOutput:
-    """Normalized output returned by a live temporal-NRX inference callable."""
+    """Normalized temporal inference output."""
 
     receiver_output: Any
     next_memory: Any
@@ -44,7 +28,7 @@ class TemporalInferenceOutput:
 
 @dataclass(frozen=True)
 class TemporalRuntimeResult:
-    """Result plus the exact memory metadata consumed for this inference."""
+    """Temporal result with consumed memory metadata."""
 
     receiver_output: Any
     channel_estimate: Any
@@ -58,7 +42,7 @@ class TemporalRuntimeResult:
 
 
 def _to_numpy(value) -> np.ndarray:
-    """Convert NumPy/TensorFlow-like values without importing TensorFlow."""
+    """Convert tensor-like values to NumPy."""
     if hasattr(value, "numpy"):
         value = value.numpy()
     return np.asarray(value)
@@ -85,32 +69,7 @@ def _normalize_inference_output(value) -> TemporalInferenceOutput:
 
 
 class TemporalNRXRuntime:
-    """C-RNTI-keyed live temporal receiver transaction.
-
-    Parameters
-    ----------
-    inference_fn:
-        Callable invoked with keyword arguments:
-
-            received_grid
-            ls_estimate
-            active_tx       [1, U] bool
-            prev_memory     [1, U, d_mem] float32
-            memory_gap      [1, U] int32
-            memory_valid    [1, U] bool
-
-        It must return TemporalInferenceOutput (or an equivalent mapping).
-    d_mem:
-        Persistent memory width per UE. This must match the trained model.
-
-    Notes
-    -----
-    A single lock covers lookup -> inference -> commit. This is the conservative
-    correctness-first deployment policy: two calls cannot interleave and update
-    the same UE out of slot order. Once the live receiver batches all UEs for a
-    slot in one invocation, this lock is normally uncontended. A future highly
-    parallel runtime can replace it with per-UE ordering once needed.
-    """
+    """C-RNTI-keyed live temporal receiver transaction."""
 
     def __init__(
         self,
@@ -173,12 +132,7 @@ class TemporalNRXRuntime:
         active: Sequence[bool] | np.ndarray | None = None,
         **inference_kwargs,
     ) -> TemporalRuntimeResult:
-        """Run one live temporal inference and persist the resulting UE memory.
-
-        `crntis` must use the exact UE ordering represented by received_grid,
-        ls_estimate and active. The immutable keys returned by lookup are used
-        for commit so receiver-position reorder cannot redirect memory.
-        """
+        """Run one temporal receiver transaction."""
         keys = normalize_crntis(crntis)
         if not keys:
             raise ValueError("at least one scheduled C-RNTI is required")
@@ -188,8 +142,6 @@ class TemporalNRXRuntime:
         with self._lock:
             lookup = self.memory.lookup(keys, slot)
 
-            # TemporalUEMemoryCGNN is trained with a batch dimension. Live gNB
-            # processing is batch-size one, so the runtime inserts it here.
             output = _normalize_inference_output(
                 self.inference_fn(
                     received_grid=received_grid,
@@ -205,7 +157,6 @@ class TemporalNRXRuntime:
                 output.next_memory, len(keys)
             )
 
-            # Commit only after inference and memory validation succeed.
             self.memory.process_result(
                 lookup,
                 next_memory,
@@ -251,16 +202,9 @@ class TemporalNRXRuntime:
 
 
 class TensorFlowTemporalInference:
-    """Adapter from the trained TemporalUEMemoryCGNN to TemporalNRXRuntime.
-
-    This reproduces the preprocessing/demapping used by
-    ``temporal_ue_memory_model.py`` while keeping live memory ownership outside
-    the neural model. Only the first three model outputs are required for
-    deployment.
-    """
+    """Adapt TemporalUEMemoryCGNN for live inference."""
 
     def __init__(self, receiver, temporal_model, expected_num_it: int | None = 2):
-        # Lazy imports keep the generic runtime/test path NumPy-only.
         import tensorflow as tf
         from sionna.utils import flatten_last_dims
 
@@ -312,10 +256,6 @@ class TensorFlowTemporalInference:
         tf = self.tf
         ofdm = self.receiver._neural_rx
 
-        # Per-TB training shapes are:
-        #   y     [B, 1, RxAnt, Symbols, Subcarriers]
-        #   h_hat [B, U, Subcarriers, Symbols, Features]
-        # Accept the same tensors without B and insert B=1 when necessary.
         y = self._batched(received_grid, unbatched_rank=4)
         h_hat = self._batched(ls_estimate, unbatched_rank=4)
         active = tf.convert_to_tensor(active_tx)

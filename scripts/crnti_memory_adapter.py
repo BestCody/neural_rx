@@ -1,22 +1,5 @@
 #!/usr/bin/env python3
-"""C-RNTI boundary adapter for runtime temporal UE memory.
-
-The neural receiver must never infer UE identity from RF samples. The gNB
-scheduler already knows the UE associated with each scheduled PUSCH. This
-adapter converts those scheduler-supplied C-RNTIs into the stable keys used by
-RuntimeUEMemoryManager and exposes explicit lifecycle hooks.
-
-Intended production call sequence per slot:
-
-    crntis from scheduled PUSCH PDUs
-        -> lookup(crntis, slot_index)
-        -> NRX(prev_memory, gap, valid, current signal)
-        -> process_result(lookup, next_memory, same slot_index)
-
-On UE release, re-establishment with a new identity, handover, or any event that
-invalidates temporal state, call release(crnti). Expiration handles UEs that
-simply stop being scheduled for longer than the configured TTL.
-"""
+"""Route temporal memory by C-RNTI."""
 
 from __future__ import annotations
 
@@ -55,7 +38,7 @@ def normalize_crntis(values: Iterable[int]) -> list[int]:
 
 @dataclass(frozen=True)
 class RuntimeMemoryInput:
-    """Immutable state handed from the C-RNTI adapter to the neural receiver."""
+    """Memory lookup result for one receiver call."""
 
     crntis: tuple[int, ...]
     slot_index: int
@@ -65,7 +48,7 @@ class RuntimeMemoryInput:
 
 
 class CRNTIMemoryAdapter:
-    """Scheduler C-RNTI -> identity-owned temporal-memory bridge."""
+    """Bind C-RNTI lookups to successful commits."""
 
     def __init__(
         self,
@@ -90,7 +73,7 @@ class CRNTIMemoryAdapter:
         self.d_mem = int(d_mem)
 
     def lookup(self, crntis: Sequence[int], slot_index: int) -> RuntimeMemoryInput:
-        """Resolve scheduled PUSCH C-RNTIs to previous memory/gap/valid tensors."""
+        """Lookup."""
         keys = normalize_crntis(crntis)
         slot = int(slot_index)
         memory, gap, valid = self.manager.lookup(keys, slot)
@@ -109,7 +92,7 @@ class CRNTIMemoryAdapter:
         slot_index: int,
         active: Sequence[bool] | None = None,
     ) -> None:
-        """Write NRX-produced memory back under the exact scheduled C-RNTIs."""
+        """Commit."""
         keys = normalize_crntis(crntis)
         self.manager.update(
             keys,
@@ -125,11 +108,7 @@ class CRNTIMemoryAdapter:
         slot_index: int,
         active: Sequence[bool] | None = None,
     ) -> None:
-        """Commit using the immutable keys and slot returned by lookup.
-
-        This prevents both UE-order mismatches and accidental cross-slot commits.
-        A result computed from slot N's previous memory must be committed as slot N.
-        """
+        """Process result."""
         slot = int(slot_index)
         if slot != int(lookup.slot_index):
             raise ValueError(
@@ -143,15 +122,15 @@ class CRNTIMemoryAdapter:
         )
 
     def release(self, crnti: int) -> None:
-        """Erase temporal state immediately on scheduler/RRC UE removal."""
+        """Release."""
         self.manager.remove(normalize_crnti(crnti))
 
     def handover(self, crnti: int) -> None:
-        """Conservative handover hook: old cell-specific state is invalidated."""
+        """Handover."""
         self.release(crnti)
 
     def reestablishment(self, old_crnti: int) -> None:
-        """Invalidate the old identity before a re-established UE is re-keyed."""
+        """Reestablishment."""
         self.release(old_crnti)
 
     def expire(self, slot_index: int) -> None:

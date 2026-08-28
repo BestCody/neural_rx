@@ -8,7 +8,6 @@
 # without an express license agreement from NVIDIA CORPORATION or
 # its affiliates is strictly prohibited.
 
-# Implements baseline receiver algorithms for performance evaluation
 
 from tensorflow.keras.layers import Layer
 import tensorflow as tf
@@ -21,44 +20,7 @@ from sionna.utils import flatten_last_dims, split_dim, flatten_dims
 
 
 class BaselineReceiver(Layer):
-    """BaselineReceiver class implementing a Sionna baseline receiver for
-    different receiver architectures.
-
-    Parameters
-    ----------
-    sys_parameters : Parameters
-        The system parameters.
-
-    dtype : tf.complex64, optional
-        The datatype of the layer, by default tf.complex64.
-
-    return_tb_status : bool, optional
-        Whether to return transport block status, by default False.
-
-    Input
-    -----
-    inputs : list
-        [y, no] or [y, h, no] (only for 'baseline_perf_csi')
-
-        y : [batch_size, num_subcarriers, num_ofdm_symbols, num_rx_ant], tf.complex64
-            The received OFDM resource grid after cyclic prefix removal and FFT.
-
-        no : tf.float32
-            Noise variance. Must have broadcastable shape to ``y``.
-
-        h : [batch_size, num_subcarriers, num_ofdm_symbols, num_rx_ant], tf.complex64
-            Channel frequency responses. Only required for for
-            'baseline_perf_csi'.
-
-    Output
-    ------
-    b_hat : [batch_size, num_tx, tb_size], tf.float32
-        The reconstructed payload bits of each transport block.
-
-    tb_crc_status : [batch_size, num_tx], tf.bool
-        Transport block CRC status. Only returned if `return_tb_status`
-        is `True`.
-    """
+    """Baseline Receiver."""
 
     def __init__(self,
                  sys_parameters,
@@ -71,25 +33,15 @@ class BaselineReceiver(Layer):
         self._sys_parameters = sys_parameters
         self._return_tb_status = return_tb_status
 
-        ###################################
-        # Channel Estimation
-        ###################################
         if sys_parameters.system in ('baseline_lmmse_kbest',
                                      'baseline_lmmse_lmmse'):
-            # Setup channel estimator for non-perfect CSI
 
-            # Use low-complexity LMMSE interpolator for large bandwidth parts
-            # to keep computational complexity feasible.
-            # Remark: dimensions are hard-coded in config. Needs to be adjusted
-            # for different PRB dimensions.
             if sys_parameters.n_size_bwp > 100:
                 print("Applying low complexity LMMSE interpolation with " \
                       "reduced number of PRBs.")
 
-                # use automatic mode to find suitable split parameters
                 if sys_parameters.lmmse_num_prbs==-1:
                     print("Using automatic LMMSE splitting.")
-                    # find prime factorial of num_prbs
                     n = sys_parameters.n_size_bwp
                     prime_factors = []
                     i = 2
@@ -100,8 +52,6 @@ class BaselineReceiver(Layer):
                             x /= i
                         else:
                             i += 1
-                    # find good split such that the number of PRBs is slightly 
-                    # above 20; this is heuristic
                     n = len(prime_factors)
                     best_product = 1e6
 
@@ -121,7 +71,6 @@ class BaselineReceiver(Layer):
                                      "lmmse_num_prbs.")
                 reduction = int(reduction)
 
-                # modify PUSCH configs for reduced n_size_bwp
                 pcs = []
                 for i in range(0, len(sys_parameters.pusch_configs[mcs_arr_eval_idx])):
                     pc = sys_parameters.pusch_configs[mcs_arr_eval_idx][i].clone()
@@ -146,7 +95,6 @@ class BaselineReceiver(Layer):
                     cov_mat_space=cov_mat_space,
                     order="s-f-t"
                 )
-                # 5G PUSCH version of low-complexity LMMSE
                 self._est = LowComplexityPUSCHLMSEEstimator(
                     resource_grid=sys_parameters.transmitters[mcs_arr_eval_idx]._resource_grid,
                     dmrs_length=pc.dmrs.length,
@@ -158,7 +106,6 @@ class BaselineReceiver(Layer):
                     reduction=reduction
                 )
             else:
-                # Use standard Sionna LMMSE interpolator over all PRBs
                 interpolator = LMMSEInterpolator(
                     sys_parameters.transmitters[mcs_arr_eval_idx]._resource_grid.pilot_pattern,
                     cov_mat_time=sys_parameters.time_cov_mat,
@@ -193,19 +140,12 @@ class BaselineReceiver(Layer):
                 num_cdm_groups_without_data=pc.dmrs.num_cdm_groups_without_data,
                 interpolation_type="lin"
             )
-            #self._est = LSChannelEstimator(
-            #            resource_grid=sys_parameters.transmitters[mcs_arr_eval_idx]._resource_grid,
-            #            interpolation_type="lin")
         elif sys_parameters.system in ('baseline_perf_csi_lmmse',
                                        'baseline_perf_csi_kbest'):
             self._est = "perfect"
 
-        ###################################
-        # Detection
-        ###################################
         if sys_parameters.system in ('baseline_lmmse_kbest',
                                      'baseline_perf_csi_kbest'):
-            # Init K-best detector
             self._detector = KBestDetector(
                 "bit",
                 sys_parameters.max_num_tx,
@@ -220,7 +160,6 @@ class BaselineReceiver(Layer):
                                        'baseline_lsnn_lmmse',
                                        'baseline_lslin_lmmse',
                                        'baseline_perf_csi_lmmse'):
-            # Init LMMSE detector
             self._detector = LinearDetector(
                 "lmmse",
                 "bit",
@@ -232,9 +171,6 @@ class BaselineReceiver(Layer):
                     sys_parameters.transmitters[mcs_arr_eval_idx]._num_bits_per_symbol
             )
 
-        ###################################
-        # Decoding
-        ###################################
         self._decoder = TBDecoder(
             sys_parameters.transmitters[mcs_arr_eval_idx]._tb_encoder,
             num_bp_iter=sys_parameters.num_bp_iter,
@@ -246,7 +182,7 @@ class BaselineReceiver(Layer):
             channel_estimator=self._est,
             mimo_detector=self._detector,
             tb_decoder=self._decoder,
-            stream_management=None,  # Will be derived from transmitters
+            stream_management=None,
             input_domain="freq",
             return_tb_crc_status=self._return_tb_status
         )
@@ -261,43 +197,9 @@ class BaselineReceiver(Layer):
             b_hat = self._receiver([y, no])
         return b_hat
 
-# The following LMMSE estimator implementations are used to keep the
-# complexity of the LMMSEEstimator class feasible.
 
 class LowComplexityLMSEEstimator(LSChannelEstimator):
-    """LowComplexityLMSEEstimator class for scalable LMMSE estimation for a
-    large number of PRBs.
-
-    The LMMSE estimation is only applied to a smaller number of PRBs
-    instead of the entire number of PRBs. This leads to a small performance
-    degradation, but keeps the computational (and memory) complexity
-    significantly lower.
-    Please note that these blocks are experimental e.g., the batch-size is
-    hard-coded for XLA support (derived from sys_parameters); the same holds for
-    the num_rx parameter and the number of streams per tx.
-
-    Input
-    -----
-    inputs : list
-        [y, no]
-
-    y : [batch_size, num_subcarriers, num_ofdm_symbols, num_rx_ant], tf.complex64
-        The received OFDM resource grid after cyclic prefix removal and FFT.
-
-    no : tf.float32
-        Noise variance. Must have broadcastable shape to ``y``.
-
-    Output
-    ------
-
-    h_hat : [batch_size, 1, num_rx_ant, num_tx, 1, num_ofdm_symbols, fft_size], tf.complex
-        Channel estimates across the entire resource grid for all
-        transmitters and streams
-
-    err_var : Same shape as ``h_hat``, tf.float
-        Channel estimation error variances across the entire resource grid
-        for all transmitters and streams
-    """
+    """Low Complexity LMSEEstimator."""
 
 
     def __init__(self, resource_grid, interpolator,
@@ -307,7 +209,6 @@ class LowComplexityLMSEEstimator(LSChannelEstimator):
         self._reduction = reduction
         self._sys_parameters = sys_parameters
 
-        # static shapes
         self._num_pilots = self._sys_parameters.transmitters[0]._resource_grid.num_pilot_symbols.numpy()
 
     def call(self, inputs):
@@ -318,12 +219,11 @@ class LowComplexityLMSEEstimator(LSChannelEstimator):
         h_hat, err_var = self.estimate_at_pilot_locations(y_pilots, no)
         err_var = tf.broadcast_to(err_var, tf.shape(h_hat))
 
-        # Hard-coded batch size
         s = [self._sys_parameters.batch_size_eval_small]
-        s.append(1)  # num_rx
+        s.append(1)
         s.append(self._sys_parameters.num_rx_antennas)
         s.append(self._sys_parameters.max_num_tx)
-        s.append(1)  # num_layer
+        s.append(1)
         s.append(self._num_pilots)
 
         h_hat = tf.ensure_shape(h_hat, shape=s)
@@ -357,41 +257,7 @@ class LowComplexityLMSEEstimator(LSChannelEstimator):
         return h_hat10, err_var10
 
 class LowComplexityPUSCHLMSEEstimator(PUSCHLSChannelEstimator):
-    """LowComplexityPUSCHLMSEEstimator class for scalable LMMSE estimation for 5G PUSCH.
-
-    The LMMSE estimation is only applied to a smaller number of PRBs
-    instead of the entire number of PRBs. This leads to a small performance
-    degradation, but keeps the computational (and memory) complexity
-    significantly lower.
-    Please note that these blocks are experimental e.g., the batch-size is
-    hard-coded for XLA support (derived from sys_parameters); the same holds for
-    the num_rx parameter and the number of streams per tx.
-
-    Remark: Similar to LowComplexityLMMSEEstimator, but supports
-    FOCC, i.e., non-orthogonal DMRS as done in  some 5G NR configurations.
-
-    Input
-    -----
-    inputs : list
-        [y, no]
-
-    y : [batch_size, num_subcarriers, num_ofdm_symbols, num_rx_ant], tf.complex64
-        The received OFDM resource grid after cyclic prefix removal and FFT.
-
-    no : tf.float32
-        Noise variance. Must have broadcastable shape to ``y``.
-
-    Output
-    ------
-
-    h_hat : [batch_size, 1, num_rx_ant, num_tx, 1, num_ofdm_symbols, fft_size], tf.complex
-        Channel estimates across the entire resource grid for all
-        transmitters and streams
-
-    err_var : Same shape as ``h_hat``, tf.float
-        Channel estimation error variances across the entire resource grid
-        for all transmitters and streams
-    """
+    """Low Complexity PUSCHLMSEEstimator."""
 
     def __init__(self, resource_grid, dmrs_length, dmrs_additional_position,
                  num_cdm_groups_without_data, interpolator, sys_parameters,
@@ -405,7 +271,6 @@ class LowComplexityPUSCHLMSEEstimator(PUSCHLSChannelEstimator):
         self._reduction = reduction
         self._sys_parameters = sys_parameters
 
-        # static shapes
         self._num_pilots = self._sys_parameters.transmitters[0]._resource_grid.num_pilot_symbols.numpy()
 
     def call(self, inputs):
@@ -416,12 +281,11 @@ class LowComplexityPUSCHLMSEEstimator(PUSCHLSChannelEstimator):
         h_hat, err_var = self.estimate_at_pilot_locations(y_pilots, no)
         err_var = tf.broadcast_to(err_var, tf.shape(h_hat))
 
-        # Hard-coded batch size
         s = [self._sys_parameters.batch_size_eval_small]
-        s.append(1)  # num_rx
+        s.append(1)
         s.append(self._sys_parameters.num_rx_antennas)
         s.append(self._sys_parameters.max_num_tx)
-        s.append(1)  # num_layer
+        s.append(1)
         s.append(self._num_pilots)
 
         h_hat = tf.ensure_shape(h_hat, shape=s)

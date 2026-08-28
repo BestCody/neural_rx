@@ -1,10 +1,5 @@
 #!/usr/bin/env python3
-"""Temporal UE-memory receiver components shared by training and evaluation.
-
-This module contains architecture and signal-processing code only. It parses no
-command-line arguments and starts no training jobs. Keeping it separate makes
-``train_temporal_ue_memory_streaming.py`` the single training entry point.
-"""
+"""Temporal UE-memory receiver."""
 
 from __future__ import annotations
 
@@ -28,7 +23,7 @@ from utils import E2E_Model, Parameters, load_weights
 
 
 class TemporalUEMemoryCGNN(tf.keras.Model):
-    """Pretrained CGNN with identity-owned memory read/write paths."""
+    """Temporal UE-memory CGNN."""
 
     def __init__(
         self,
@@ -101,7 +96,7 @@ class TemporalUEMemoryCGNN(tf.keras.Model):
         return state
 
     def cold_pooled_final(self, inputs):
-        """Return a cold K-step state for fitting a frozen PCA basis."""
+        """Pool the current receiver state."""
         y, pe, h_hat, active_tx, mcs_ue_mask = inputs
         state = self._initial_state(y, pe, h_hat, mcs_ue_mask)
         state = self._iterations(state, pe, active_tx)
@@ -249,7 +244,7 @@ def temporal_forward(
 
 
 def build_backbone(config, num_it, training, num_tx_eval=None):
-    """Build and load the shipped cold Neural RX backbone."""
+    """Build the cold Neural RX backbone."""
     parameters = Parameters(
         config,
         training=training,
@@ -267,7 +262,7 @@ def build_backbone(config, num_it, training, num_tx_eval=None):
 
 
 def identity_routing_check(d_mem, capacity):
-    """Verify that memory follows UE identity rather than receiver position."""
+    """Check memory routing across UE positions."""
     manager = DifferentiableUEMemoryManager(
         capacity=capacity, d_mem=d_mem, expiry_slots=8
     )
@@ -345,7 +340,7 @@ def identity_routing_check(d_mem, capacity):
 
 
 def temporal_gradient_check(receiver, model, generator, memory_manager):
-    """Verify that TB2 loss differentiates through the TB1 write path."""
+    """Check temporal gradient flow."""
     batch_size = 2
     schedule_pair = (
         [[0, 1], [1, 2]]

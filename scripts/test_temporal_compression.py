@@ -69,8 +69,6 @@ def main():
         and temporal_connected
     )
 
-    # Synthetic data with descending feature scales gives a well-defined PCA
-    # spectrum and enough samples for a stable rank-d_mem fit.
     scales = np.linspace(3.0, 0.2, d_s, dtype=np.float32)
     x = np.random.randn(512, d_s).astype(np.float32) * scales
     mean, components, eigenvalues, stats = fit_pca_numpy(x, d_mem)

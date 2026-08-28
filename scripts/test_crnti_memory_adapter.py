@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Correctness tests for the runtime C-RNTI -> temporal-memory bridge."""
+"""Test crnti memory adapter."""
 
 import json
 
@@ -20,7 +20,6 @@ def main():
     b = 0x4602
     c = 0x4603
 
-    # Slot 0: A/B are new, so the NRX must receive invalid zero memory.
     first = bridge.lookup([a, b], 0)
     new_zero = bool(
         first.crntis == (a, b)
@@ -38,8 +37,6 @@ def main():
         0,
     )
 
-    # Slot 1: scheduler order is B/C. B must follow its C-RNTI from position 1
-    # to position 0; C must not inherit A's old row.
     second = bridge.lookup([b, c], 1)
     identity_routing = bool(
         second.crntis == (b, c)
@@ -58,7 +55,6 @@ def main():
         1,
     )
 
-    # A result looked up for one slot must never be committed as another slot.
     slot_binding_guard = False
     before_bad_commit = bridge.snapshot()
     try:
@@ -79,7 +75,6 @@ def main():
         and before_bad_commit["last_seen"] == after_bad_commit["last_seen"]
     )
 
-    # Slot 2: A was unscheduled for one slot and must retain its own memory.
     third = bridge.lookup([a, b], 2)
     absence_persistence = bool(
         third.valid.tolist() == [True, True]
@@ -88,7 +83,6 @@ def main():
         and np.allclose(third.memory[1], 20.0)
     )
 
-    # Explicit RRC/scheduler release immediately destroys B's state.
     bridge.release(b)
     b_after_release = bridge.lookup([b], 3)
     release_zeroes = bool(
@@ -96,8 +90,6 @@ def main():
         and np.allclose(b_after_release.memory, 0.0)
     )
 
-    # C last wrote in slot 1. At slot 4 its age is 3 > expiry_slots=2, so it
-    # must be expired and observed as a new zero state.
     c_after_expiry = bridge.lookup([c], 4)
     expiry_zeroes = bool(
         c_after_expiry.valid.tolist() == [False]

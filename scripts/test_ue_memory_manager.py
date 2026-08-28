@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Correctness tests for UE-identity-aware temporal memory routing."""
+"""Test ue memory manager."""
 
 import json
 
@@ -60,7 +60,6 @@ def test_tensor_manager():
 def test_runtime_manager():
     manager = RuntimeUEMemoryManager(d_mem=3, initial_capacity=2, expiry_slots=2)
 
-    # New lookups are read-only: zero/invalid state is returned without owning a slot.
     mem, gap, valid = manager.lookup([0x4601, 0x4602], slot_index=10)
     assert np.allclose(mem, 0.0)
     assert gap.tolist() == [0, 0]
@@ -79,7 +78,6 @@ def test_runtime_manager():
     assert gap.tolist() == [1, 1]
     assert valid.tolist() == [True, True]
 
-    # A successful update of a third UE is what allocates and forces growth.
     manager.update(
         [0x4603], np.asarray([[3, 3, 3]], np.float32), slot_index=11
     )
@@ -91,7 +89,6 @@ def test_runtime_manager():
     assert manager.slot_to_ue[old_slot] is None
     assert np.allclose(manager.memory[old_slot], 0.0)
 
-    # Merely looking up a replacement UE still must not allocate or consume the slot.
     before = manager.snapshot()
     mem, _, valid = manager.lookup([0x4700], slot_index=12)
     assert not valid[0]
@@ -99,7 +96,6 @@ def test_runtime_manager():
     assert 0x4700 not in manager.ue_to_slot
     assert manager.snapshot()["free_slots"] == before["free_slots"]
 
-    # An inactive update also must not allocate a previously unseen UE.
     manager.update(
         [0x4700],
         np.asarray([[9, 9, 9]], np.float32),
@@ -108,14 +104,12 @@ def test_runtime_manager():
     )
     assert 0x4700 not in manager.ue_to_slot
 
-    # A later active commit allocates it and reuses a zeroed free row.
     manager.update(
         [0x4700], np.asarray([[4, 4, 4]], np.float32), slot_index=12
     )
     slot_4700 = manager.ue_to_slot[0x4700]
     assert np.allclose(manager.memory[slot_4700], 4.0)
 
-    # UE 0x4601 was last written at 10 and expires beyond TTL=2.
     manager.expire(slot_index=13)
     assert 0x4601 not in manager.ue_to_slot
 

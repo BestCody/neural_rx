@@ -8,7 +8,6 @@
 # without an express license agreement from NVIDIA CORPORATION or
 # its affiliates is strictly prohibited.
 
-# Implements different channel models for performance evaluation
 
 from tensorflow.keras.layers import Layer
 import tensorflow as tf
@@ -37,53 +36,7 @@ def ue_correlation_matrix(num_ant, beta):
     return gnb_correlation_matrix(num_ant, beta)
 
 class DoubleTDLChannel(tf.keras.layers.Layer):
-    """
-    Channel model that stacks a 3GPP TDL-B100-400 and TDL-C-300-100 channel
-    model. This allows to benchmark a two user system in a 3GPP compliant
-    scenario.
-
-    Parameters
-    ---------
-    carrier_frequency: float
-        Carrier frequency of the simulation.
-
-    resource_grid: ResourceGrid
-        Resource grid used for the simulation.
-
-    num_rx_ant: int
-        Number of receiver antennas.
-
-    num_tx_ant: int
-        Number of transmit antennas for each user.
-
-    norm_channel: bool
-        If True, the channel is normalized.
-
-    correlation: "low" | "medium" | "high"
-        Antenna correlation according to 38.901.
-
-    Input
-    -----
-
-    (x, no) or x:
-        Tuple or Tensor:
-
-    x :  [batch size, num_tx, num_tx_ant, num_ofdm_symbols, fft_size],
-         tf.complex
-        Channel inputs
-
-    no : Scalar or Tensor, tf.float
-        Scalar or tensor whose shape can be broadcast to the shape of the
-        channel outputs
-
-    Output
-    -------
-    y : [batch size, num_rx, num_rx_ant, num_ofdm_symbols, fft_size], tf.complex
-        Channel outputs
-    h_freq : [batch size, num_rx, num_rx_ant, num_tx, num_tx_ant,
-              num_ofdm_symbols, fft_size], tf.complex
-        Channel frequency responses.
-    """
+    """Double TDLChannel."""
     def __init__(self,
                  carrier_frequency,
                  resource_grid,
@@ -109,7 +62,6 @@ class DoubleTDLChannel(tf.keras.layers.Layer):
         tx_corr_mat = ue_correlation_matrix(num_tx_ant, beta)
         rx_corr_mat = gnb_correlation_matrix(num_rx_ant, alpha)
 
-        # TDL B100 model
         delay_spread_1 = 100e-9
         doppler_spread_1 = 400
         speed_1 = doppler_spread_1 * sionna.SPEED_OF_LIGHT / carrier_frequency
@@ -122,7 +74,6 @@ class DoubleTDLChannel(tf.keras.layers.Layer):
            rx_corr_mat=rx_corr_mat,
            tx_corr_mat=tx_corr_mat)
 
-        # TDL C300 model
         delay_spread_2 = 300e-9
         doppler_spread_2 = 100
         speed_2 = doppler_spread_2 * sionna.SPEED_OF_LIGHT / carrier_frequency
@@ -154,42 +105,13 @@ class DoubleTDLChannel(tf.keras.layers.Layer):
         h1 = self._gen_channel_1(batch_size)
         h2 = self._gen_channel_2(batch_size)
 
-        # stack the two models
         h = tf.concat([h1, h2], axis=3)
 
         y = self._apply_channel([x, h, no])
         return y, h
 
 class DatasetChannel(ChannelModel):
-    """Channel model from a TFRecords Dataset File
-       The entire dataset is read in memory.
-
-       This version supports XLA acceleration.
-
-
-    Parameter
-    ---------
-    tfrecord_filename: str
-        Filename of the pre-computed dataset.
-
-    max_num_examples: int
-        Max number of samples loaded from dataset. If equals to "-1"
-        the entire dataset will be loaded. Defines memory occupation.
-
-    Input
-    -----
-    batchsize: int
-        How many samples shall be returned.
-
-    Output
-    ------
-    a: [batch_size,...]
-        batch_size samples from ``a``. Exact shape depends on dataset.
-
-    tau: [batch_size,...]
-        batch_size samples from ``tau``. Exact shape depends on dataset.
-
-    """
+    """Channel model from a TFRecords Dataset File"""
     def __init__(self, tfrecord_filename, max_num_examples=-1, training=True,
                  num_tx=1, random_subsampling=True):
 
@@ -197,24 +119,15 @@ class DatasetChannel(ChannelModel):
         self._num_tx = num_tx
         self._random_subsampling = random_subsampling
 
-        # Read raw dataset
         dataset = tf.data.TFRecordDataset([tfrecord_filename]) \
                   .map(self._parse_function,
                        num_parallel_calls=tf.data.AUTOTUNE) \
                   .take(max_num_examples) \
                   .batch(1024)
 
-        # Load entire dataset into memory as large tensor
         a = None
         tau = None
         for example in dataset:
-            # aggregate all channels in batch direction to multiple users.
-            # i.e., move batch direction to num_tx direction.
-            #
-            # Evaluation data set already has two active users for each batch
-            # sample.
-            # Thus, every other sample after the aggregation belong to the same
-            # user.
             a_ex, tau_ex = example
             a_ex = tf.split(a_ex, a_ex.shape[0], axis=0)
             a_ex = tf.concat(a_ex, axis=3)
@@ -228,10 +141,6 @@ class DatasetChannel(ChannelModel):
                 tau = tf.concat([tau, tau_ex], axis=2)
 
         if training:
-            # User positions are randomly sampled. In order to avoid sampling
-            # the same positions multiple times within one batch sample, we
-            # split the dataset into equal parts for each user to sample from
-            # during simulations.
             num_examples = int(a.shape[3]/self._num_tx)
             self._num_examples = num_examples
             self._a = []
@@ -253,19 +162,13 @@ class DatasetChannel(ChannelModel):
         features = tf.io.parse_single_example(proto, description)
         a = tf.io.parse_tensor(features['a'], out_type=tf.complex64)
         tau = tf.io.parse_tensor(features['tau'], out_type=tf.float32)
-        # tf.print(tf.shape(a))
         return a, tau
 
 
     def __call__(self, batch_size=None,
                        num_time_steps=None,
                        sampling_frequency=None):
-        # default values are used for compatibility with other TF functions.
 
-        # Remark: this is random subsampling
-        # random sampling is also done in eval mode; keep in mind that even
-        # though UE is on trajectory, we need many slot realizations for good
-        # BLER curves (in any case we sample new AWGN noise)
 
         a = None
         tau = None
@@ -274,7 +177,6 @@ class DatasetChannel(ChannelModel):
             if not self._random_subsampling:
                 ind = tf.random.uniform([batch_size],
                                      maxval=self._num_examples, dtype=tf.int32)
-            # randomly subsample from different subsets
             for ue_idx in range(self._num_tx):
                 if self._random_subsampling:
                     ind = tf.random.uniform(
@@ -282,7 +184,6 @@ class DatasetChannel(ChannelModel):
                                         maxval=self._num_examples,
                                         dtype=tf.int32)
 
-                # Gather reshape and combine
                 a_ = tf.gather(self._a[ue_idx], ind, axis=3)
                 a_ = tf.transpose(a_, perm=[3, 1, 2, 0, 4, 5, 6])
                 tau_ = tf.gather(self._tau[ue_idx], ind, axis=2)
@@ -294,9 +195,7 @@ class DatasetChannel(ChannelModel):
                     a = a_
                     tau = tau_
         else:
-            # samples in self._a alternating between both trajectories
             if not self._random_subsampling:
-                # no random sub-sampling: take subsequent two samples
                 ind = tf.random.uniform([batch_size],
                                      maxval=self._num_examples//self._num_tx,
                                      dtype=tf.int32)
@@ -306,7 +205,6 @@ class DatasetChannel(ChannelModel):
                 ind = tf.random.uniform([batch_size, self._num_tx],
                                      maxval=self._num_examples//self._num_tx,
                                      dtype=tf.int32)
-            # sample subsequent points from all ues
             ind = self._num_tx * ind + tf.expand_dims(
                                         tf.range(self._num_tx, dtype=tf.int32),
                                         axis=0)

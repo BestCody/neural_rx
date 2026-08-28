@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Pure-NumPy correctness test for the live temporal NRX runtime bridge."""
+"""Test temporal NRX runtime."""
 
 import json
 
@@ -139,7 +139,6 @@ def main():
         and np.allclose(b_after_inactive.previous_memory[0], 17.0)
     )
 
-    # Existing UE: failed inference must not change the stored value.
     before_fail = runtime.process(
         received_grid=np.array([0.0], np.float32),
         ls_estimate=None,
@@ -167,7 +166,6 @@ def main():
         failed and np.allclose(after_fail.previous_memory, before_fail.next_memory)
     )
 
-    # Brand-new UE: lookup during a failed inference must not leave an empty slot.
     new_failed_crnti = 0x4610
     infer.fail_next = True
     new_failed = False
@@ -185,7 +183,6 @@ def main():
         new_failed and new_failed_crnti not in snapshot_after_new_failure["ue_to_slot"]
     )
 
-    # A brand-new inactive position also must not acquire a persistent slot.
     inactive_new_crnti = 0x4611
     inactive_new = runtime.process(
         received_grid=np.array([123.0], np.float32),

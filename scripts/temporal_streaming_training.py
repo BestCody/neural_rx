@@ -1,13 +1,5 @@
 #!/usr/bin/env python3
-"""Small, testable primitives for long-horizon temporal-memory training.
-
-The full Neural RX trainer lives in ``train_temporal_ue_memory_streaming.py``.
-This module deliberately has no model or command-line side effects so the two
-important TBPTT invariants can be checked cheaply:
-
-* the numerical UE-memory state crosses chunk boundaries;
-* its gradient history does not cross those boundaries.
-"""
+"""TBPTT helpers for streaming temporal training."""
 
 from __future__ import annotations
 
@@ -23,7 +15,7 @@ def validate_streaming_config(
     tbptt_window: int,
     memory_reset_prob: float,
 ) -> None:
-    """Validate the long-episode/truncated-backpropagation configuration."""
+    """Validate the streaming training settings."""
     if stream_len < 2:
         raise ValueError("stream_len must be at least 2 TBs")
     if tbptt_window < 2:
@@ -46,7 +38,7 @@ def iter_tbptt_windows(
     stream_len: int,
     tbptt_window: int,
 ) -> Iterator[Tuple[int, int]]:
-    """Yield half-open TBPTT windows, retaining a possible final short chunk."""
+    """Yield half-open TBPTT windows."""
     if stream_len <= 0 or tbptt_window <= 0:
         raise ValueError("stream_len and tbptt_window must be positive")
     for start in range(0, int(stream_len), int(tbptt_window)):
@@ -54,7 +46,7 @@ def iter_tbptt_windows(
 
 
 def detach_memory_state(state: TensorMemoryState) -> TensorMemoryState:
-    """Carry state values forward while truncating their gradient history."""
+    """Detach memory from its gradient history."""
     return TensorMemoryState(
         tf.stop_gradient(state.memory),
         tf.stop_gradient(state.valid),
@@ -66,13 +58,7 @@ def reset_memory_entries(
     state: TensorMemoryState,
     reset_mask,
 ) -> TensorMemoryState:
-    """Cold-reset selected ``[batch, UE]`` memory entries.
-
-    This is used only at TBPTT boundaries. It teaches the same receiver to
-    recover from a cold UE or an explicitly discarded stale state at arbitrary
-    positions in a long episode; no transport-block position is exposed to the
-    network.
-    """
+    """Cold-reset selected UE memories."""
     mask = tf.cast(reset_mask, tf.bool)
     tf.debugging.assert_equal(
         tf.shape(mask),
@@ -94,7 +80,7 @@ def detach_and_randomly_reset(
     state: TensorMemoryState,
     reset_probability: float,
 ) -> tuple[TensorMemoryState, tf.Tensor]:
-    """Detach a carried state and independently reset valid UE entries."""
+    """Detach memory and apply random cold resets."""
     state = detach_memory_state(state)
     probability = float(reset_probability)
     if probability == 0.0:

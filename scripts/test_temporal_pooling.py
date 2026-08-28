@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Unit checks for mean, attention, and CNN temporal pooling."""
+"""Test temporal pooling."""
 
 import json
 

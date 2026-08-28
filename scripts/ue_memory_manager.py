@@ -1,11 +1,5 @@
 #!/usr/bin/env python3
-"""UE-identity-aware memory routing for temporal Neural RX.
-
-The neural receiver learns what to remember; this module owns whose memory it
-is. Training uses a differentiable dense TensorFlow table keyed by simulated UE
-IDs. Runtime uses a NumPy slot table keyed by arbitrary stable IDs such as
-C-RNTIs.
-"""
+"""Manage temporal memory by stable UE identity."""
 
 from __future__ import annotations
 
@@ -16,13 +10,13 @@ import tensorflow as tf
 
 
 class TensorMemoryState(NamedTuple):
-    memory: tf.Tensor       # [batch, capacity, d_mem]
-    valid: tf.Tensor        # [batch, capacity] bool
-    last_seen: tf.Tensor    # [batch, capacity] int32; -1 means never seen
+    memory: tf.Tensor
+    valid: tf.Tensor
+    last_seen: tf.Tensor
 
 
 class DifferentiableUEMemoryManager:
-    """Identity-keyed differentiable memory table used during sequence training."""
+    """Manage differentiable UE memory tensors."""
 
     def __init__(self, capacity: int, d_mem: int, expiry_slots: Optional[int] = None):
         if capacity <= 0:
@@ -88,7 +82,7 @@ class DifferentiableUEMemoryManager:
         )
 
     def gather(self, state: TensorMemoryState, ue_ids, slot_index):
-        """Return each scheduled UE's memory, age and validity after expiration."""
+        """Gather memory by stable UE identity."""
         state = self.expire(state, slot_index)
         ids = self._checked_ids(ue_ids)
         memory = tf.gather(state.memory, ids, axis=1, batch_dims=1)
@@ -108,7 +102,7 @@ class DifferentiableUEMemoryManager:
         active,
         slot_index,
     ) -> TensorMemoryState:
-        """Write active scheduled memories back under stable UE identity."""
+        """Scatter updates by stable UE identity."""
         updated_memory = tf.cast(updated_memory, state.memory.dtype)
         ids, one_hot, active_bool = self._selection(
             ue_ids, active=active, dtype=updated_memory.dtype)
@@ -157,13 +151,7 @@ class DifferentiableUEMemoryManager:
 
 
 class RuntimeUEMemoryManager:
-    """Deployment UE-ID -> memory-slot manager.
-
-    Runtime lookup is deliberately transactional: looking up an unseen UE returns
-    zero/invalid memory but does *not* allocate a slot. Allocation happens only
-    when an active inference result is successfully committed through ``update``.
-    This prevents failed inference and inactive new UEs from leaking empty slots.
-    """
+    """Manage runtime UE memory slots."""
 
     def __init__(
         self,
@@ -246,7 +234,7 @@ class RuntimeUEMemoryManager:
             raise ValueError("A physical UE may appear at most once in one TB")
 
     def lookup(self, ue_ids: Sequence[Hashable], slot_index: int):
-        """Read previous state without allocating slots for unseen UEs."""
+        """Lookup."""
         keys = list(ue_ids)
         self._check_unique(keys)
         self.expire(slot_index)
@@ -286,7 +274,7 @@ class RuntimeUEMemoryManager:
         slot_index: int,
         active: Optional[Sequence[bool]] = None,
     ) -> None:
-        """Commit active inference results; this is the allocation point."""
+        """Update."""
         keys = list(ue_ids)
         self._check_unique(keys)
         values = np.asarray(updated_memory, dtype=self.dtype)

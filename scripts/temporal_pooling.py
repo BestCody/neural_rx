@@ -1,17 +1,5 @@
 #!/usr/bin/env python3
-"""Pooling backends for temporal Neural RX UE memory.
-
-Pooling and compression are deliberately separate operations:
-
-    final NRX state [B, U, F, T, d_s]
-        -> pooler
-    per-UE summary [B, U, d_s]
-        -> PCA / autoencoder / learned writer
-    persistent memory [B, U, d_mem]
-
-Every pooler returns the same d_s-wide per-UE representation so compression
-experiments keep exactly the same downstream interface and memory cap.
-"""
+"""Pooling backends for temporal Neural RX UE memory."""
 
 from __future__ import annotations
 
@@ -20,7 +8,7 @@ from tensorflow.keras.layers import Conv2D, Dense
 
 
 class MeanTemporalPooling(tf.keras.layers.Layer):
-    """Exact baseline used by the original temporal-memory implementation."""
+    """Mean-pool UE state features."""
 
     mode = "mean"
 
@@ -34,11 +22,7 @@ class MeanTemporalPooling(tf.keras.layers.Layer):
 
 
 class AttentionTemporalPooling(tf.keras.layers.Layer):
-    """Learn a scalar importance weight for every time/frequency location.
-
-    The learned scores select *where* to summarize from. The weighted values are
-    the original d_s-dimensional NRX states, so the output width remains d_s.
-    """
+    """Attention-pool UE state features."""
 
     mode = "attention"
 
@@ -70,7 +54,7 @@ class AttentionTemporalPooling(tf.keras.layers.Layer):
         return tf.reduce_sum(values * weights[..., None], axis=2)
 
     def attention_weights(self, state):
-        """Return [B,U,F*T] weights for diagnostics/visualization."""
+        """Return the latest attention weights."""
         state = tf.convert_to_tensor(state)
         shape = tf.shape(state)
         score = self.score_out(self.score_hidden(state))
@@ -80,12 +64,7 @@ class AttentionTemporalPooling(tf.keras.layers.Layer):
 
 
 class CNNTemporalPooling(tf.keras.layers.Layer):
-    """Learn local time/frequency patterns before global reduction.
-
-    A 3x3 convolution captures neighboring structure and a 1x1 projection
-    returns to d_s channels. Global averaging then produces one d_s-wide vector
-    per UE. This is intentionally small so pooling does not dominate NRX cost.
-    """
+    """CNN-pool UE state features."""
 
     mode = "cnn"
 
@@ -125,7 +104,7 @@ class CNNTemporalPooling(tf.keras.layers.Layer):
 
 
 def build_pooler(mode: str, d_s: int):
-    """Construct a pooling backend with the common [B,U,d_s] interface."""
+    """Build a temporal pooling backend."""
     mode = str(mode).lower()
     if mode == "mean":
         return MeanTemporalPooling(d_s=d_s, name="pooling_mean")

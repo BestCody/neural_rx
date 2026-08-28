@@ -1,27 +1,5 @@
 #!/usr/bin/env python3
-"""Compression backends for temporal Neural RX UE memory.
-
-Each backend maps the same pooled final NRX state [B, U, d_s] to exactly
-`d_mem` float32 values per scheduled UE. The UE identity/lifecycle manager is
-separate and unchanged.
-
-Modes
------
-writer:
-    Existing task-aware learned temporal writer. It may mix the new candidate
-    with the previous UE memory through a learned keep gate.
-
-pca:
-    Frozen linear PCA projection fitted on pooled K-step NRX states before the
-    temporal training run. It stores the d_mem PCA coefficients directly.
-
-autoencoder:
-    Learned encoder bottleneck of width d_mem. A decoder is used only to define
-    a reconstruction loss during training; the decoder is not part of the
-    persistent state passed between TBs. The persistent bottleneck is bounded
-    and the auxiliary reconstruction path is scale-normalized and detached from
-    the upstream NRX state so it cannot destabilize the pretrained receiver.
-"""
+"""Compression backends for temporal Neural RX UE memory."""
 
 from __future__ import annotations
 
@@ -97,7 +75,7 @@ class LearnedWriterCompression(tf.keras.layers.Layer):
 
 
 class PCACompression(tf.keras.layers.Layer):
-    """Frozen PCA projection fitted on pooled final NRX states."""
+    """Compress UE memory with fixed PCA components."""
 
     mode = "pca"
 
@@ -142,9 +120,6 @@ class PCACompression(tf.keras.layers.Layer):
 
     @property
     def temporal_check_variables(self):
-        # Non-trainable, but GradientTape can explicitly watch this tensor.
-        # In the temporal check TB2's loss can only reach it through the memory
-        # produced after TB1.
         return [self.components]
 
     def set_basis(self, mean, components, eigenvalues):
@@ -181,7 +156,6 @@ class PCACompression(tf.keras.layers.Layer):
         components = tf.cast(self.components, pooled_final.dtype)
         memory = tf.einsum("bud,dm->bum", centered, components)
 
-        # Reconstruction is diagnostic only and does not alter the PCA basis.
         reconstructed = (
             tf.einsum("bum,dm->bud", memory, components)
             + tf.cast(self.mean, pooled_final.dtype)
@@ -193,23 +167,7 @@ class PCACompression(tf.keras.layers.Layer):
 
 
 class AutoencoderCompression(tf.keras.layers.Layer):
-    """Stable learned autoencoder whose bottleneck is temporal UE memory.
-
-    Two invariants are important for the temporal receiver:
-
-    1. Persistent memory must have a controlled numerical scale because it is
-       consumed directly by the common tanh/sigmoid reader on the next TB.
-       The bottleneck therefore uses tanh and is bounded to [-1, 1].
-    2. Reconstruction is an auxiliary compressor objective, not a reason to
-       reshape or rescale the pretrained NRX state. The auxiliary branch is fed
-       a stop-gradient copy of the pooled state. Encoder/decoder weights still
-       learn reconstruction, while future-TB decoding loss remains free to
-       train the live memory path end-to-end.
-
-    The auxiliary loss is normalized by target power so its relative weight is
-    stable even if the NRX state scale varies. Raw MSE is still returned as a
-    diagnostic.
-    """
+    """Compress UE memory with an autoencoder."""
 
     mode = "autoencoder"
 
@@ -230,7 +188,6 @@ class AutoencoderCompression(tf.keras.layers.Layer):
 
     @property
     def temporal_check_variables(self):
-        # Only encoder variables create the memory passed from TB1 to TB2.
         return (
             self.encoder_hidden.trainable_variables
             + self.encoder_bottleneck.trainable_variables
@@ -248,14 +205,8 @@ class AutoencoderCompression(tf.keras.layers.Layer):
         memory_valid,
         training=None,
     ):
-        # Live temporal path. Future-TB decoding gradients can still propagate
-        # through this memory and back into the TB1 NRX state during joint fine
-        # tuning, exactly as they do for the learned writer.
         memory = self._encode(pooled_final)
 
-        # Auxiliary reconstruction path. Stop only the upstream NRX-state
-        # gradient from the reconstruction objective; the shared encoder and
-        # decoder weights still receive reconstruction gradients.
         target = tf.stop_gradient(pooled_final)
         reconstruction_memory = self._encode(target)
         d = self.decoder_hidden(reconstruction_memory)
@@ -294,21 +245,7 @@ def build_compressor(mode: str, d_s: int, d_mem: int):
 
 
 def fit_pca_numpy(samples, d_mem: int):
-    """Fit PCA with an eigendecomposition of the feature covariance.
-
-    Parameters
-    ----------
-    samples : array-like [N, d_s]
-        Pooled final NRX states.
-    d_mem : int
-        Number of principal components retained.
-
-    Returns
-    -------
-    mean, components, eigenvalues, stats
-        components has shape [d_s, d_mem] with columns ordered from highest to
-        lowest variance.
-    """
+    """Fit PCA components with NumPy."""
     x = np.asarray(samples, np.float64)
     if x.ndim != 2:
         raise ValueError(f"samples must be rank-2, got shape {x.shape}")
