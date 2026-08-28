@@ -30,6 +30,21 @@ The following features are currently supported:
 
 We recommend starting with the [Jumpstart NRX Tutorial notebook](notebooks/jumpstart_tutorial.ipynb) for a detailed introduction and overview of the project.
 
+## Temporal UE-memory receiver
+
+This fork adds a persistent per-UE memory path for latency-constrained K=1 and
+K=2 Neural RX operation. The current training method uses continuous 64-TB
+channel episodes, carries numerical UE state across four-TB TBPTT windows, and
+occasionally resets valid memory entries to teach cold-start recovery.
+
+- [Streaming training entry point](scripts/train_temporal_ue_memory_streaming.py)
+- [Temporal UE-memory model](scripts/temporal_ue_memory_model.py)
+- [TBPTT and reset primitives](scripts/temporal_streaming_training.py)
+- [srsRAN C-RNTI integration contract](docs/temporal_nrx_crnti_integration.md)
+
+Generated checkpoints and experiment outputs are written under `outputs/` and
+remain excluded from Git.
+
 The basic neural receiver architecture is introduced and described in [a Neural Receiver for 5G NR Multi-user MIMO](https://arxiv.org/pdf/2312.02601) [1].
 The real-time experiments and the site-specific training is described in [Design of a Standard-Compliant Real-Time
 Neural Receiver for 5G NR](https://arxiv.org/abs/2409.02912) [2].

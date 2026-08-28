@@ -1,0 +1,171 @@
+From 0000000000000000000000000000000000000001 Mon Sep 17 00:00:00 2001
+From: Neural RX Research <noreply@example.com>
+Date: Sun, 16 Aug 2026 00:00:00 +0000
+Subject: [PATCH] phy: expose scoped PUSCH C-RNTI and slot to temporal NRX
+ runtime
+
+The deployed srsRAN 23.10.1 PUSCH path already carries the scheduler-provided
+RNTI and slot in pusch_processor::pdu_t. Add a zero-cost-when-unused callback
+hook immediately before PUSCH processing so an in-process temporal neural
+receiver can resolve persistent UE state by C-RNTI before inference.
+
+Keep the same context installed in thread-local storage for the full synchronous
+pusch_proc->process(...) call. A neural runtime invoked downstream on that same
+PUSCH processing thread can therefore query the exact C-RNTI/slot at inference
+time without guessing identity or relying on a mutable process-wide "last UE".
+The scope restores any prior context on exit.
+
+The callback is deliberately synchronous and allocation-free on the srsRAN
+side. A registered consumer is responsible for remaining non-blocking and
+real-time safe.
+---
+ .../phy/upper/temporal_nrx_pusch_context.h | 115 +++++++++++++++++++++
+ lib/phy/upper/uplink_processor_impl.cpp    |   4 +
+ 2 files changed, 119 insertions(+)
+ create mode 100644 include/srsran/phy/upper/temporal_nrx_pusch_context.h
+
+diff --git a/include/srsran/phy/upper/temporal_nrx_pusch_context.h b/include/srsran/phy/upper/temporal_nrx_pusch_context.h
+new file mode 100644
+index 000000000..111111111
+--- /dev/null
++++ b/include/srsran/phy/upper/temporal_nrx_pusch_context.h
+@@ -0,0 +1,115 @@
++/*
++ * Copyright 2026
++ *
++ * This file is part of the Temporal NRX research integration for srsRAN.
++ * It is distributed under the same AGPL-3.0-or-later terms as srsRAN_Project.
++ */
++
++#pragma once
++
++#include "srsran/ran/slot_point.h"
++#include <atomic>
++#include <cstdint>
++
++namespace srsran {
++
++/// Stable per-PUSCH identity available to an in-process temporal neural receiver.
++///
++/// For normal connected-mode UE PUSCH transmissions, \c crnti is the C-RNTI
++/// supplied by the scheduler/FAPI path. The PHY only transports the numeric
++/// RNTI; higher layers remain responsible for RNTI-type/lifecycle semantics.
++struct temporal_nrx_pusch_context {
++  uint16_t   crnti;
++  slot_point slot;
++};
++
++/// Callback invoked immediately before the selected PUSCH processor runs.
++///
++/// The callback executes on the PUSCH processing path. Implementations must be
++/// non-blocking and real-time safe. They must not retain a reference to the
++/// context after returning.
++using temporal_nrx_pusch_context_hook = void (*)(const temporal_nrx_pusch_context& context);
++
++namespace detail {
++
++inline std::atomic<temporal_nrx_pusch_context_hook>& temporal_nrx_pusch_context_hook_storage()
++{
++  static std::atomic<temporal_nrx_pusch_context_hook> hook{nullptr};
++  return hook;
++}
++
++/// C++11/14-compatible per-thread storage for the PUSCH currently executing.
++/// Returning a reference lets the RAII scope install/restore the pointer without
++/// using a C++17 inline variable.
++inline const temporal_nrx_pusch_context*& current_temporal_nrx_pusch_context_storage() noexcept
++{
++  static thread_local const temporal_nrx_pusch_context* context = nullptr;
++  return context;
++}
++
++} // namespace detail
++
++/// Registers the process-wide temporal NRX PUSCH context consumer.
++/// Passing nullptr disables notification. The default is disabled, so an
++/// unmodified deployment retains stock srsRAN behaviour and cost is one atomic
++/// load on the PUSCH path.
++inline void set_temporal_nrx_pusch_context_hook(temporal_nrx_pusch_context_hook hook)
++{
++  detail::temporal_nrx_pusch_context_hook_storage().store(hook, std::memory_order_release);
++}
++
++/// Removes any temporal NRX PUSCH context consumer.
++inline void clear_temporal_nrx_pusch_context_hook()
++{
++  set_temporal_nrx_pusch_context_hook(nullptr);
++}
++
++/// Delivers the exact RNTI/slot pair associated with the PUSCH about to run.
++inline void notify_temporal_nrx_pusch_context(const temporal_nrx_pusch_context& context)
++{
++  temporal_nrx_pusch_context_hook hook =
++      detail::temporal_nrx_pusch_context_hook_storage().load(std::memory_order_acquire);
++  if (hook != nullptr) {
++    hook(context);
++  }
++}
++
++/// Returns the PUSCH identity currently scoped to this processing thread.
++///
++/// This is the preferred access path for a synchronous in-process neural
++/// receiver called from inside pusch_proc->process(...). The pointer is valid
++/// only until that PUSCH call returns and must not be retained.
++inline const temporal_nrx_pusch_context* get_current_temporal_nrx_pusch_context() noexcept
++{
++  return detail::current_temporal_nrx_pusch_context_storage();
++}
++
++/// Installs a PUSCH context for the lifetime of one synchronous processing call.
++///
++/// Construction also preserves the original callback notification contract.
++/// Destruction restores the prior thread-local context, making nested scopes
++/// well-defined without a global mutable "last C-RNTI".
++class temporal_nrx_pusch_context_scope
++{
++public:
++  explicit temporal_nrx_pusch_context_scope(const temporal_nrx_pusch_context& context) :
++    context_(context), previous_(detail::current_temporal_nrx_pusch_context_storage())
++  {
++    detail::current_temporal_nrx_pusch_context_storage() = &context_;
++    notify_temporal_nrx_pusch_context(context_);
++  }
++
++  ~temporal_nrx_pusch_context_scope()
++  {
++    detail::current_temporal_nrx_pusch_context_storage() = previous_;
++  }
++
++  temporal_nrx_pusch_context_scope(const temporal_nrx_pusch_context_scope&)            = delete;
++  temporal_nrx_pusch_context_scope& operator=(const temporal_nrx_pusch_context_scope&) = delete;
++
++private:
++  temporal_nrx_pusch_context        context_;
++  const temporal_nrx_pusch_context* previous_;
++};
++
++} // namespace srsran
+diff --git a/lib/phy/upper/uplink_processor_impl.cpp b/lib/phy/upper/uplink_processor_impl.cpp
+index 2a2453bef..222222222 100644
+--- a/lib/phy/upper/uplink_processor_impl.cpp
++++ b/lib/phy/upper/uplink_processor_impl.cpp
+@@ -23,6 +23,7 @@
+ 
+ #include "uplink_processor_impl.h"
+ #include "srsran/instrumentation/traces/du_traces.h"
++#include "srsran/phy/upper/temporal_nrx_pusch_context.h"
+ #include "srsran/phy/support/prach_buffer.h"
+ #include "srsran/phy/support/prach_buffer_context.h"
+ #include "srsran/phy/upper/unique_rx_buffer.h"
+@@ -102,6 +103,9 @@ void uplink_processor_impl::process_pusch(span<uint8_t>                    data,
+   pusch_processor_result_notifier& processor_notifier = pusch_adaptors[adaptor_id.value()].configure(
+       notifier, to_rnti(pdu.pdu.rnti), pdu.pdu.slot, to_harq_id(pdu.harq_id), data);
+ 
++  // Keep stable UE identity visible for the complete synchronous receiver call.
++  temporal_nrx_pusch_context_scope temporal_nrx_scope({pdu.pdu.rnti, pdu.pdu.slot});
++
+   // Process PUSCH.
+   pusch_proc->process(data, std::move(rm_buffer), processor_notifier, grid, pdu.pdu);
+ 
+-- 
+2.34.1

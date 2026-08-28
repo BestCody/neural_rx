@@ -1,0 +1,164 @@
+name: Build srsRAN Temporal NRX C-RNTI Hook
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'patches/srsran-23.10.1/0001-temporal-nrx-crnti-hook.patch'
+      - '.github/workflows/build-srsran-temporal-nrx-crnti.yml'
+
+jobs:
+  build-and-test:
+    runs-on: [self-hosted, Linux, X64]
+    timeout-minutes: 90
+    steps:
+      - name: Checkout Neural RX repository
+        uses: actions/checkout@v4
+
+      - name: Clone exact deployed srsRAN and apply patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          ROOT="$RUNNER_TEMP/srsran-temporal-nrx-${GITHUB_RUN_ID}"
+          SRC="$ROOT/srsRAN_Project"
+          BUILD="$ROOT/build"
+          SHA='bcf941b34faba5e14b4d614772fa45068721afdf'
+          PATCH="$GITHUB_WORKSPACE/patches/srsran-23.10.1/0001-temporal-nrx-crnti-hook.patch"
+
+          rm -rf "$ROOT"
+          mkdir -p "$ROOT"
+          git clone --filter=blob:none https://github.com/srsran/srsRAN_Project.git "$SRC"
+          git -C "$SRC" checkout "$SHA"
+          test "$(git -C "$SRC" rev-parse HEAD)" = "$SHA"
+
+          git -C "$SRC" apply --check "$PATCH"
+          git -C "$SRC" apply "$PATCH"
+
+          grep -q 'temporal_nrx_pusch_context_scope temporal_nrx_scope' \
+            "$SRC/lib/phy/upper/uplink_processor_impl.cpp"
+          grep -q 'get_current_temporal_nrx_pusch_context' \
+            "$SRC/include/srsran/phy/upper/temporal_nrx_pusch_context.h"
+          grep -q 'uint16_t   crnti' \
+            "$SRC/include/srsran/phy/upper/temporal_nrx_pusch_context.h"
+
+          echo "ROOT=$ROOT" >> "$GITHUB_ENV"
+          echo "SRC=$SRC" >> "$GITHUB_ENV"
+          echo "BUILD=$BUILD" >> "$GITHUB_ENV"
+          echo "SRSRAN_SHA=$SHA" >> "$GITHUB_ENV"
+
+          git -C "$SRC" diff --check
+          git -C "$SRC" status --short
+
+      - name: Compile and execute scoped-context contract probe under C++14
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > "$ROOT/crnti_hook_probe.cpp" <<'CPP'
+          #include "srsran/phy/upper/temporal_nrx_pusch_context.h"
+          #include <cstdint>
+          #include <iostream>
+
+          namespace {
+          uint16_t observed_crnti = 0;
+          bool     called         = false;
+
+          void capture(const srsran::temporal_nrx_pusch_context& context)
+          {
+            observed_crnti = context.crnti;
+            called = true;
+          }
+          }
+
+          int main()
+          {
+            using namespace srsran;
+
+            if (get_current_temporal_nrx_pusch_context() != nullptr) {
+              return 1;
+            }
+
+            set_temporal_nrx_pusch_context_hook(&capture);
+            {
+              temporal_nrx_pusch_context_scope scope({0x4601, slot_point(1, 42)});
+              const auto* current = get_current_temporal_nrx_pusch_context();
+              if (!called || observed_crnti != 0x4601 || current == nullptr) {
+                return 2;
+              }
+              if (current->crnti != 0x4601 || current->slot.system_slot() != 42) {
+                return 3;
+              }
+            }
+            if (get_current_temporal_nrx_pusch_context() != nullptr) {
+              return 4;
+            }
+
+            called = false;
+            clear_temporal_nrx_pusch_context_hook();
+            {
+              temporal_nrx_pusch_context_scope scope({0x4602, slot_point(1, 43)});
+              const auto* current = get_current_temporal_nrx_pusch_context();
+              if (called || current == nullptr || current->crnti != 0x4602) {
+                return 5;
+              }
+            }
+            if (get_current_temporal_nrx_pusch_context() != nullptr) {
+              return 6;
+            }
+
+            std::cout
+              << "TEMPORAL_NRX_CRNTI_SCOPE_PROBE_PASSED crnti=0x4601 slot=42\n";
+            return 0;
+          }
+          CPP
+
+          c++ -std=c++14 -pthread \
+            -I"$SRC/include" \
+            -I"$SRC/external/fmt/include" \
+            "$ROOT/crnti_hook_probe.cpp" -o "$ROOT/crnti_hook_probe"
+          "$ROOT/crnti_hook_probe"
+
+      - name: Ensure srsRAN build dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! command -v cmake >/dev/null 2>&1; then
+            sudo -n apt-get update
+            sudo -n env DEBIAN_FRONTEND=noninteractive apt-get install -y \
+              build-essential cmake pkg-config \
+              libfftw3-dev libmbedtls-dev libsctp-dev libyaml-cpp-dev \
+              libgtest-dev libboost-program-options-dev libzmq3-dev
+          fi
+          cmake --version
+
+      - name: Configure srsRAN
+        shell: bash
+        run: |
+          set -euo pipefail
+          cmake -S "$SRC" -B "$BUILD" \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DBUILD_TESTS=OFF \
+            -DENABLE_ZEROMQ=ON
+
+      - name: Build gNB
+        shell: bash
+        run: |
+          set -euo pipefail
+          cmake --build "$BUILD" --target gnb --parallel 4
+          test -x "$BUILD/apps/gnb/gnb"
+          "$BUILD/apps/gnb/gnb" --version 2>&1 | tee "$ROOT/gnb-version.txt" || true
+          sha256sum "$BUILD/apps/gnb/gnb" | tee "$ROOT/gnb-sha256.txt"
+          echo "SRSRAN_TEMPORAL_NRX_CRNTI_BUILD_PASSED"
+
+      - name: Upload patched gNB and patch evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: srsran-temporal-nrx-crnti-${{ github.run_id }}
+          path: |
+            ${{ env.ROOT }}/gnb-version.txt
+            ${{ env.ROOT }}/gnb-sha256.txt
+            ${{ env.ROOT }}/crnti_hook_probe
+            ${{ env.BUILD }}/apps/gnb/gnb
+          if-no-files-found: warn
+          retention-days: 14
