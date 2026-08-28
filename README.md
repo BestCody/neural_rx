@@ -46,16 +46,35 @@ occasionally resets valid memory entries to teach cold-start recovery.
 Generated checkpoints and experiment outputs are written under `outputs/` and
 remain excluded from Git.
 
-The evaluator compares trained temporal K=1 and K=2 checkpoints against the
-shipped cold K=1, K=2, and K=8 receivers on identical continuous 64-TB channel
-episodes. Its primary metric excludes the deliberately cold first TB and
-reports TBLER over TB2--TB64, while retaining per-TB results for memory-drift
-analysis.
+Train K=1 and K=2 separately. The commands below use one GPU at a time; they
+can be run concurrently on different GPUs.
+
+```bash
+mkdir -p outputs/temporal-k1 outputs/temporal-k2
+cd scripts
+python train_temporal_ue_memory_streaming.py \
+  --config nrx_large.cfg --gpu 0 --num-it 1 \
+  --stream-len 64 --tbptt-window 4 --train-steps 6000 \
+  --output-dir ../outputs/temporal-k1
+python train_temporal_ue_memory_streaming.py \
+  --config nrx_large.cfg --gpu 1 --num-it 2 \
+  --stream-len 64 --tbptt-window 4 --train-steps 6000 \
+  --output-dir ../outputs/temporal-k2
+cd ..
+```
+
+The evaluator runs temporal K=1 and K=2 by default. Pass
+`--include-cold-baselines` only when the shipped cold K=1, K=2, and K=8
+receivers must be rerun on the same episodes. The primary metric excludes the
+deliberately cold first TB and reports TBLER over TB2--TB64 while retaining
+per-TB results for memory-drift analysis.
 
 ```bash
 python scripts/evaluate_temporal_64tb.py \
-  --temporal-k1-checkpoint outputs/.../k1/model.weights.h5 \
-  --temporal-k2-checkpoint outputs/.../k2/model.weights.h5 \
+  --temporal-k1-checkpoint \
+    outputs/temporal-k1/ue_memory_streaming_mean_writer_idaware_d32_k1.weights.h5 \
+  --temporal-k2-checkpoint \
+    outputs/temporal-k2/ue_memory_streaming_mean_writer_idaware_d32_k2.weights.h5 \
   --temporal-only \
   --output-dir outputs/temporal_64tb_evaluation
 ```
@@ -96,8 +115,15 @@ Running this code requires [Sionna 0.18](https://nvlabs.github.io/sionna/).
 To run the notebooks on your machine, you also need [Jupyter](https://jupyter.org).
 We recommend Ubuntu 22.04, Python 3.10, and TensorFlow 2.15.
 
+```bash
+python3.10 -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
+```
+
 For [TensorRT](https://developer.nvidia.com/tensorrt), we recommend version 9.6 and newer.
-For [ONNX](https://onnx.ai/) exporting, the Python package `onnx==1.14` is required (`onnx==1.15` does not work due to a known bug).
+For [ONNX](https://onnx.ai/) exporting, this repository uses `onnx==1.16.2`.
 
 ## Structure of this repository
 
@@ -109,10 +135,11 @@ This repository is structured in the following way:
 - [weights](weights/) contains weights of pre-trained neural receivers for different configuration files
 - [results](results/) contains pre-computed BLER performance results
 
-The following two folders will be generated locally:
+The following folders are generated locally:
 - `logs` contains log files of the training
 - `onnx_models` contains exported ONNX neural receiver models
 - `data` contains a ray tracing-based dataset of channel realizations for site-specific evaluation
+- `outputs` contains temporal checkpoints and experiment results
 
 We recommend starting with the [Jumpstart NRX Tutorial notebook](notebooks/jumpstart_tutorial.ipynb) for a detailed introduction and overview of the project.
 
