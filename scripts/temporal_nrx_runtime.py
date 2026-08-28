@@ -254,10 +254,9 @@ class TensorFlowTemporalInference:
     """Adapter from the trained TemporalUEMemoryCGNN to TemporalNRXRuntime.
 
     This reproduces the preprocessing/demapping used by
-    train_temporal_ue_memory_v3.py/v4.py while keeping live memory ownership
-    outside the neural model. It supports the original 3-output model and the
-    newer 5-output compressor models; only the first three outputs are required
-    for deployment.
+    ``temporal_ue_memory_model.py`` while keeping live memory ownership outside
+    the neural model. Only the first three model outputs are required for
+    deployment.
     """
 
     def __init__(self, receiver, temporal_model, expected_num_it: int | None = 2):

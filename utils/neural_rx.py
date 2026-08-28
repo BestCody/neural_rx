@@ -1556,9 +1556,14 @@ class NeuralPUSCHReceiver(Layer):
 
         return h
 
-    def call(self, inputs, mcs_arr_eval=[0], mcs_ue_mask_eval=None):
+    def call(self, inputs, mcs_arr_eval=[0], mcs_ue_mask_eval=None,
+             h_hat_ext=None):
         """
         Apply neural receiver.
+
+        h_hat_ext optionally overrides the internal initial channel
+        estimate (e.g., warm-start from a previous slot); inference
+        mode only. Same shape as the internal LS estimate.
         """
 
         # assume u is provided as input in training mode
@@ -1594,7 +1599,10 @@ class NeuralPUSCHReceiver(Layer):
 
             # Initial channel estimation
             num_tx = tf.shape(active_tx)[1]
-            h_hat = self.estimate_channel(y, num_tx)
+            if h_hat_ext is not None:
+                h_hat = h_hat_ext
+            else:
+                h_hat = self.estimate_channel(y, num_tx)
 
             llr, h_hat_refined = self._neural_rx(
                                             (y, h_hat, active_tx),

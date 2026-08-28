@@ -229,13 +229,6 @@ class TemporalTrainingDataGenerator:
             gathered.append(h_t)
         return tf.stack(gathered, axis=1)
 
-    def sample_sequence_channel(self, batch_size, seq_len, ue_ids=None):
-        """Backward-compatible helper returning channels in scheduled positions."""
-        if ue_ids is None:
-            ue_ids = self.sample_schedule(batch_size, seq_len)
-        h_pool = self.sample_pool_channel(batch_size, seq_len)
-        return self.gather_scheduled_channel(h_pool, ue_ids)
-
     def ebno_to_no(self, ebno_db):
         return ebnodb2no(
             ebno_db,

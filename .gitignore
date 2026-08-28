@@ -16,3 +16,26 @@ onnx_models/*
 *.tfrecord
 /weights/site_specific_sweep/*
 *.csv
+
+# Generated experiment outputs. Existing tracked reference results remain
+# tracked; this prevents new run artifacts from being added accidentally.
+/results/
+/runs/
+/outputs/
+/artifacts/
+/checkpoints/
+/data/
+/saved_models/
+/tensorrt_models/
+/wandb/
+
+# Training checkpoints, event streams, and serialized run state
+*.weights.h5
+*.ckpt
+*.ckpt.*
+checkpoint
+events.out.tfevents.*
+*.pkl
+*.pickle
+*.jsonl
+*.log

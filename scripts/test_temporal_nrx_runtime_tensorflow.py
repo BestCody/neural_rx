@@ -10,27 +10,14 @@ previous memory on the next correlated TB.
 from __future__ import annotations
 
 import json
-import sys
 
 import numpy as np
 
-# train_temporal_ue_memory parses CLI arguments at import time. Pin only the
-# contract-relevant values before importing it so this smoke test is stable.
-sys.argv[:] = [
-    sys.argv[0],
-    "--gpu", "0",
-    "--d-mem", "8",
-    "--num-it", "2",
-    "--batch-size", "1",
-    "--seq-len", "3",
-    "--fixed-scheduling",
-    "--seed", "20260816",
-]
-
 import tensorflow as tf
 
-import train_temporal_ue_memory as train
 from temporal_nrx_runtime import TensorFlowTemporalInference, TemporalNRXRuntime
+from temporal_training_data import TemporalTrainingDataGenerator
+from temporal_ue_memory_model import TemporalUEMemoryCGNN, build_backbone
 
 
 def _as_numpy(value):
@@ -41,7 +28,23 @@ def main():
     tf.random.set_seed(20260816)
     np.random.seed(20260816)
 
-    _, e2e, temporal_model, generator, _ = train.build()
+    parameters, e2e = build_backbone(
+        "nrx_large.cfg", num_it=2, training=True
+    )
+    temporal_model = TemporalUEMemoryCGNN(
+        e2e._receiver._neural_rx._cgnn,
+        d_mem=8,
+        d_s=parameters.d_s,
+        compression="writer",
+        pooling="mean",
+        name="runtime_contract_temporal_model",
+    )
+    generator = TemporalTrainingDataGenerator(
+        parameters,
+        e2e,
+        ue_pool_size=4,
+        dynamic_scheduling=False,
+    )
     batch = generator.sample_batch(batch_size=1, seq_len=3, ebno_db=3.0)
 
     inference = TensorFlowTemporalInference(
