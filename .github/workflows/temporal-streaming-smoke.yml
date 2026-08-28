@@ -1,0 +1,115 @@
+name: Temporal Streaming UE Memory Smoke
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/temporal-streaming-smoke.yml'
+      - 'scripts/temporal_*.py'
+      - 'scripts/ue_memory_manager.py'
+      - 'scripts/crnti_memory_adapter.py'
+      - 'scripts/train_temporal_ue_memory_streaming.py'
+
+jobs:
+  temporal-streaming-smoke:
+    runs-on: [self-hosted, Linux, X64]
+    timeout-minutes: 45
+    steps:
+      - name: Check out Neural RX repository
+        uses: actions/checkout@v4
+
+      - name: Configure smoke test
+        shell: bash
+        run: |
+          set -euo pipefail
+          NRX="$GITHUB_WORKSPACE"
+          PY="$HOME/miniforge3/envs/neural_rx/bin/python"
+          OUT="$RUNNER_TEMP/temporal-streaming-${GITHUB_RUN_ID}"
+
+          mkdir -p "$OUT"
+          test -x "$PY"
+
+          echo "PY=$PY" >> "$GITHUB_ENV"
+          echo "NRX=$NRX" >> "$GITHUB_ENV"
+          echo "OUT=$OUT" >> "$GITHUB_ENV"
+          echo "host=$(hostname)"
+          nvidia-smi
+
+      - name: Compile current temporal implementation
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$PY" -m py_compile "$NRX"/scripts/temporal_*.py \
+            "$NRX"/scripts/ue_memory_manager.py \
+            "$NRX"/scripts/crnti_memory_adapter.py \
+            "$NRX"/scripts/train_temporal_ue_memory_streaming.py \
+            "$NRX"/scripts/test_temporal_*.py \
+            "$NRX"/scripts/test_ue_memory_manager.py \
+            "$NRX"/scripts/test_crnti_memory_adapter.py
+
+      - name: Run current temporal unit tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$NRX/scripts"
+          for test in \
+            test_temporal_streaming_training.py \
+            test_temporal_compression.py \
+            test_temporal_pooling.py \
+            test_ue_memory_manager.py \
+            test_crnti_memory_adapter.py \
+            test_temporal_nrx_runtime.py \
+            test_temporal_nrx_runtime_tensorflow.py
+          do
+            "$PY" "$test" 2>&1 | tee "$OUT/${test%.py}.log"
+          done
+
+      - name: Run persistent streaming training smoke test
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$NRX/scripts"
+          "$PY" train_temporal_ue_memory_streaming.py \
+            --gpu 0 \
+            --pooling mean \
+            --compression writer \
+            --d-mem 8 \
+            --num-it 1 \
+            --train-steps 2 \
+            --memory-only-steps 2 \
+            --batch-size 1 \
+            --stream-len 4 \
+            --tbptt-window 2 \
+            --memory-reset-prob 0 \
+            --ue-pool-size 4 \
+            --log-every 1 \
+            --seed 20260816 \
+            --output-dir "$OUT" \
+            2>&1 | tee "$OUT/smoke.log"
+
+          test -f "$OUT/training_summary.json"
+          "$PY" - "$OUT/training_summary.json" <<'PY'
+          import json
+          import sys
+          with open(sys.argv[1], encoding="utf-8") as handle:
+              x = json.load(handle)
+          assert x["architecture"] == "ue_identity_aware_temporal_memory_streaming_tbptt_v1"
+          assert x["stream_len"] == 4
+          assert x["tbptt_window"] == 2
+          assert x["training_method"]["state_carried_across_tbptt_windows"] is True
+          assert x["identity_routing_check"]["passed"] is True
+          assert x["temporal_compression_gradient_check"]["passed"] is True
+          assert len(x["history"]) == 2
+          print("SUMMARY_CHECK_PASSED")
+          PY
+
+      - name: Upload smoke-test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: temporal-streaming-smoke-${{ github.run_id }}
+          path: ${{ env.OUT }}
+          if-no-files-found: warn
+          retention-days: 30
