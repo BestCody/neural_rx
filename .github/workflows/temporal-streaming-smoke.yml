@@ -8,6 +8,8 @@ on:
     paths:
       - '.github/workflows/temporal-streaming-smoke.yml'
       - 'scripts/temporal_*.py'
+      - 'scripts/evaluate_temporal_64tb.py'
+      - 'scripts/test_temporal_64tb_evaluator.py'
       - 'scripts/ue_memory_manager.py'
       - 'scripts/crnti_memory_adapter.py'
       - 'scripts/train_temporal_ue_memory_streaming.py'
@@ -42,6 +44,7 @@ jobs:
         run: |
           set -euo pipefail
           "$PY" -m py_compile "$NRX"/scripts/temporal_*.py \
+            "$NRX"/scripts/evaluate_temporal_64tb.py \
             "$NRX"/scripts/ue_memory_manager.py \
             "$NRX"/scripts/crnti_memory_adapter.py \
             "$NRX"/scripts/train_temporal_ue_memory_streaming.py \
@@ -55,6 +58,7 @@ jobs:
           set -euo pipefail
           cd "$NRX/scripts"
           for test in \
+            test_temporal_64tb_evaluator.py \
             test_temporal_streaming_training.py \
             test_temporal_compression.py \
             test_temporal_pooling.py \

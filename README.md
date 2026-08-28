@@ -38,12 +38,27 @@ channel episodes, carries numerical UE state across four-TB TBPTT windows, and
 occasionally resets valid memory entries to teach cold-start recovery.
 
 - [Streaming training entry point](scripts/train_temporal_ue_memory_streaming.py)
+- [Paired 64-TB evaluator](scripts/evaluate_temporal_64tb.py)
 - [Temporal UE-memory model](scripts/temporal_ue_memory_model.py)
 - [TBPTT and reset primitives](scripts/temporal_streaming_training.py)
 - [srsRAN C-RNTI integration contract](docs/temporal_nrx_crnti_integration.md)
 
 Generated checkpoints and experiment outputs are written under `outputs/` and
 remain excluded from Git.
+
+The evaluator compares trained temporal K=1 and K=2 checkpoints against the
+shipped cold K=1, K=2, and K=8 receivers on identical continuous 64-TB channel
+episodes. Its primary metric excludes the deliberately cold first TB and
+reports TBLER over TB2--TB64, while retaining per-TB results for memory-drift
+analysis.
+
+```bash
+python scripts/evaluate_temporal_64tb.py \
+  --temporal-k1-checkpoint outputs/.../k1/model.weights.h5 \
+  --temporal-k2-checkpoint outputs/.../k2/model.weights.h5 \
+  --temporal-only \
+  --output-dir outputs/temporal_64tb_evaluation
+```
 
 The basic neural receiver architecture is introduced and described in [a Neural Receiver for 5G NR Multi-user MIMO](https://arxiv.org/pdf/2312.02601) [1].
 The real-time experiments and the site-specific training is described in [Design of a Standard-Compliant Real-Time
