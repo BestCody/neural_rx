@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "architecture": "distilled_pd_l8_cjlr_v18_segment_safe",
+  "parent_architecture": "distilled_pd_l8_cjlr_v18",
+  "receiver": {
+    "learned_iterations": 2,
+    "teacher_iterations": 8,
+    "ldpc_iterations": 20,
+    "bp_first_iterations": 8,
+    "bp_remaining_iterations": 12,
+    "support_width": 256,
+    "candidate_cap": 256,
+    "optimized_chunk_size": 6336,
+    "num_tx": 2,
+    "bits_per_symbol": 4,
+    "n_size_bwp": 132,
+    "mcs_index": 14
+  },
+  "memory": {
+    "type": "segment_safe_pilot_domain_wiener",
+    "maximum_history_tbs": 8,
+    "reset_threshold_file": "segment_safe_pd_l8_threshold.json",
+    "probation_transitions": 1,
+    "minimum_prior_innovations": 1,
+    "refractory_tbs": 0
+  },
+  "checkpoint": {
+    "format": "selected_variables_npz",
+    "binding": "sealed_candidate_manifest"
+  }
+}

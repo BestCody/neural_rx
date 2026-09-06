@@ -1,0 +1,36 @@
+{
+  "schema_version": 3,
+  "protocol": "temporal_benchmark_training_recipe_v3",
+  "initialization": {
+    "checkpoint": "weights/nrx_large_weights",
+    "sha256": "0e6aa52dc89725bc982710c4a14a2c617295118d7153da1d512e276d62a06592"
+  },
+  "learning_rate_schedule": {
+    "type": "warmup_cosine_v1",
+    "initial": 0.00002,
+    "peak": 0.0001,
+    "final": 0.00001,
+    "warmup_fraction": 0.05
+  },
+  "candidate_teacher": {
+    "source": "matched_stage_checkpoint",
+    "exact_checkpoint_required": true
+  },
+  "candidate_initialization": {
+    "source": "matched_teacher_executed_k2_path"
+  },
+  "candidate_loss": {
+    "payload": 0.5,
+    "cold_k8": 0.5,
+    "user_priority": {
+      "power_max_multiplier": 3.0,
+      "teacher_advantage_max_multiplier": 2.0,
+      "teacher_advantage_scale": 0.05,
+      "combined_max_multiplier": 4.0
+    }
+  },
+  "matched_cold_k8_loss": {
+    "payload": 1.0,
+    "power_max_multiplier": 3.0
+  }
+}

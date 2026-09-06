@@ -30,54 +30,84 @@ The following features are currently supported:
 
 We recommend starting with the [Jumpstart NRX Tutorial notebook](notebooks/jumpstart_tutorial.ipynb) for a detailed introduction and overview of the project.
 
-## Temporal UE-memory receiver
+## Temporal receiver
 
-This fork adds a persistent per-UE memory path for latency-constrained K=1 and
-K=2 Neural RX operation. The current training method uses continuous 64-TB
-channel episodes, carries numerical UE state across four-TB TBPTT windows, and
-occasionally resets valid memory entries to teach cold-start recovery.
+This fork adds persistent per-UE channel memory for a latency-constrained
+Neural RX. The retained v18 receiver combines:
 
-- [Streaming training entry point](scripts/train_temporal_ue_memory_streaming.py)
-- [Paired 64-TB evaluator](scripts/evaluate_temporal_64tb.py)
-- [Temporal UE-memory model](scripts/temporal_ue_memory_model.py)
-- [TBPTT and reset primitives](scripts/temporal_streaming_training.py)
-- [srsRAN C-RNTI integration contract](docs/temporal_nrx_crnti_integration.md)
+- Causal PD-L8 channel memory from current and previous DMRS observations.
+- A two-iteration CGNN distilled from the frozen eight-iteration receiver.
+- Coded Joint-List Refinement between detection and LDPC decoding.
 
-Generated checkpoints and experiment outputs are written under `outputs/` and
-remain excluded from Git.
+Memory follows physical UE identity across scheduling order changes. It stores
+pilot-derived channel evidence, not previous payload bits or hidden detection
+state. Causal DMRS disagreement and UE re-entry reset stale history.
 
-Train K=1 and K=2 separately. The commands below use one GPU at a time; they
-can be run concurrently on different GPUs.
+The current design, limitations, and retained results are documented in
+[Temporal receiver v18](docs/temporal_receiver_v18.md). Earlier conclusions are
+summarized in [Experiment history](docs/experiment_history.md).
+The exact streamed PD-L8 optimization is part of the active V18 adapter.
+The corrected training contract is specified in
+[V18 training correction](docs/temporal_receiver_v18_training_correction.md).
+The current weak-user correction is specified in
+[V18 training V3](docs/temporal_receiver_v18_training_correction_v3.md).
+
+### Current source
+
+- [PD-L8 memory state](scripts/pilot_domain_memory.py)
+- [Pilot-domain estimator](scripts/pilot_domain_channel.py)
+- [Active streamed estimator](scripts/pilot_domain_channel_v19.py)
+- [Active streamed memory](scripts/pilot_domain_memory_v19.py)
+- [Shared receiver helpers](scripts/temporal_receiver_core.py)
+- [CJLR detector and decoder](scripts/cjlr_receiver.py)
+- [Optimized CJLR kernel](scripts/cjlr_optimized_receiver.py)
+- [Frozen v18 runtime](scripts/cjlr_final_runtime.py)
+- [Training and scenario data](scripts/temporal_training_data.py)
+- [V3 power training data](scripts/temporal_power_training_data.py)
+- [V18 configuration](config/temporal_receiver_v18_segment_safe.json)
+- [Current V3 training data](config/temporal_benchmark_training_data_v3.json)
+- [Current V3 training recipe](config/temporal_benchmark_training_recipe_v3.json)
+- [Reproducible V2 data](config/temporal_benchmark_training_data_v2.json)
+- [Reproducible V2 recipe](config/temporal_benchmark_training_recipe_v2.json)
+- [Event-relative targets](scripts/temporal_training_curriculum.py)
+- [Aligned trainer](scripts/orchestrate_v18_aligned_training.py)
+
+### Systematic evaluation
+
+Every new receiver must use
+[Temporal benchmark v1](docs/temporal_benchmark_v1.md). The benchmark owns the
+data, seeds, paired methods, reset control, metrics, latency timing, and
+acceptance rules. Architecture code supplies only a decoder adapter.
+
+The primary accuracy comparison is:
+
+- Candidate K=2 with persistent memory.
+- The same checkpoint with memory reset every TB.
+- Training-matched Cold K=8.
+
+Frozen Cold K=3 is measured only in the fixed latency microbenchmark.
+
+Screening uses four core conditions, 16 episodes, one SNR, and 16 TBs.
+Development uses the same conditions with 64 episodes, three SNRs, and 64
+TBs. Confirmation uses three independently trained checkpoints and starts at
+64 episodes; it expands to 128 or 256 only if the predeclared confidence target
+is not met. Historical Cold K=8 and perfect-CSI K-Best are cached once for final
+reporting. Accuracy batches independent episodes while memory remains strictly
+sequential within each episode; latency uses a separate batch-one test.
+
+Generated checkpoints and experiment outputs belong under `outputs/`; they
+are intentionally excluded from Git.
+
+The V3 screen is dependency ordered. It trains and seals matched Cold K=8
+first, then warm-starts and distills K=2 from that exact checkpoint:
 
 ```bash
-mkdir -p outputs/temporal-k1 outputs/temporal-k2
-cd scripts
-python train_temporal_ue_memory_streaming.py \
-  --config nrx_large.cfg --gpu 0 --num-it 1 \
-  --stream-len 64 --tbptt-window 4 --train-steps 6000 \
-  --output-dir ../outputs/temporal-k1
-python train_temporal_ue_memory_streaming.py \
-  --config nrx_large.cfg --gpu 1 --num-it 2 \
-  --stream-len 64 --tbptt-window 4 --train-steps 6000 \
-  --output-dir ../outputs/temporal-k2
-cd ..
+python scripts/orchestrate_v18_aligned_training.py \
+  --output-dir outputs/v18_aligned_screen --gpu 0
 ```
 
-The evaluator runs temporal K=1 and K=2 by default. Pass
-`--include-cold-baselines` only when the shipped cold K=1, K=2, and K=8
-receivers must be rerun on the same episodes. The primary metric excludes the
-deliberately cold first TB and reports TBLER over TB2--TB64 while retaining
-per-TB results for memory-drift analysis.
-
-```bash
-python scripts/evaluate_temporal_64tb.py \
-  --temporal-k1-checkpoint \
-    outputs/temporal-k1/ue_memory_streaming_mean_writer_idaware_d32_k1.weights.h5 \
-  --temporal-k2-checkpoint \
-    outputs/temporal-k2/ue_memory_streaming_mean_writer_idaware_d32_k2.weights.h5 \
-  --temporal-only \
-  --output-dir outputs/temporal_64tb_evaluation
-```
+Add `--smoke-only` to run the two five-update Stage 0 checks without starting
+the 500-update screen.
 
 The basic neural receiver architecture is introduced and described in [a Neural Receiver for 5G NR Multi-user MIMO](https://arxiv.org/pdf/2312.02601) [1].
 The real-time experiments and the site-specific training is described in [Design of a Standard-Compliant Real-Time

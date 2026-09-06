@@ -19,7 +19,6 @@ import numpy as np
 from os.path import exists
 import matplotlib.pyplot as plt
 import pandas as pd
-import io
 
 import sys
 sys.path.append('../')
@@ -69,16 +68,6 @@ class TriangularDistributionSampler:
 
         return x
 
-
-def plot_to_image(figure):
-    """Plot to image."""
-    buf = io.BytesIO()
-    plt.savefig(buf, format='png')
-    plt.close(figure)
-    buf.seek(0)
-    image = tf.image.decode_png(buf.getvalue(), channels=4)
-    image = tf.expand_dims(image, 0)
-    return image
 
 def training_loop(model, label, filename, training_logdir, training_seed,
                   training_schedule, eval_ebno_db_arr, min_num_tx, max_num_tx,
@@ -378,35 +367,6 @@ def plot_results(config_name, show_ber=False, xlim=None, ylim=None,
         ax.set_ylim(ylim);
 
     return fig
-
-def export_csv(config_name, num_tx_eval):
-    """Export results to csv for pgfplots etc."""
-    sys_parameters = Parameters(config_name,
-                                training=True,
-                                system='dummy')
-    filename = f"../results/{sys_parameters.label}_results"
-
-    with open(filename,'rb') as f:
-        snrs, BERs, BLERs = pickle.load(f)
-
-    a = snrs
-    for label in BLERs:
-        if num_tx_eval == label[1]:
-            a = np.column_stack((snrs, BLERs[label].numpy()))
-            if label[0]=="Baseline - LS/lin+LMMSE":
-                l = "lslin+lmmse"
-            elif label[0]=="Neural Receiver":
-                l = "nn"
-            elif label[0]=="Baseline - Perf. CSI & K-Best":
-                l = "perfcsi"
-            elif label[0]=="Baseline - LMMSE+K-Best":
-                l = "lmmse+kbest"
-            else:
-                pass
-            df = pd.DataFrame(a, columns=['snr', "bler"])
-
-            df.to_csv(f"{sys_parameters.label}_{num_tx_eval}_{l}.csv",
-                      index=False)
 
 def plot_gp(config_name, num_tx_eval=None, xlim=None, ylim=None, fig=None,
             sim_idx=None, color_offset=0, labels=None, verbose=False):

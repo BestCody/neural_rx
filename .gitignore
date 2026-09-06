@@ -22,6 +22,7 @@ onnx_models/*
 /results/
 /runs/
 /outputs/
+/scripts/outputs/
 /artifacts/
 /checkpoints/
 /data/

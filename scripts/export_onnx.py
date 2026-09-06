@@ -39,16 +39,19 @@ try:
 except RuntimeError as e:
     print(e)
 
-import numpy as np
-
 import sys
 sys.path.append('../')
 
-from utils import Parameters, NeuralReceiverONNX, load_weights
+from utils import (
+    DataEvaluator,
+    DataGeneratorAerial,
+    NeuralReceiverONNX,
+    Parameters,
+    load_weights,
+)
 
 import tf2onnx
 import onnx
-from utils import *
 
 print(f"Loading: {config_name}.")
 

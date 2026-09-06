@@ -1,0 +1,20 @@
+{
+  "schema_version": 2,
+  "protocol": "temporal_benchmark_training_recipe_v2",
+  "initialization": {
+    "checkpoint": "weights/nrx_large_weights",
+    "sha256": "0e6aa52dc89725bc982710c4a14a2c617295118d7153da1d512e276d62a06592"
+  },
+  "learning_rate": 0.00002,
+  "candidate_teacher": {
+    "source": "matched_stage_checkpoint",
+    "exact_checkpoint_required": true
+  },
+  "candidate_loss": {
+    "payload": 0.5,
+    "cold_k8": 0.5
+  },
+  "matched_cold_k8_loss": {
+    "payload": 1.0
+  }
+}

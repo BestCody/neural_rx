@@ -10,7 +10,7 @@
 
 
 from tensorflow.keras import Model
-from sionna.channel import OFDMChannel, gen_single_sector_topology
+from sionna.channel import gen_single_sector_topology
 from sionna.utils import BinarySource, ebnodb2no, insert_dims
 from sionna.ofdm import LSChannelEstimator
 from sionna.utils import flatten_dims, flatten_last_dims, compute_ber, hard_decisions, expand_to_rank

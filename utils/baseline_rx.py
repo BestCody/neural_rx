@@ -14,7 +14,7 @@ import tensorflow as tf
 from itertools import combinations
 import numpy as np
 
-from sionna.ofdm import LMMSEInterpolator, KBestDetector, LinearDetector, LSChannelEstimator
+from sionna.ofdm import LMMSEInterpolator, KBestDetector, LinearDetector
 from sionna.nr import PUSCHReceiver, TBDecoder, PUSCHTransmitter, PUSCHLSChannelEstimator
 from sionna.utils import flatten_last_dims, split_dim, flatten_dims
 
@@ -197,64 +197,6 @@ class BaselineReceiver(Layer):
             b_hat = self._receiver([y, no])
         return b_hat
 
-
-class LowComplexityLMSEEstimator(LSChannelEstimator):
-    """Low Complexity LMSEEstimator."""
-
-
-    def __init__(self, resource_grid, interpolator,
-                 sys_parameters, reduction=4):
-        super().__init__(resource_grid, interpolator=interpolator,
-                         dtype=tf.complex64)
-        self._reduction = reduction
-        self._sys_parameters = sys_parameters
-
-        self._num_pilots = self._sys_parameters.transmitters[0]._resource_grid.num_pilot_symbols.numpy()
-
-    def call(self, inputs):
-        y, no = inputs
-        y_eff = self._removed_nulled_scs(y)
-        y_eff_flat = flatten_last_dims(y_eff)
-        y_pilots = tf.gather(y_eff_flat, self._pilot_ind, axis=-1)
-        h_hat, err_var = self.estimate_at_pilot_locations(y_pilots, no)
-        err_var = tf.broadcast_to(err_var, tf.shape(h_hat))
-
-        s = [self._sys_parameters.batch_size_eval_small]
-        s.append(1)
-        s.append(self._sys_parameters.num_rx_antennas)
-        s.append(self._sys_parameters.max_num_tx)
-        s.append(1)
-        s.append(self._num_pilots)
-
-        h_hat = tf.ensure_shape(h_hat, shape=s)
-        err_var = tf.ensure_shape(err_var, shape=s)
-
-        h_hat2 = split_dim(h_hat, [2, -1], axis=tf.rank(h_hat) - 1)
-        h_hat3 = split_dim(h_hat2, [self._reduction, -1],
-                           axis=tf.rank(h_hat2) - 1)
-        h_hat4 = tf.transpose(h_hat3, perm=[6, 0, 1, 2, 3, 4, 5, 7])
-        h_hat5 = flatten_last_dims(h_hat4, 2)
-        h_hat6 = flatten_dims(h_hat5, 2, 0)
-
-        err_var2 = split_dim(err_var, [2, -1], axis=tf.rank(err_var) - 1)
-        err_var3 = split_dim(err_var2, [self._reduction, -1],
-                             axis=tf.rank(err_var2) - 1)
-        err_var4 = tf.transpose(err_var3, perm=[6, 0, 1, 2, 3, 4, 5, 7])
-        err_var5 = flatten_last_dims(err_var4, 2)
-        err_var6 = flatten_dims(err_var5, 2, 0)
-
-        h_hat7, err_var7 = self._interpol(h_hat6, err_var6)
-        err_var7 = tf.maximum(err_var7, tf.cast(0, err_var7.dtype))
-
-        h_hat8 = split_dim(h_hat7, [self._reduction, -1], 0)
-        h_hat9 = tf.transpose(h_hat8, perm=[1, 2, 3, 4, 5, 6, 0, 7])
-        h_hat10 = flatten_last_dims(h_hat9, 2)
-
-        err_var8 = split_dim(err_var7, [self._reduction, -1], 0)
-        err_var9 = tf.transpose(err_var8, perm=[1, 2, 3, 4, 5, 6, 0, 7])
-        err_var10 = flatten_last_dims(err_var9, 2)
-
-        return h_hat10, err_var10
 
 class LowComplexityPUSCHLMSEEstimator(PUSCHLSChannelEstimator):
     """Low Complexity PUSCHLMSEEstimator."""

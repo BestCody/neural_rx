@@ -1,0 +1,6 @@
+{
+  "schema_version": 1,
+  "protocol": "temporal_benchmark_checkpoint_selection_v1",
+  "rule": "last_update",
+  "validation_data_used": false
+}

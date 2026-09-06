@@ -13,6 +13,7 @@ import numpy as np
 import configparser
 import tensorflow as tf
 from os.path import exists
+from pathlib import Path
 from sionna.nr import PUSCHConfig, PUSCHDMRSConfig, TBConfig, CarrierConfig, PUSCHTransmitter, PUSCHPilotPattern
 from sionna.channel.tr38901 import PanelArray, UMi, TDL, UMa
 from sionna.mimo import StreamManagement
@@ -22,7 +23,9 @@ from .impairments import FrequencyOffset
 
 class Parameters:
     """Simulation parameters"""
-    def __init__(self, config_name, system="dummy", training=False, verbose=False, compute_cov=False, num_tx_eval=None):
+    def __init__(self, config_name, system="dummy", training=False,
+                 verbose=False, compute_cov=False, num_tx_eval=None,
+                 n_size_bwp_override=None):
 
         assert isinstance(verbose, bool), "verbose must be bool."
         assert isinstance(training, bool), "training must be bool."
@@ -33,11 +36,11 @@ class Parameters:
         self.system = system
 
 
-        fn = f'../config/{config_name}'
-        if exists(fn):
+        fn = Path(__file__).resolve().parent.parent / "config" / Path(config_name).name
+        if fn.exists():
             config = configparser.RawConfigParser()
             config_name.replace(".cfg","") + ".cfg"
-            config.read(fn)
+            config.read(str(fn))
         else:
             raise FileNotFoundError("Unknown config file.")
 
@@ -64,6 +67,11 @@ class Parameters:
             self.tfrecord_filename = self.tfrecord_filename_eval
             if self.channel_type == "Dataset":
                 self.random_subsampling = self.random_subsampling_eval
+
+        if n_size_bwp_override is not None:
+            if int(n_size_bwp_override) <= 0:
+                raise ValueError("n_size_bwp_override must be positive")
+            self.n_size_bwp = int(n_size_bwp_override)
 
         if self.system == "dummy":
             return
