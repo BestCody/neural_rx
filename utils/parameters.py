@@ -12,26 +12,23 @@
 import numpy as np
 import configparser
 import tensorflow as tf
-from os.path import exists
 from pathlib import Path
 from sionna.nr import PUSCHConfig, PUSCHDMRSConfig, TBConfig, CarrierConfig, PUSCHTransmitter, PUSCHPilotPattern
 from sionna.channel.tr38901 import PanelArray, UMi, TDL, UMa
 from sionna.mimo import StreamManagement
-from sionna.channel import OFDMChannel, AWGN
-from .channel_models import DoubleTDLChannel, DatasetChannel
-from .impairments import FrequencyOffset
+from sionna.channel import OFDMChannel
+from .channel_models import DoubleTDLChannel
 
 class Parameters:
     """Simulation parameters"""
     def __init__(self, config_name, system="dummy", training=False,
-                 verbose=False, compute_cov=False, num_tx_eval=None,
+                 verbose=False, num_tx_eval=None,
                  n_size_bwp_override=None):
 
         assert isinstance(verbose, bool), "verbose must be bool."
         assert isinstance(training, bool), "training must be bool."
         assert isinstance(config_name, str), "config_name must be str."
         assert isinstance(system, str), "system must be str."
-        assert isinstance(compute_cov, bool), "compute_cov must be bool."
 
         self.system = system
 
@@ -63,10 +60,6 @@ class Parameters:
             self.max_ut_velocity = self.max_ut_velocity_eval
             self.min_ut_velocity = self.min_ut_velocity_eval
             self.channel_norm = self.channel_norm_eval
-            self.cfo_offset_ppm = self.cfo_offset_ppm_eval
-            self.tfrecord_filename = self.tfrecord_filename_eval
-            if self.channel_type == "Dataset":
-                self.random_subsampling = self.random_subsampling_eval
 
         if n_size_bwp_override is not None:
             if int(n_size_bwp_override) <= 0:
@@ -173,11 +166,6 @@ class Parameters:
         self.sm = StreamManagement(np.ones([1, self.max_num_tx], int), 1)
 
 
-        if compute_cov:
-            if not self.channel_type in ("UMi", "UMa"):
-                print("Setting channel type to UMi for covariance computation.")
-                self.channel_type = "UMi"
-
         if self.channel_type in ("DoubleTDLlow","DoubleTDLmedium",
                                  "DoubleTDLhigh") and self.max_num_tx==1:
                 print("Warning: SelectedDoubleTDL model only defined for 2 "\
@@ -282,51 +270,5 @@ class Parameters:
                                     num_tx_ant=pc.num_antenna_ports,
                                     norm_channel=self.channel_norm)
 
-        elif self.channel_type == "AWGN":
-            self.channel = AWGN()
-
-
-        elif self.channel_type == "Dataset":
-            channel_model = DatasetChannel("../data/" + self.tfrecord_filename,
-                                    max_num_examples=-1,
-                                    training=training,
-                                    num_tx=self.max_num_tx,
-                                    random_subsampling=self.random_subsampling,
-                                    )
-            self.channel = OFDMChannel(channel_model,
-                                       self.transmitters[0].resource_grid,
-                                       add_awgn=True,
-                                       normalize_channel=self.channel_norm,
-                                       return_channel=True)
-
         else:
             raise ValueError("Unknown Channel type.")
-
-        if self.cfo_offset_ppm>0:
-            offset = self.carrier_frequency / 1e6 * self.cfo_offset_ppm
-            max_rel_offset = offset/self.transmitters[0].resource_grid.bandwidth
-            self.frequency_offset = FrequencyOffset(
-                                    max_rel_offset,
-                                    "freq",
-                                    self.transmitters[0].resource_grid,
-                                    constant_offset=(not training))
-        else:
-            self.frequency_offset = None
-
-
-        if self.system in ("baseline_lmmse_kbest", "baseline_lmmse_lmmse"):
-
-            fn = f'../weights/{self.label}_time_cov_mat.npy'
-            if not exists(fn):
-                raise FileNotFoundError("time_cov_mat.npy not found. " \
-                    "Please run compute_cov_mat.py for given config first.")
-
-            self.space_cov_mat = tf.cast(np.load(
-                        f'../weights/{self.label}_space_cov_mat.npy'),
-                                                tf.complex64)
-            self.time_cov_mat = tf.cast(np.load(
-                        f'../weights/{self.label}_time_cov_mat.npy'),
-                                            tf.complex64)
-            self.freq_cov_mat = tf.cast(np.load(
-                        f'../weights/{self.label}_freq_cov_mat.npy'),
-                                            tf.complex64)

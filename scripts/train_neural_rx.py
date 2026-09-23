@@ -12,7 +12,10 @@
 
 
 import argparse
-from os.path import exists
+from pathlib import Path
+
+
+ROOT = Path(__file__).resolve().parent.parent
 
 parser = argparse.ArgumentParser()
 parser.add_argument("-config_name", help="config filename", type=str)
@@ -37,7 +40,7 @@ except RuntimeError as e:
     print(e)
 
 import sys
-sys.path.append('../')
+sys.path.insert(0, str(ROOT))
 
 from utils import E2E_Model, training_loop, Parameters, load_weights
 
@@ -48,20 +51,20 @@ sys_parameters = Parameters(config_name,
                             system='nrx',
                             training=True)
 label = f'{sys_parameters.label}'
-filename = '../weights/'+ label + '_weights'
-training_logdir = '../logs'
+filename = str(ROOT / 'weights' / f'{label}_weights')
+training_logdir = str(ROOT / 'logs')
 training_seed = 42
 
 if args.debug:
     tf.config.run_functions_eagerly(True)
-    training_logdir = training_logdir + "/debug"
+    training_logdir = str(ROOT / 'logs' / 'debug')
 
 
 sys_training = E2E_Model(sys_parameters, training=True)
 sys_training(1, 1.)
 sys_training.summary()
 
-if exists(filename):
+if Path(filename).exists():
     print("\nWeights exist already - loading stored weights.")
     load_weights(sys_training, filename)
 

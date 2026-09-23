@@ -1,4 +1,5 @@
 .vscode/
+*.md
 build/
 __pycache__
 .ipynb_checkpoints
@@ -11,14 +12,7 @@ dev
 _build
 logs/
 dev/
-**/*_cov_mat.npy
-onnx_models/*
-*.tfrecord
-/weights/site_specific_sweep/*
-*.csv
 
-# Generated experiment outputs. Existing tracked reference results remain
-# tracked; this prevents new run artifacts from being added accidentally.
 /results/
 /runs/
 /outputs/
@@ -27,16 +21,4 @@ onnx_models/*
 /checkpoints/
 /data/
 /saved_models/
-/tensorrt_models/
 /wandb/
-
-# Training checkpoints, event streams, and serialized run state
-*.weights.h5
-*.ckpt
-*.ckpt.*
-checkpoint
-events.out.tfevents.*
-*.pkl
-*.pickle
-*.jsonl
-*.log

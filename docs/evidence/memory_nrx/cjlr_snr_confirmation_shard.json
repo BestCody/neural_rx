@@ -1,0 +1,220 @@
+{
+  "schema_version": 1,
+  "evaluation": "cjlr_paired_snr_confirmation_shard_v1",
+  "config": {
+    "set": "initial",
+    "split_offset": 192,
+    "histories": 16,
+    "batch_size": 2,
+    "num_tbs": 64,
+    "protocol_sha256": "96408e492a5e0032b9f5686ea367a313a3ac7abe6e8a5c7a20e3c0888b48898c",
+    "checkpoint_sha256": "d451340f92f3eb8c01d17d882745167698b01a6180155fe95403c2cb236525d3",
+    "smoke_test": false,
+    "methods": [
+      "optimized_exact_cjlr_pd_l8_k2",
+      "cold_k8"
+    ],
+    "cjlr_snr_db": [
+      1.0,
+      1.25,
+      1.5,
+      1.75,
+      2.0,
+      2.25,
+      2.5,
+      2.75
+    ],
+    "cold_k8_snr_db": [
+      2.0,
+      2.25,
+      2.5,
+      2.75
+    ],
+    "channel_role": "known_comparison",
+    "ue_profiles": [
+      {
+        "ue_id": 0,
+        "split_role": "known_comparison",
+        "steady_family": "tdl",
+        "steady_model": "B100",
+        "steady_delay_spread_s": 1e-07,
+        "steady_delay_spread_range_s": [
+          1e-07,
+          1e-07
+        ],
+        "steady_doppler_hz": [
+          0.0,
+          400.0
+        ],
+        "harsh_family": "tdl",
+        "harsh_model": "B100",
+        "harsh_delay_spread_s": 1e-07,
+        "harsh_delay_spread_range_s": [
+          1e-07,
+          1e-07
+        ],
+        "harsh_doppler_hz": [
+          0.0,
+          400.0
+        ]
+      },
+      {
+        "ue_id": 1,
+        "split_role": "known_comparison",
+        "steady_family": "tdl",
+        "steady_model": "C300",
+        "steady_delay_spread_s": 3e-07,
+        "steady_delay_spread_range_s": [
+          3e-07,
+          3e-07
+        ],
+        "steady_doppler_hz": [
+          0.0,
+          100.0
+        ],
+        "harsh_family": "tdl",
+        "harsh_model": "C300",
+        "harsh_delay_spread_s": 3e-07,
+        "harsh_delay_spread_range_s": [
+          3e-07,
+          3e-07
+        ],
+        "harsh_doppler_hz": [
+          0.0,
+          100.0
+        ]
+      }
+    ]
+  },
+  "preflight": {
+    "fixed_physical_ues": true,
+    "two_active_ues": true,
+    "no_scenario_events": true,
+    "paired_episode_fingerprints": true,
+    "paired_normalized_noise": true,
+    "unique_episode_fingerprints": true,
+    "pd_l8_empty_at_tb1": true,
+    "pd_l8_history_bounded": true,
+    "crc_matches_payload_error": true,
+    "finite_outputs": true,
+    "checkpoint_unchanged": true,
+    "crc_layers_materialized_eagerly": true,
+    "support_and_bp_schedule_frozen": true,
+    "ood_data_unopened": true,
+    "pass": true
+  },
+  "elapsed_seconds": 856.5127649307251,
+  "raw_episode_metrics": {
+    "file": "episode_metrics.npz",
+    "sha256": "dc41c1e9d6204ea206b7afd70c16fdbed1d8f6216ef0e81e69b3a3698717dde2",
+    "arrays": {
+      "episode_index": {
+        "shape": [
+          16
+        ],
+        "dtype": "int32"
+      },
+      "all_snr_db": {
+        "shape": [
+          8
+        ],
+        "dtype": "float32"
+      },
+      "snr_optimized_exact_cjlr_pd_l8_k2": {
+        "shape": [
+          8
+        ],
+        "dtype": "float32"
+      },
+      "snr_cold_k8": {
+        "shape": [
+          4
+        ],
+        "dtype": "float32"
+      },
+      "errors_optimized_exact_cjlr_pd_l8_k2": {
+        "shape": [
+          8,
+          16,
+          64,
+          2
+        ],
+        "dtype": "bool"
+      },
+      "errors_cold_k8": {
+        "shape": [
+          4,
+          16,
+          64,
+          2
+        ],
+        "dtype": "bool"
+      },
+      "crc_disagreement_optimized_exact_cjlr_pd_l8_k2": {
+        "shape": [
+          8,
+          16,
+          64,
+          2
+        ],
+        "dtype": "bool"
+      },
+      "crc_disagreement_cold_k8": {
+        "shape": [
+          4,
+          16,
+          64,
+          2
+        ],
+        "dtype": "bool"
+      },
+      "episode_fingerprint": {
+        "shape": [
+          8,
+          16,
+          32
+        ],
+        "dtype": "uint8"
+      },
+      "active": {
+        "shape": [
+          16,
+          64,
+          2
+        ],
+        "dtype": "bool"
+      },
+      "normalized_noise_max_error": {
+        "shape": [
+          8,
+          16
+        ],
+        "dtype": "float32"
+      },
+      "pd_l8_reset_count": {
+        "shape": [
+          8,
+          16,
+          2
+        ],
+        "dtype": "int16"
+      },
+      "pd_l8_maximum_history": {
+        "shape": [
+          8,
+          16,
+          2
+        ],
+        "dtype": "int8"
+      },
+      "pd_l8_tb1_history_empty": {
+        "shape": [
+          8,
+          16,
+          2
+        ],
+        "dtype": "bool"
+      }
+    }
+  }
+}

@@ -18,7 +18,6 @@ from sionna.ofdm import ResourceGridDemapper
 from sionna.nr import TBDecoder, LayerDemapper, PUSCHLSChannelEstimator
 
 class StateInit(Layer):
-    # pylint: disable=line-too-long
     """State Init."""
 
     def __init__(   self,
@@ -75,7 +74,6 @@ class StateInit(Layer):
         return s0
 
 class AggregateUserStates(Layer):
-    # pylint: disable=line-too-long
     """Aggregate User States."""
 
     def __init__(   self,
@@ -121,7 +119,6 @@ class AggregateUserStates(Layer):
         return a
 
 class UpdateState(Layer):
-    # pylint: disable=line-too-long
     """Updates the state tensor."""
 
     def __init__(   self,
@@ -171,7 +168,6 @@ class UpdateState(Layer):
         return s_new
 
 class CGNNIt(Layer):
-    # pylint: disable=line-too-long
     """Implements an iteration of the CGNN detector."""
 
     def __init__(   self,
@@ -205,7 +201,6 @@ class CGNNIt(Layer):
         return s_new
 
 class ReadoutLLRs(Layer):
-    # pylint: disable=line-too-long
     """Network computing LLRs from the state vectors."""
 
     def __init__(   self,
@@ -239,7 +234,6 @@ class ReadoutLLRs(Layer):
         return llr
 
 class ReadoutChEst(Layer):
-    # pylint: disable=line-too-long
     """Network computing channel estimate."""
 
     def __init__(   self,
@@ -271,7 +265,6 @@ class ReadoutChEst(Layer):
         return h_hat
 
 class CGNN(Model):
-    # pylint: disable=line-too-long
     """Implements the core neural receiver consisting of"""
 
     def __init__(   self,
@@ -410,7 +403,6 @@ class CGNN(Model):
         return llrs, h_hats
 
 class CGNNOFDM(Model):
-    # pylint: disable=line-too-long
     """CGNNOFDM."""
 
     def __init__(self,
@@ -658,7 +650,6 @@ class CGNNOFDM(Model):
             return llrs[-1][0], h_hats[-1]
 
 class NeuralPUSCHReceiver(Layer):
-    # pylint: disable=line-too-long
     """Neural PUSCHReceiver."""
 
     def __init__(self,
@@ -801,232 +792,3 @@ class NeuralPUSCHReceiver(Layer):
             b_hat, tb_crc_status = self._tb_decoders[mcs_arr_eval[0]](llr)
 
             return b_hat, h_hat_refined, h_hat, tb_crc_status
-
-
-class NRPreprocessing(Layer):
-    # pylint: disable=line-too-long
-    """NRPreprocessing."""
-
-    def __init__(self,
-                 num_tx,
-                 **kwargs):
-
-        super().__init__(**kwargs)
-
-        self._num_tx = num_tx
-        self._num_res_per_prb = 12
-
-    def _focc_removal(self, h_hat):
-        """Apply FOCC removal to h_hat."""
-
-        shape = [-1, 2]
-        s = tf.shape(h_hat)
-        new_shape = tf.concat([s[:3], shape], 0)
-        h_hat = tf.reshape(h_hat, new_shape)
-
-        h_hat = tf.reduce_sum(h_hat, axis=-1, keepdims=True) \
-                                    / tf.cast(2., dtype=h_hat.dtype)
-
-        h_hat = tf.repeat(h_hat, 2, axis=-1)
-
-        shape = [-1]
-        s = tf.shape(h_hat)
-        new_shape = tf.concat([s[:3], shape], 0)
-        h_ls = tf.reshape(h_hat, new_shape)
-
-        return h_ls
-
-    def _calculate_nn_indices(self, dmrs_ofdm_pos, dmrs_subcarrier_pos,
-                              num_ofdm_symbols, num_prbs):
-        """Calculate nn indices."""
-
-        re_pos = tf.meshgrid(tf.range(self._num_res_per_prb),
-                             tf.range(num_ofdm_symbols))
-        re_pos = tf.stack(re_pos, axis=-1)
-        re_pos = tf.reshape(re_pos, (-1,1,2))
-
-        pes = []
-        nn_idxs = []
-        for tx_idx in range(self._num_tx):
-            p_idx= tf.meshgrid(dmrs_subcarrier_pos[tx_idx],
-                               dmrs_ofdm_pos[tx_idx])
-            pilot_pos = tf.stack(p_idx, axis=-1)
-            pilot_pos = tf.reshape(pilot_pos, (-1, 2))
-
-            pilot_pos = tf.reshape(pilot_pos, (1,-1,2))
-            diff = tf.abs(re_pos - pilot_pos)
-            dist = tf.reduce_sum(diff, axis=-1)
-
-            nn_idx = tf.argmin(dist, axis=1)
-
-            nn_idx = tf.reshape(nn_idx,
-                                (1, 1, num_ofdm_symbols, self._num_res_per_prb))
-
-            pe = tf.reduce_min(diff, axis=1)
-            pe = tf.reshape(pe,
-                            (1, num_ofdm_symbols, self._num_res_per_prb, 2))
-            pe = tf.transpose(pe, (0,2,1,3))
-
-            p = []
-            pe = tf.cast(pe, tf.float32)
-
-            pe_ = pe[...,1:2]
-            pe_ -= tf.reduce_mean(pe_)
-            std_ = tf.math.reduce_std(pe_)
-            pe_ = tf.where(std_>0., pe_/std_, pe_)
-            p.append(pe_)
-
-            pe_ = pe[...,0:1]
-            pe_ -= tf.reduce_mean(pe_)
-            std_ = tf.math.reduce_std(pe_)
-            pe_ = tf.where(std_>0., pe_/std_, pe_)
-            p.append(pe_)
-
-            pe = tf.concat(p ,axis=-1)
-
-            pes.append(pe)
-            nn_idxs.append(nn_idx)
-
-        pe = tf.concat(pes, axis=0)
-        pe = tf.tile(pe, (1, num_prbs, 1, 1))
-        nn_idx = tf.concat(nn_idxs, axis=0)
-        nn_idx = tf.concat(nn_idxs, axis=0)
-        return nn_idx, pe
-
-    def _nn_interpolation(self, h_hat, num_ofdm_symbols,dmrs_ofdm_pos,
-                          dmrs_subcarrier_pos):
-        """Nn interpolation."""
-        num_pilots_per_dmrs = tf.shape(dmrs_subcarrier_pos)[1]
-        num_prbs = tf.cast(tf.shape(h_hat)[-1]
-                        / (num_pilots_per_dmrs * tf.shape(dmrs_ofdm_pos)[-1]),
-                           tf.int32)
-
-        s = tf.shape(h_hat)
-        h_hat = split_dim(h_hat, shape=(-1, num_pilots_per_dmrs), axis=3)
-        h_hat = split_dim(h_hat, shape=(-1, num_prbs), axis=3)
-        h_hat = tf.transpose(h_hat, (0,1,2,4,3,5))
-        h_hat = tf.reshape(h_hat, s)
-
-        h_hat = tf.expand_dims(h_hat, axis=1)
-        h_hat = tf.expand_dims(h_hat, axis=4)
-        perm = tf.roll(tf.range(tf.rank(h_hat)), -3, 0)
-        h_hat = tf.transpose(h_hat, perm)
-
-        ls_nn_ind, pe = self._calculate_nn_indices(dmrs_ofdm_pos,
-                                                   dmrs_subcarrier_pos,
-                                                   num_ofdm_symbols,
-                                                   num_prbs)
-
-        s = tf.shape(h_hat)
-        h_hat_prb = split_dim(h_hat, shape=(num_prbs, -1), axis=2)
-        h_hat_prb = tf.transpose(h_hat_prb, (0,1,3,2,4,5,6))
-        outputs = tf.gather(h_hat_prb, ls_nn_ind, 2, batch_dims=2)
-        outputs = tf.transpose(outputs, (0,1,2,4,3,5,6,7))
-
-        s = tf.shape(outputs)
-        s = tf.concat((tf.constant((-1,), tf.int32), s[1:3],
-                       tf.expand_dims(num_prbs*self._num_res_per_prb, axis=0),
-                       s[5:]), axis=0)
-        outputs = tf.reshape(outputs, s)
-
-        perm = tf.roll(tf.range(tf.rank(outputs)), 3, 0)
-        h_hat = tf.transpose(outputs, perm)
-        return h_hat, pe
-
-    def call(self, inputs):
-
-        y, h_hat_ls, dmrs_ofdm_pos, dmrs_subcarrier_pos = inputs
-
-        num_ofdm_symbols = tf.shape(y)[2]
-
-        h_hat_ls = tf.transpose(h_hat_ls, (0,3,2,1))
-
-
-        h_hat_ls = self._focc_removal(h_hat_ls)
-
-        h_hat, pe = self._nn_interpolation(h_hat_ls,
-                                           num_ofdm_symbols,
-                                           dmrs_ofdm_pos,
-                                           dmrs_subcarrier_pos)
-
-        h_hat = h_hat[:,0,:,:self._num_tx,0]
-        h_hat = tf.transpose(h_hat, [0, 2, 4, 3, 1])
-        return [h_hat, pe]
-
-class NeuralReceiverONNX(Model):
-    # pylint: disable=line-too-long
-    """Neural Receiver ONNX."""
-
-    def __init__(self,
-                 num_it,
-                 d_s,
-                 num_units_init,
-                 num_units_agg,
-                 num_units_state ,
-                 num_units_readout,
-                 num_bits_per_symbol,
-                 layer_type_dense,
-                 layer_type_conv,
-                 layer_type_readout,
-                 nrx_dtype,
-                 num_tx,
-                 num_rx_ant,
-                 **kwargs):
-
-        super().__init__(**kwargs)
-        assert len(num_units_agg) == num_it and len(num_units_state) == num_it
-
-        self._num_tx = num_tx
-
-        self._cgnn = CGNN([num_bits_per_symbol],
-                          num_rx_ant,
-                          num_it,
-                          d_s,
-                          num_units_init,
-                          num_units_agg,
-                          num_units_state,
-                          num_units_readout,
-                          layer_type_dense=layer_type_dense,
-                          layer_type_conv=layer_type_conv,
-                          layer_type_readout=layer_type_readout,
-                          dtype=nrx_dtype)
-
-        self._preprocessing = NRPreprocessing(self._num_tx)
-
-    @property
-    def num_it(self):
-        return self._num_it
-
-    @num_it.setter
-    def num_it(self, val):
-        assert (val >= 1) and (val <= len(self._iterations)),\
-            "Invalid number of iterations"
-        self._num_it = val
-
-    def call(self, inputs):
-
-        y_real, y_imag, h_hat_real, h_hat_imag, \
-            dmrs_port_mask, dmrs_ofdm_pos, dmrs_subcarrier_pos = inputs
-
-        y = tf.concat((y_real, y_imag), axis=-1)
-        h_hat_p = tf.concat((h_hat_real, h_hat_imag), axis=-1)
-
-        h_hat, pe = self._preprocessing((y,
-                                         h_hat_p,
-                                         dmrs_ofdm_pos,
-                                         dmrs_subcarrier_pos))
-
-        mcs_ue_mask = tf.ones((1,1,1), tf.float32)
-
-        llr, h_hat = self._cgnn([y, pe, h_hat, dmrs_port_mask, mcs_ue_mask])
-
-        llr = llr[-1][0]
-        h_hat = h_hat[-1]
-
-        llr = tf.cast(llr, tf.float32)
-        h_hat = tf.cast(h_hat, tf.float32)
-
-        llr = tf.transpose(llr, (0,4,1,2,3))
-        llr = -1. * llr
-
-        return llr, h_hat

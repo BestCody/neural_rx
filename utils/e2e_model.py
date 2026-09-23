@@ -25,7 +25,7 @@ class E2E_Model(Model):
 
         super().__init__()
 
-        assert isinstance(mcs_arr_eval_idx, int), "E2E Model can only evaluate one MCS at a time. For mixed MCS evaluation, use the E2E_Model_Mixed_MCS class."
+        assert isinstance(mcs_arr_eval_idx, int), "E2E Model can only evaluate one MCS at a time."
 
         self._sys_parameters = sys_parameters
         self._training = training
@@ -41,41 +41,6 @@ class E2E_Model(Model):
 
         if self._sys_parameters.system == 'baseline_perf_csi_kbest':
             self._sys_name = "Baseline - Perf. CSI & K-Best"
-            self._receiver = BaselineReceiver(
-                                self._sys_parameters,
-                                return_tb_status=return_tb_status,
-                                mcs_arr_eval_idx=mcs_arr_eval_idx)
-
-        elif self._sys_parameters.system == 'baseline_perf_csi_lmmse':
-            self._sys_name = "Baseline - Perf. CSI & LMMSE"
-            self._receiver = BaselineReceiver(
-                                self._sys_parameters,
-                                return_tb_status=return_tb_status,
-                                mcs_arr_eval_idx=mcs_arr_eval_idx)
-
-        elif self._sys_parameters.system == 'baseline_lmmse_kbest':
-            self._sys_name = f"Baseline - LMMSE+K-Best"
-            self._receiver = BaselineReceiver(
-                                self._sys_parameters,
-                                return_tb_status=return_tb_status,
-                                mcs_arr_eval_idx=mcs_arr_eval_idx)
-
-        elif self._sys_parameters.system == 'baseline_lmmse_lmmse':
-            self._sys_name = f"Baseline - LMMSE+LMMSE"
-            self._receiver = BaselineReceiver(
-                            self._sys_parameters,
-                            return_tb_status=return_tb_status,
-                            mcs_arr_eval_idx=mcs_arr_eval_idx)
-
-        elif self._sys_parameters.system == 'baseline_lsnn_lmmse':
-            self._sys_name = f"Baseline - LS/nn+LMMSE"
-            self._receiver = BaselineReceiver(
-                            self._sys_parameters,
-                            return_tb_status=return_tb_status,
-                            mcs_arr_eval_idx=mcs_arr_eval_idx)
-
-        elif self._sys_parameters.system == 'baseline_lslin_lmmse':
-            self._sys_name = f"Baseline - LS/lin+LMMSE"
             self._receiver = BaselineReceiver(
                                 self._sys_parameters,
                                 return_tb_status=return_tb_status,
@@ -203,8 +168,6 @@ class E2E_Model(Model):
         x = tf.multiply(x, tf.cast(a_tx, tf.complex64))
 
 
-        if self._sys_parameters.frequency_offset is not None:
-            x = self._sys_parameters.frequency_offset(x)
 
         if self._sys_parameters.ebno:
 
@@ -239,29 +202,10 @@ class E2E_Model(Model):
                         indoor_probability=0.)
             self._sys_parameters.channel_model.set_topology(*topology)
 
-        if self._sys_parameters.channel_type == "AWGN":
-            y = self._channel([x, no])
-            h = tf.ones_like(y)
-        else:
-            y, h = self._channel([x, no])
+        y, h = self._channel([x, no])
 
 
-        if self._sys_parameters.system in ('baseline_lmmse_kbest',
-                                           'baseline_lmmse_lmmse',
-                                           'baseline_lsnn_lmmse',
-                                           'baseline_lslin_lmmse'):
-            b_hat = self._receiver([y, no])
-            if self._return_tb_status:
-                b_hat, tb_crc_status = b_hat
-            else:
-                tb_crc_status = None
-
-            return self._mask_active_dmrs(b[0], b_hat, num_tx,
-                                          active_dmrs, mcs_arr_eval[0],
-                                          tb_crc_status)
-
-        elif self._sys_parameters.system in ('baseline_perf_csi_kbest',
-                                             'baseline_perf_csi_lmmse'):
+        if self._sys_parameters.system == 'baseline_perf_csi_kbest':
 
             b_hat = self._receiver([y, h, no])
 
@@ -318,70 +262,3 @@ class E2E_Model(Model):
                         return b, b_hat
         else:
             raise ValueError("Unknown system selected!")
-
-
-class E2E_Model_Mixed_MCS(E2E_Model):
-    """E2 E Model Mixed MCS."""
-    def __init__(self, sys_parameters, training=False, return_tb_status=False,
-                 mcs_arr_eval_idx=0, ue_return=0, mcs_ue_mask=None):
-        if isinstance(mcs_arr_eval_idx, (list, tuple)):
-            assert len(mcs_arr_eval_idx)==len(sys_parameters.mcs_index), "If mcs_arr_eval_idx is a list, it must have the same length as sys_parameters.mcs_index"
-            assert mcs_ue_mask is not None, "Must specify mcs_ue_mask if mcs_arr_eval_idx is given as list"
-            super().__init__(sys_parameters=sys_parameters,
-                             training=training,
-                             return_tb_status=return_tb_status,
-                             mcs_arr_eval_idx=mcs_arr_eval_idx[0])
-            self._mcs_arr_eval = mcs_arr_eval_idx
-        else:
-            super().__init__(sys_parameters=sys_parameters,
-                             training=training,
-                             return_tb_status=return_tb_status,
-                             mcs_arr_eval_idx=mcs_arr_eval_idx)
-            self._mcs_arr_eval = mcs_arr_eval_idx
-        self._ue_return = ue_return
-
-        self._mcs_ue_mask = mcs_ue_mask
-
-    def call(self, batch_size, ebno_db, num_tx=None, output_nrx_h_hat=False):
-        if self._return_tb_status:
-            if output_nrx_h_hat:
-                b, b_hat, tb_crc_status, h, h_hat_refined, h_hat = \
-                        super().call(batch_size, ebno_db, num_tx,
-                                     output_nrx_h_hat,
-                                     mcs_arr_eval_idx=self._mcs_arr_eval,
-                                     mcs_ue_mask=self._mcs_ue_mask)
-            else:
-                b, b_hat, tb_crc_status = \
-                            super().call(batch_size,
-                                        ebno_db, num_tx,
-                                        output_nrx_h_hat,
-                                        mcs_arr_eval_idx=self._mcs_arr_eval,
-                                        mcs_ue_mask=self._mcs_ue_mask)
-        else:
-            if output_nrx_h_hat:
-                b, b_hat, h, h_hat_refined, h_hat = \
-                            super().call(batch_size, ebno_db, num_tx,
-                                         output_nrx_h_hat,
-                                         mcs_arr_eval_idx=self._mcs_arr_eval,
-                                         mcs_ue_mask=self._mcs_ue_mask)
-            else:
-                b, b_hat = super().call(batch_size, ebno_db, num_tx,
-                                        output_nrx_h_hat,
-                                        mcs_arr_eval_idx=self._mcs_arr_eval,
-                                        mcs_ue_mask=self._mcs_ue_mask)
-
-        b = tf.gather(b, indices=[self._ue_return], axis=1)
-        b_hat = tf.gather(b_hat, indices=[self._ue_return], axis=1)
-
-        if self._return_tb_status:
-            tb_crc_status = tf.gather(tb_crc_status,
-                                      indices=[self._ue_return], axis=1)
-            if output_nrx_h_hat:
-                return b, b_hat, tb_crc_status, h, h_hat_refined, h_hat
-            else:
-                return b, b_hat, tb_crc_status
-        else:
-            if output_nrx_h_hat:
-                return b, b_hat, h, h_hat_refined, h_hat
-            else:
-                return b, b_hat

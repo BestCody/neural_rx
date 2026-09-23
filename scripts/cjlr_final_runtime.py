@@ -52,7 +52,7 @@ def load_v18_segment_safe_config(path: Path | str) -> dict:
 
 
 class FrozenV18Runtime:
-    """Hold immutable v18 models and paired decode graphs."""
+    """Hold immutable v18 models and the candidate decode graph."""
 
     def __init__(
         self,
@@ -69,7 +69,6 @@ class FrozenV18Runtime:
         from cjlr_receiver import (
             OneLayerGridCodeMap,
             StatefulSoftTBCode,
-            StatefulSoftTBInformationDecoder,
             constellation_table,
         )
         from temporal_receiver_core import (
@@ -77,10 +76,8 @@ class FrozenV18Runtime:
             build_backbone,
             derive_cdm_noise_conversion,
             direct_k2_trainable_variables,
-            frozen_cold_state,
             model_checksum,
             prepare_cgnn_inputs,
-            readout_llr_grid,
             received_to_grid,
             run_k2,
             select_channel_input,
@@ -93,8 +90,6 @@ class FrozenV18Runtime:
         self.batch_size = int(batch_size)
         self.users = int(receiver_config["num_tx"])
         self.run_k2 = run_k2
-        self.frozen_cold_state = frozen_cold_state
-        self.readout_llr_grid = readout_llr_grid
         self.prepare_cgnn_inputs = prepare_cgnn_inputs
         self.select_channel_input = select_channel_input
         self.select_channel_variance = select_channel_variance
@@ -102,7 +97,7 @@ class FrozenV18Runtime:
         self.stacked_to_complex_channel = stacked_to_complex_channel
         self.model_checksum = model_checksum
 
-        self.parameters, teacher_e2e = build_backbone(
+        parameters, teacher_e2e = build_backbone(
             config_name,
             num_it=int(receiver_config["teacher_iterations"]),
             training=False,
@@ -116,7 +111,6 @@ class FrozenV18Runtime:
             num_tx_eval=self.users,
             n_size_bwp_override=int(receiver_config["n_size_bwp"]),
         )
-        self.teacher_e2e = teacher_e2e
         self.receiver = teacher_e2e._receiver
         self.teacher = self.receiver._neural_rx._cgnn
         self.student = student_e2e._receiver._neural_rx._cgnn
@@ -152,21 +146,14 @@ class FrozenV18Runtime:
             int(receiver_config["bp_remaining_iterations"]),
             reference_decoder=early_decoder.decoder,
         )
-        self.full_decoder = StatefulSoftTBInformationDecoder(
-            self.receiver._tb_encoders[0],
-            self.receiver._tb_decoders[0],
-            int(receiver_config["ldpc_iterations"]),
-        )
         self.cdm = derive_cdm_noise_conversion(
             self.receiver._ls_est, self.users
         )
         self.symbols = int(self.grid_map.num_data_symbols)
-        self.receive_antennas = int(self.parameters.num_rx_antennas)
+        self.receive_antennas = int(parameters.num_rx_antennas)
         self.bits = int(receiver_config["bits_per_symbol"])
         self.sequential_delta = self._make_delta(self.batch_size)
-        self.combined_delta = self._make_delta(2 * self.batch_size)
         self.decode_candidate = self._build_candidate_graph()
-        self.decode_all = self._build_combined_graph()
 
     def _make_delta(self, expected_batch: int):
         from cjlr_optimized_receiver import make_chunked_exact_delta
@@ -221,12 +208,6 @@ class FrozenV18Runtime:
             )
 
         return delta
-
-    def _teacher_grid(self, inputs):
-        state = self.frozen_cold_state(self.teacher, inputs)
-        for iteration in self.teacher._iterations:
-            state = iteration([state, inputs[1], inputs[3]])
-        return self.readout_llr_grid(self.teacher, state)
 
     def _received_noise(self, observation_variance, active):
         tf = self.tf
@@ -312,143 +293,6 @@ class FrozenV18Runtime:
             return output.logits, output.hard_bits, output.crc_status
 
         return decode
-
-    def _cold_one(self, y, current_ls, active):
-        inputs = self.prepare_cgnn_inputs(
-            self.receiver, y, current_ls, active
-        )
-        grid = self._teacher_grid(inputs)
-        return self.full_decoder(self.grid_map.grid_to_coded(grid))
-
-    def _build_combined_graph(self):
-        tf = self.tf
-
-        @tf.function(reduce_retracing=True, jit_compile=False)
-        def decode(
-            y,
-            current_ls,
-            posterior,
-            posterior_variance,
-            observation_variance,
-            history_valid,
-            reset_mask,
-            active,
-        ):
-            selected, available = self.select_channel_input(
-                current_ls,
-                posterior,
-                history_valid,
-                reset_mask=reset_mask,
-            )
-            selected_variance = self.select_channel_variance(
-                posterior_variance, observation_variance, available
-            )
-            persistent_inputs = self.prepare_cgnn_inputs(
-                self.receiver, y, selected, active
-            )
-            reset_inputs = self.prepare_cgnn_inputs(
-                self.receiver, y, current_ls, active
-            )
-            persistent_grid = self.run_k2(self.student, persistent_inputs)
-            reset_grid = self.run_k2(self.student, reset_inputs)
-            cold_grid = self._teacher_grid(reset_inputs)
-            cjlr_coded = tf.concat([
-                self.grid_map.grid_to_coded(persistent_grid),
-                self.grid_map.grid_to_coded(reset_grid),
-            ], axis=0)
-            y_data = self.grid_map.gather_shared_grid(
-                self.received_to_grid(y)
-            )
-            y_data = tf.concat([y_data, y_data], axis=0)
-            channels = self.grid_map.gather_stream_grid(
-                self.stacked_to_complex_channel(
-                    tf.concat([selected, current_ls], axis=0)
-                )
-            )
-            variances = self.grid_map.gather_stream_grid(tf.concat([
-                selected_variance,
-                observation_variance,
-            ], axis=0))
-            observations = tf.concat([
-                observation_variance,
-                observation_variance,
-            ], axis=0)
-            actives = tf.concat([active, active], axis=0)
-            noise = self._received_noise(observations, actives)
-
-            def refine(extrinsic):
-                data = self.grid_map.coded_to_data(extrinsic)
-                return self.combined_delta(
-                    y_data,
-                    tf.transpose(channels, [0, 2, 1, 3]),
-                    tf.transpose(variances, [0, 2, 1, 3]),
-                    noise,
-                    tf.transpose(data, [0, 2, 1, 3]),
-                )
-
-            cjlr = self.cjlr_decoder(cjlr_coded, refine)
-            cold = self.full_decoder(
-                self.grid_map.grid_to_coded(cold_grid)
-            )
-            cjlr_values = tuple(
-                tf.split(value, 2, axis=0)
-                for value in (
-                    cjlr.logits,
-                    cjlr.hard_bits,
-                    cjlr.crc_status,
-                )
-            )
-            return (
-                cjlr_values[0][0],
-                cjlr_values[1][0],
-                cjlr_values[2][0],
-                cjlr_values[0][1],
-                cjlr_values[1][1],
-                cjlr_values[2][1],
-                cold.logits,
-                cold.hard_bits,
-                cold.crc_status,
-            )
-
-        return decode
-
-    def sequential_outputs(
-        self,
-        y,
-        current_ls,
-        posterior,
-        posterior_variance,
-        observation_variance,
-        history_valid,
-        reset_mask,
-        active,
-    ):
-        selected, available = self.select_channel_input(
-            current_ls,
-            posterior,
-            history_valid,
-            reset_mask=reset_mask,
-        )
-        selected_variance = self.select_channel_variance(
-            posterior_variance, observation_variance, available
-        )
-        return (
-            self._cjlr_one(
-                y,
-                selected,
-                selected_variance,
-                observation_variance,
-                active,
-            ),
-            self._cjlr_one(
-                y,
-                current_ls,
-                observation_variance,
-                observation_variance,
-                active,
-            ),
-            self._cold_one(y, current_ls, active),
-        )
 
     def checksums_unchanged(self) -> bool:
         return bool(
