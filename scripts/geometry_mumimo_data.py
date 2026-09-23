@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""Generate shared-topology temporal MU-MIMO data."""
 
 from __future__ import annotations
 
@@ -14,7 +13,6 @@ from temporal_training_data import TemporalTrainingDataGenerator
 
 
 def azimuth_geometry(ut_loc, bs_loc):
-    """Return UE azimuths and minimum pair separation."""
     ut_loc = np.asarray(ut_loc, np.float64)
     bs_loc = np.asarray(bs_loc, np.float64)
     if ut_loc.ndim != 3 or ut_loc.shape[-1] != 3:
@@ -36,7 +34,6 @@ def azimuth_geometry(ut_loc, bs_loc):
 
 
 class GeometryAwareMUMIMOGenerator(TemporalTrainingDataGenerator):
-    """Generate all UE channels from one physical topology."""
 
     def __init__(
         self,
@@ -97,7 +94,6 @@ class GeometryAwareMUMIMOGenerator(TemporalTrainingDataGenerator):
         )
 
     def _make_umi(self, profile):
-        """Build the selected geometry-aware channel model."""
         carrier = self.p.carrier_frequency
         antennas = int(self.p.num_rx_antennas)
         if antennas == 1:
@@ -138,7 +134,6 @@ class GeometryAwareMUMIMOGenerator(TemporalTrainingDataGenerator):
         )
 
     def _topology_candidates(self, count, profile):
-        """Draw candidate topologies from one 3GPP scenario."""
         speed_scale = sn.SPEED_OF_LIGHT / self.p.carrier_frequency
         return gen_single_sector_topology(
             int(count),
@@ -150,7 +145,6 @@ class GeometryAwareMUMIMOGenerator(TemporalTrainingDataGenerator):
         )
 
     def _draw_topology(self, batch_size, profile):
-        """Draw topology rows satisfying the geometry interval."""
         batch_size = int(batch_size)
         natural = (
             self.min_azimuth_separation_deg == 0.0
@@ -188,7 +182,6 @@ class GeometryAwareMUMIMOGenerator(TemporalTrainingDataGenerator):
         )
 
     def _set_joint_topology(self, channel, topology):
-        """Apply one topology and return its public metadata."""
         channel.set_topology(*topology, los=self.force_los)
         ut_loc, bs_loc, ut_orientation, bs_orientation, velocity, indoor = (
             topology
@@ -213,7 +206,6 @@ class GeometryAwareMUMIMOGenerator(TemporalTrainingDataGenerator):
         }
 
     def _sample_joint_slots(self, channel, batch_size, seq_len):
-        """Generate one continuous joint channel sequence."""
         symbols = int(self.rg.num_ofdm_symbols)
         sampling_frequency = 1.0 / self.rg.ofdm_symbol_duration
         a, tau = channel(
@@ -225,7 +217,6 @@ class GeometryAwareMUMIMOGenerator(TemporalTrainingDataGenerator):
         return tf.stack(tf.split(h, int(seq_len), axis=5), axis=1)
 
     def sample_pool_channel(self, batch_size, seq_len, channel_regime=None):
-        """Sample all persistent UE channels in one topology."""
         profile = self.channel_profiles[0]
         steady_topology = self._draw_topology(batch_size, profile)
         steady_metadata = self._set_joint_topology(
@@ -257,7 +248,6 @@ class GeometryAwareMUMIMOGenerator(TemporalTrainingDataGenerator):
         return steady
 
     def _update_profile_metadata(self, steady, event):
-        """Expose first-batch geometry for existing reports."""
         locations = steady["ut_location_m"].numpy()[0]
         azimuth = steady["azimuth_deg"].numpy()[0]
         los = steady["los"].numpy()[0]
@@ -284,7 +274,6 @@ class GeometryAwareMUMIMOGenerator(TemporalTrainingDataGenerator):
             })
 
     def sample_batch(self, *args, **kwargs):
-        """Sample a batch and attach geometry provenance."""
         result = super().sample_batch(*args, **kwargs)
         if self.last_geometry is None:
             raise RuntimeError("joint geometry metadata is unavailable")

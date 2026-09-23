@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""Test causal PD-L8 routing and reset behavior."""
 
 from __future__ import annotations
 

@@ -17,19 +17,16 @@ import sionna as sn
 from sionna.utils import ebnodb2no, expand_to_rank
 
 def save_weights(system, model_path):
-    """Save model weights."""
     weights = system.get_weights()
     with open(model_path, 'wb') as f:
         pickle.dump(weights, f)
 
 def load_weights(system, model_path):
-    """Load model weights."""
     with open(model_path, 'rb') as f:
         weights = pickle.load(f)
     system.set_weights(weights)
 
 class TriangularDistributionSampler:
-    """sampling from a triangular distribution."""
 
     def __init__(self, minimum, maximum, dtype=tf.float32):
         self._dtype = dtype
@@ -61,7 +58,6 @@ def training_loop(model, label, filename, training_logdir, training_seed,
                   sys_parameters, mcs_arr_training_idx,
                   mcs_training_snr_db_offset=None, mcs_training_probs=None,
                   weight_saving_schedule=None, xla=False):
-    """Training loop used to train a system ``model``."""
 
     print(f"Training with mixed MCS from arr. idx {mcs_arr_training_idx}. Eval EbNo at {eval_ebno_db_arr} dB.")
 

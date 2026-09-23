@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""Score standardized Temporal Neural RX benchmark runs."""
 
 from __future__ import annotations
 
@@ -15,7 +14,6 @@ PERSISTENT = "candidate_persistent"
 RESET = "candidate_reset"
 MATCHED_K8 = "matched_cold_k8"
 def primary_snr_index(protocol: dict, stage: str) -> int:
-    """Return the frozen primary SNR position."""
     name = protocol["statistics"]["primary_snr_point"]
     points = protocol["stages"][stage]["snr_points"]
     if points.count(name) != 1:
@@ -24,7 +22,6 @@ def primary_snr_index(protocol: dict, stage: str) -> int:
 
 
 def window_slice(bounds: list[int], num_tbs: int) -> slice:
-    """Convert inclusive one-indexed TB bounds."""
     first, last = (int(value) for value in bounds)
     if not 1 <= first <= last <= int(num_tbs):
         raise ValueError("scoring window is outside the TB horizon")
@@ -36,7 +33,6 @@ def episode_rates(
     active: np.ndarray,
     window: slice,
 ) -> np.ndarray:
-    """Return one rate per condition, SNR, and episode."""
     errors = np.asarray(errors, bool)
     active = np.asarray(active, bool)
     if errors.ndim != 5 or active.ndim != 4:
@@ -63,7 +59,6 @@ def _bootstrap_units(
     draws: int,
     rng: np.random.RandomState,
 ) -> tuple[float, np.ndarray, np.ndarray]:
-    """Bootstrap episodes, then training seeds."""
     runs = len(values)
     conditions = len(condition_indices)
     if runs == 0 or conditions == 0:
@@ -104,7 +99,6 @@ def paired_summary(
     draws: int,
     rng: np.random.RandomState,
 ) -> dict:
-    """Summarize a paired method difference."""
     tbs = int(protocol["stages"][stage]["num_tbs"])
     window = window_slice(
         protocol["stages"][stage]["scoring_window"], tbs
@@ -157,7 +151,6 @@ def method_summary(
     protocol: dict,
     stage: str,
 ) -> dict:
-    """Summarize one method without independence claims."""
     tbs = int(protocol["stages"][stage]["num_tbs"])
     window = window_slice(
         protocol["stages"][stage]["scoring_window"], tbs
@@ -192,7 +185,6 @@ def late_drift_summary(
     draws: int,
     rng: np.random.RandomState,
 ) -> dict | None:
-    """Compare late and mature persistent-memory errors."""
     tbs = int(protocol["stages"][stage]["num_tbs"])
     if tbs < int(protocol["windows"]["late"][1]):
         return None
@@ -233,7 +225,6 @@ def episode_outage_summary(
     protocol: dict,
     stage: str,
 ) -> dict:
-    """Measure channel histories with majority failure."""
     tbs = int(protocol["stages"][stage]["num_tbs"])
     window = window_slice(
         protocol["stages"][stage]["scoring_window"], tbs
@@ -267,7 +258,6 @@ def snr_crossing(
     blocks: np.ndarray,
     target: float,
 ) -> dict:
-    """Interpolate a monotone log-TBLER crossing."""
     snrs = np.asarray(snrs, np.float64)
     errors = np.asarray(errors, np.int64)
     blocks = np.asarray(blocks, np.int64)
@@ -300,7 +290,6 @@ def snr_target_summary(
     protocol: dict,
     stage: str,
 ) -> dict:
-    """Report candidate and matched-K8 target crossings."""
     target = float(protocol["objective"]["target_tbler"])
     tbs = int(protocol["stages"][stage]["num_tbs"])
     window = window_slice(
@@ -343,7 +332,6 @@ def adaptation_summary(
     protocol: dict,
     stage: str,
 ) -> dict | None:
-    """Measure excess error after the frozen topology change."""
     tbs = int(next(iter(runs))["active"].shape[2])
     if tbs < 64:
         return None
@@ -395,7 +383,6 @@ def schedule_reentry_summary(
     stage: str,
     horizon: int = 4,
 ) -> dict:
-    """Measure paired excess error after a physical UE re-enters."""
     index = protocol["stages"][stage]["condition_names"].index(
         "schedule_gap_reentry"
     )
@@ -458,7 +445,6 @@ def schedule_reentry_summary(
 def latency_summary(
     runs: list[dict[str, np.ndarray]], protocol: dict
 ) -> dict:
-    """Summarize candidate latency relative to paired references."""
     timing = protocol["execution"]["latency"]
     methods = timing["candidate_methods"] + timing["reference_methods"]
     summaries = {}
@@ -497,7 +483,6 @@ def confirmation_precision_summary(
     k8_gap: dict,
     memory_gain: dict,
 ) -> dict | None:
-    """Decide whether confirmation needs another episode batch."""
     if stage != "confirmation":
         return None
     target = float(protocol["statistics"]["confirmation_ci_half_width"])
@@ -529,7 +514,6 @@ def confirmation_precision_summary(
 
 
 def validate_run_group(payloads: list[dict], arrays: list[dict], protocol: dict):
-    """Require one complete set of training seeds."""
     if not payloads or len(payloads) != len(arrays):
         raise ValueError("run group is empty or incomplete")
     manifest = payloads[0]["candidate"]
@@ -565,7 +549,6 @@ def score_run_group(
     arrays: list[dict[str, np.ndarray]],
     protocol: dict,
 ) -> dict:
-    """Score one candidate across its training seeds."""
     manifest, stage = validate_run_group(payloads, arrays, protocol)
     draws = int(protocol["statistics"]["bootstrap_samples"])
     rng = np.random.RandomState(20_261_220)
@@ -613,7 +596,6 @@ def score_run_group(
 
 
 def pareto_frontier(scores: list[dict]) -> list[str]:
-    """Return non-dominated accuracy-latency candidates."""
     metrics = {}
     for score in scores:
         gap = score["comparisons"]["candidate_gap_to_matched_k8"]
@@ -640,7 +622,6 @@ def pareto_frontier(scores: list[dict]) -> list[str]:
 
 
 def rank_frontier(scores: list[dict]) -> list[str]:
-    """Apply the frozen lexicographic tie breaks."""
     frontier = set(pareto_frontier(scores))
 
     def key(score):
@@ -663,7 +644,6 @@ def rank_frontier(scores: list[dict]) -> list[str]:
 
 
 def _latency_rank_value(score: dict) -> float:
-    """Return normalized p95 latency for ranking."""
     latency = score["latency"]
     reference = latency["reference_method"]
     return float(latency["relative_to"][reference]["p95_ratio"])

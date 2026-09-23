@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""Generate every benchmark condition through one scenario bank."""
 
 from __future__ import annotations
 
@@ -13,7 +12,6 @@ from temporal_training_data import TemporalTrainingDataGenerator
 
 
 class PowerControlledGeometryGenerator(GeometryAwareMUMIMOGenerator):
-    """Impose a known residual received-power gap between UEs."""
 
     def __init__(self, *args, received_power_gap_db: float, **kwargs):
         self.received_power_gap_db = float(received_power_gap_db)
@@ -22,7 +20,6 @@ class PowerControlledGeometryGenerator(GeometryAwareMUMIMOGenerator):
         super().__init__(*args, **kwargs)
 
     def sample_pool_channel(self, batch_size, seq_len, channel_regime=None):
-        """Normalize per-UE power and impose the residual gap."""
         h = super().sample_pool_channel(batch_size, seq_len, channel_regime)
         power = self.tf.reduce_mean(
             self.tf.abs(h) ** 2, axis=(2, 3, 5, 6, 7), keepdims=True
@@ -39,7 +36,6 @@ class PowerControlledGeometryGenerator(GeometryAwareMUMIMOGenerator):
 
 
 class TemporalBenchmarkScenarioBank:
-    """Build deterministic paired episodes from the frozen job list."""
 
     def __init__(self, parameters, e2e_model, tf_module):
         self.parameters = parameters
@@ -49,14 +45,12 @@ class TemporalBenchmarkScenarioBank:
         self.generators = {}
 
     def _seed_streams(self, job: dict, episode_index: int) -> dict:
-        """Advance every independent random domain by one episode."""
         return {
             name: int(value) + int(episode_index)
             for name, value in job["seed_streams"].items()
         }
 
     def _common_kwargs(self, job: dict, episode_index: int) -> dict:
-        """Return settings shared by all providers."""
         return {
             "seed_streams": self._seed_streams(job, episode_index),
             "seed_stream_limit": 1,
@@ -70,7 +64,6 @@ class TemporalBenchmarkScenarioBank:
 
     @staticmethod
     def _tdl_profile(settings: dict) -> ChannelProfileSpec:
-        """Build one historical TDL profile."""
         model = settings["profile"]
         delay = {"B100": 100e-9, "C300": 300e-9}[model]
         low, high = settings["doppler_hz"]
@@ -87,13 +80,11 @@ class TemporalBenchmarkScenarioBank:
     def _geometry_range(
         self, settings: dict, episode_index: int
     ) -> tuple[float, float]:
-        """Select one balanced Doppler stratum."""
         strata = settings.get("doppler_strata_hz", [[0.0, 400.0]])
         low, high = strata[int(episode_index) % len(strata)]
         return float(low), float(high)
 
     def _make_generator(self, job: dict, episode_index: int):
-        """Construct the provider selected by the immutable job."""
         provider = job["provider"]
         settings = job["provider_settings"]
         common = self._common_kwargs(job, episode_index)
@@ -159,7 +150,6 @@ class TemporalBenchmarkScenarioBank:
         raise ValueError(f"unknown scenario provider {provider}")
 
     def _generator(self, job: dict, episode_index: int):
-        """Reuse channel objects while resetting every random stream."""
         settings = job["provider_settings"]
         strata = settings.get("doppler_strata_hz", [[0.0, 400.0]])
         stratum = int(episode_index) % len(strata)
@@ -175,7 +165,6 @@ class TemporalBenchmarkScenarioBank:
         return generator
 
     def generate(self, job: dict, episode_index: int) -> BenchmarkEpisode:
-        """Generate one episode with identical payload and noise across SNR."""
         if not 0 <= int(episode_index) < int(job["episode_count"]):
             raise ValueError("episode index is outside the job")
         generator = self._generator(job, episode_index)

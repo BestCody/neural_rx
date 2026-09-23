@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""Test the corrected temporal training scheduler."""
 
 from __future__ import annotations
 

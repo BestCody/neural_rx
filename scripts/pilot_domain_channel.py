@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""Raw-DMRS extraction and pilot-domain temporal estimation."""
 
 from __future__ import annotations
 
@@ -13,7 +12,6 @@ EPSILON = 1e-12
 
 @dataclass(frozen=True)
 class PilotLayout:
-    """Compact layout of valid PUSCH pilot estimates."""
 
     num_tx: int
     num_dmrs_symbols: int
@@ -48,7 +46,6 @@ class PilotLayout:
         return result
 
 def pilot_layout(estimator, num_tx: int) -> PilotLayout:
-    """Read the active pilot geometry from a PUSCH estimator."""
     num_tx = int(num_tx)
     num_dmrs = int(estimator._num_dmrs_syms)
     per_dmrs = int(estimator._num_pilots_per_dmrs_sym)
@@ -96,7 +93,6 @@ def extract_pilot_statistics(
     num_tx: int,
     tf,
 ) -> tuple[np.ndarray, np.ndarray, PilotLayout]:
-    """Extract compact CDM-despread estimates before interpolation."""
     from sionna.utils import flatten_last_dims
 
     layout = pilot_layout(estimator, num_tx)
@@ -149,7 +145,6 @@ def extract_raw_pilot_estimates(
     num_tx: int,
     tf,
 ) -> tuple[np.ndarray, PilotLayout]:
-    """Extract valid pilot LS values before PUSCH CDM averaging."""
     from sionna.utils import flatten_last_dims
 
     layout = pilot_layout(estimator, num_tx)
@@ -187,7 +182,6 @@ def extract_raw_pilot_estimates(
 
 
 def cdm_average_raw_pilots(raw_pilots: np.ndarray) -> np.ndarray:
-    """Average each valid frequency-domain CDM pilot pair."""
     raw_pilots = np.asarray(raw_pilots)
     if raw_pilots.ndim != 5 or raw_pilots.shape[3] % 2:
         raise ValueError("raw pilots require an even valid-pilot dimension")
@@ -205,7 +199,6 @@ def cdm_average_raw_pilots(raw_pilots: np.ndarray) -> np.ndarray:
 def estimate_cdm_noise_variance(
     raw_pilots: np.ndarray,
 ) -> tuple[np.ndarray, dict]:
-    """Estimate post-CDM pilot variance from paired pilot disagreement."""
     raw_pilots = np.asarray(raw_pilots)
     if raw_pilots.ndim != 5 or raw_pilots.shape[3] % 2:
         raise ValueError("raw pilots require an even valid-pilot dimension")
@@ -235,7 +228,6 @@ def interpolate_pilot_statistics(
     layout: PilotLayout,
     tf,
 ) -> tuple[np.ndarray, np.ndarray]:
-    """Interpolate compact pilot statistics to the receiver grid."""
     compact = np.asarray(compact)
     error = np.asarray(error)
     if compact.shape != error.shape or compact.ndim != 5:
@@ -296,7 +288,6 @@ def interpolate_pilot_sequence(
     tf,
     subcarrier_stride: int = 1,
 ) -> tuple[np.ndarray, np.ndarray]:
-    """Interpolate a sequence while bounding peak grid memory."""
     compact = np.asarray(compact)
     error = np.asarray(error)
     if compact.shape != error.shape or compact.ndim != 6:
@@ -337,7 +328,6 @@ def project_toeplitz_psd(
     tolerance: float = 1e-8,
     max_iterations: int = 100,
 ) -> tuple[np.ndarray, dict]:
-    """Project a Hermitian matrix onto Toeplitz PSD matrices."""
     matrix = np.asarray(matrix, dtype=np.complex128)
     if matrix.ndim != 2 or matrix.shape[0] != matrix.shape[1]:
         raise ValueError("covariance must be square")
@@ -386,7 +376,6 @@ def pilot_domain_wiener_estimate(
     projection_max_iterations: int = 100,
     capture_weight_history: bool = False,
 ) -> tuple[np.ndarray, np.ndarray, dict]:
-    """Apply adaptive temporal Wiener filtering before interpolation."""
     observation = np.asarray(observation)
     error_variance = np.asarray(error_variance)
     history_source = (

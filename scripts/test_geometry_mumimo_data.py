@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""Test shared-topology temporal MU-MIMO data."""
 
 from __future__ import annotations
 

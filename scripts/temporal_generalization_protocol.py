@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""Define temporal generalization splits and calibration."""
 
 from __future__ import annotations
 
@@ -54,7 +53,6 @@ ALLOWED_ADAPTER_FEATURES = frozenset({
 
 @dataclass(frozen=True)
 class ChannelProfileSpec:
-    """Describe one channel-family range."""
 
     name: str
     family: str
@@ -132,7 +130,6 @@ def _tdl(
 
 
 def unique_profiles_for_role(role: str) -> tuple[ChannelProfileSpec, ...]:
-    """Return the fixed profile pool for one split role."""
     if role in ("training", "calibration"):
         return tuple(
             _tdl(model, 30.0, 500.0, 0.0, 400.0)
@@ -163,7 +160,6 @@ def unique_profiles_for_role(role: str) -> tuple[ChannelProfileSpec, ...]:
 def rotated_event_profiles(
     profiles: tuple[ChannelProfileSpec, ...],
 ) -> tuple[ChannelProfileSpec, ...]:
-    """Create a different target family for each source."""
     if not profiles:
         raise ValueError("profiles cannot be empty")
     if len({profile.name for profile in profiles}) < 2:
@@ -181,14 +177,12 @@ def _canonical_json(value: dict) -> str:
 
 
 def payload_sha256(value: dict, field: str = "manifest_sha256") -> str:
-    """Hash a JSON payload without its digest field."""
     payload = copy.deepcopy(value)
     payload.pop(field, None)
     return hashlib.sha256(_canonical_json(payload).encode("utf-8")).hexdigest()
 
 
 def seal_payload(value: dict, field: str = "manifest_sha256") -> dict:
-    """Return a copied payload with a deterministic digest."""
     payload = copy.deepcopy(value)
     payload.pop(field, None)
     payload[field] = payload_sha256(payload, field)
@@ -196,7 +190,6 @@ def seal_payload(value: dict, field: str = "manifest_sha256") -> dict:
 
 
 def verify_payload(value: dict, field: str = "manifest_sha256") -> None:
-    """Verify a sealed JSON payload."""
     expected = value.get(field)
     if not isinstance(expected, str) or len(expected) != 64:
         raise ValueError(f"missing or invalid {field}")
@@ -206,7 +199,6 @@ def verify_payload(value: dict, field: str = "manifest_sha256") -> None:
 
 
 def build_split_manifest() -> dict:
-    """Build the frozen temporal data split manifest."""
     role_settings = {
         "training": {"episodes": 6000, "seed_base": 1_000_000},
         "calibration": {"episodes": 128, "seed_base": 2_000_000},
@@ -258,7 +250,6 @@ def _seed_intervals(manifest: dict) -> list[tuple[int, int, str]]:
 
 
 def validate_split_manifest(manifest: dict) -> None:
-    """Validate hashes, families, and seed separation."""
     verify_payload(manifest)
     if manifest.get("schema_version") != 1:
         raise ValueError("unsupported split manifest schema")
@@ -308,7 +299,6 @@ def validate_split_manifest(manifest: dict) -> None:
 
 
 def load_split_manifest(path: Path) -> dict:
-    """Load and validate a split manifest."""
     manifest = json.loads(Path(path).read_text(encoding="utf-8"))
     validate_split_manifest(manifest)
     return manifest
@@ -317,7 +307,6 @@ def load_split_manifest(path: Path) -> dict:
 def role_profile_specs(
     manifest: dict, role: str
 ) -> tuple[ChannelProfileSpec, ...]:
-    """Read one role's unique profile specs."""
     validate_split_manifest(manifest)
     if role not in SPLIT_ROLES:
         raise ValueError(f"unknown split role: {role}")
@@ -330,7 +319,6 @@ def role_profile_specs(
 def episode_seed(
     manifest: dict, role: str, domain: str, episode: int
 ) -> int:
-    """Resolve one deterministic split seed."""
     validate_split_manifest(manifest)
     if role not in SPLIT_ROLES:
         raise ValueError(f"unknown split role: {role}")
@@ -350,7 +338,6 @@ def episode_seed(
 def seed_bundle(
     manifest: dict, role: str, episode: int = 0
 ) -> dict[str, int]:
-    """Resolve all independent seed domains for one split offset."""
     return {
         domain: episode_seed(manifest, role, domain, episode)
         for domain in SEED_DOMAINS
@@ -360,7 +347,6 @@ def seed_bundle(
 def validate_split_slice(
     manifest: dict, role: str, start_episode: int, episode_count: int
 ) -> None:
-    """Ensure a run stays inside its immutable split allocation."""
     validate_split_manifest(manifest)
     if role not in SPLIT_ROLES:
         raise ValueError(f"unknown split role: {role}")
@@ -379,7 +365,6 @@ def validate_split_slice(
 
 
 def assert_adapter_features(feature_names) -> None:
-    """Reject benchmark metadata in adapter tensors."""
     names = {str(name) for name in feature_names}
     forbidden = sorted(names & FORBIDDEN_ADAPTER_FEATURES)
     if forbidden:
@@ -392,7 +377,6 @@ def assert_adapter_features(feature_names) -> None:
 def normalized_dmrs_innovation(
     pilots: np.ndarray, error_variance: np.ndarray
 ) -> np.ndarray:
-    """Calculate current-to-previous DMRS disagreement."""
     pilots = np.asarray(pilots)
     error_variance = np.asarray(error_variance, dtype=np.float64)
     if pilots.shape != error_variance.shape or pilots.ndim != 6:
@@ -413,7 +397,6 @@ def normalized_dmrs_innovation(
 def innovation_jump_score(
     innovation: np.ndarray, history_window: int = 8
 ) -> tuple[np.ndarray, np.ndarray]:
-    """Calculate a causal median-normalized innovation score."""
     innovation = np.asarray(innovation, dtype=np.float64)
     if innovation.ndim != 3:
         raise ValueError("innovation must have shape [episode, TB, UE]")
@@ -438,7 +421,6 @@ def conformal_false_reset_threshold(
     eligible: np.ndarray,
     alpha: float = 0.01,
 ) -> dict:
-    """Calibrate an episode-level no-change threshold."""
     score = np.asarray(score, dtype=np.float64)
     eligible = np.asarray(eligible, dtype=bool)
     if score.shape != eligible.shape or score.ndim != 3:
@@ -484,7 +466,6 @@ def build_segment_safe_threshold_artifact(
     split_manifest_sha256: str,
     source_sha256: str,
 ) -> dict:
-    """Build a segment-safe threshold artifact."""
     if calibration.get("method") != "episode_max_split_conformal":
         raise ValueError("unsupported threshold calibration method")
     if len(str(split_manifest_sha256)) != 64:
@@ -506,7 +487,6 @@ def build_segment_safe_threshold_artifact(
 def load_segment_safe_threshold_artifact(
     path: Path, split_manifest: dict | None = None
 ) -> dict:
-    """Load a segment-safe threshold artifact."""
     artifact = json.loads(Path(path).read_text(encoding="utf-8"))
     verify_payload(artifact, field="artifact_sha256")
     if artifact.get("schema_version") != 1:
@@ -531,7 +511,6 @@ def load_segment_safe_threshold_artifact(
 
 
 def _validate_calibration_payload(calibration: dict) -> None:
-    """Validate the fixed false-reset calibration protocol."""
     if calibration.get("method") != "episode_max_split_conformal":
         raise ValueError("threshold is not false-reset calibrated")
     if calibration.get("alpha") != 0.01:

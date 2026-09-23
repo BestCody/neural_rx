@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""Read and write standardized benchmark run bundles."""
 
 from __future__ import annotations
 
@@ -36,7 +35,6 @@ def validate_latency_arrays(
     arrays: dict[str, np.ndarray], methods: list[str] | tuple[str, ...],
     protocol: dict, plan: dict,
 ) -> None:
-    """Validate measured per-TB latency for selected methods."""
     timing = protocol["execution"]["latency"]
     expected = int(timing["sample_count"])
     for method in methods:
@@ -49,7 +47,6 @@ def validate_latency_arrays(
 
 
 def required_run_preflight(protocol: dict, stage: str) -> set[str]:
-    """Return all candidate and reference preflight checks."""
     execution = protocol["execution"]
     required = (
         execution["candidate_preflight"]
@@ -61,7 +58,6 @@ def required_run_preflight(protocol: dict, stage: str) -> set[str]:
 
 
 def expected_array_shapes(protocol: dict, plan: dict) -> dict[str, tuple]:
-    """Return the frozen array shapes for a stage plan."""
     stage = plan["stage"]
     settings = protocol["stages"][stage]
     conditions = len(plan["jobs"])
@@ -87,7 +83,6 @@ def expected_array_shapes(protocol: dict, plan: dict) -> dict[str, tuple]:
 def validate_common_arrays(
     arrays: dict[str, np.ndarray], protocol: dict, plan: dict
 ) -> None:
-    """Validate paired episode identity and activity arrays."""
     shapes = expected_array_shapes(protocol, plan)
     for name in COMMON_ARRAYS:
         if name not in arrays or arrays[name].shape != shapes[name]:
@@ -140,7 +135,6 @@ def validate_scenario_metadata(
     change_event: np.ndarray,
     jobs: list[dict],
 ) -> None:
-    """Validate that every frozen scenario actually occurred."""
     for condition, job in enumerate(jobs):
         provider = job["provider"]
         point_active = active[condition]
@@ -172,7 +166,6 @@ def validate_method_arrays(
     protocol: dict,
     plan: dict,
 ) -> None:
-    """Validate block errors for selected receiver methods."""
     shapes = expected_array_shapes(protocol, plan)
     active = arrays["active"]
     for method in methods:
@@ -198,7 +191,6 @@ def validate_run_manifests(
     protocol: dict,
     stage: str,
 ) -> None:
-    """Validate candidate and baseline provenance."""
     validate_candidate_manifest(candidate, protocol)
     validate_stage_training(candidate, protocol, stage)
     expected = set(stage_reference_method_names(protocol, stage))
@@ -227,7 +219,6 @@ def validate_run_arrays(
     protocol: dict,
     plan: dict,
 ) -> None:
-    """Validate the shared benchmark tensor contract."""
     condition_names = [job["condition"] for job in plan["jobs"]]
     if condition_names != list(
         protocol["stages"][plan["stage"]]["condition_names"]
@@ -263,7 +254,6 @@ def write_run_bundle(
     elapsed_seconds: float,
     source_artifacts: dict[str, dict] | None = None,
 ) -> Path:
-    """Write one standardized benchmark run."""
     stage = plan["stage"]
     validate_run_manifests(candidate, baselines, protocol, stage)
     if candidate["manifest_sha256"] != plan["candidate_manifest_sha256"]:
@@ -325,7 +315,6 @@ def load_run_bundle(
     protocol: dict,
     plan: dict,
 ) -> tuple[dict, dict[str, np.ndarray]]:
-    """Load and fully validate one benchmark run."""
     path = Path(path).expanduser().resolve()
     payload = json.loads(path.read_text(encoding="utf-8"))
     verify_payload(payload, field="run_sha256")

@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""Seal matched-Cold-K8 benchmark operating points."""
 
 from __future__ import annotations
 
@@ -21,7 +20,7 @@ ROOT = HERE.parent
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description=__doc__)
+    parser = argparse.ArgumentParser(description='Seal matched-Cold-K8 benchmark operating points.')
     parser.add_argument("--baseline-result", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument(
@@ -33,7 +32,6 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def validate_baseline_result(result: dict, protocol: dict) -> dict:
-    """Validate calibration counts from matched Cold K=8."""
     verify_payload(result, field="result_sha256")
     if result.get("result") != "temporal_benchmark_calibration_counts_v1":
         raise ValueError("calibration result type differs")

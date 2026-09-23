@@ -35,7 +35,6 @@ def ue_correlation_matrix(num_ant, beta):
     return gnb_correlation_matrix(num_ant, beta)
 
 class DoubleTDLChannel(tf.keras.layers.Layer):
-    """Double TDLChannel."""
     def __init__(self,
                  carrier_frequency,
                  resource_grid,

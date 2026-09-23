@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-"""Bar chart of memory_nrx and Cold K8 on paired evolving-channel episodes.
-
-This renders existing measurements only; it does not run a receiver.
-memory_nrx is the figure label for the historical optimized V18 checkpoint.
-No latency is inferred from the neural round count.
-"""
 
 from __future__ import annotations
 
@@ -27,7 +21,6 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def crossing(curve: list[dict], target: float = 0.1) -> float:
-    """Verify the saved half-count-corrected, log-linear threshold."""
     points = sorted(curve, key=lambda p: p["ebno_db"])
     for point in points:
         if not np.isclose(point["tbler"], point["errors"] / point["blocks"]):
@@ -42,7 +35,7 @@ def crossing(curve: list[dict], target: float = 0.1) -> float:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description=__doc__)
+    parser = argparse.ArgumentParser(description='Bar chart of memory_nrx and Cold K8 on paired evolving-channel episodes.')
     parser.add_argument(
         "--sources", type=Path, default=ROOT / "docs/evidence/memory_nrx"
     )

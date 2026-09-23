@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""Register trained artifacts for one benchmark stage."""
 
 from __future__ import annotations
 
@@ -22,8 +21,7 @@ ROOT = HERE.parent
 
 
 def build_parser() -> argparse.ArgumentParser:
-    """Build the command-line parser."""
-    parser = argparse.ArgumentParser(description=__doc__)
+    parser = argparse.ArgumentParser(description='Register trained artifacts for one benchmark stage.')
     parser.add_argument(
         "--stage",
         choices=("calibration", "screen", "development", "confirmation"),
@@ -68,7 +66,6 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def stage_contract(protocol: dict, stage: str) -> tuple[int, list[int]]:
-    """Return the expected updates and seeds."""
     if stage == "calibration":
         value = protocol["calibration"]
         return int(value["training_updates"]), [
@@ -88,7 +85,6 @@ def load_summaries(
     seeds: list[int],
     training_type: str,
 ) -> list[tuple[dict, Path]]:
-    """Load summaries in the required seed order."""
     found = {}
     for directory in directories:
         path = directory.expanduser().resolve() / "training_summary.json"
@@ -113,7 +109,6 @@ def load_summaries(
 
 
 def checkpoint_path(summary: dict, selected: bool) -> Path:
-    """Resolve and verify one trained checkpoint."""
     key = "selected_checkpoint" if selected else "full_checkpoint"
     digest_key = f"{key}_sha256"
     path = Path(summary[key]).expanduser().resolve()
@@ -123,7 +118,6 @@ def checkpoint_path(summary: dict, selected: bool) -> Path:
 
 
 def episode_manifest_path(summary: dict) -> Path:
-    """Resolve and verify one sealed training episode manifest."""
     path = Path(summary["training_episode_manifest"]).expanduser().resolve()
     expected = summary["training_episode_manifest_sha256"]
     if not path.is_file() or file_sha256(path) != expected:
@@ -136,7 +130,6 @@ def validate_training_pair(
     baseline: dict,
     baseline_summary_path: Path,
 ) -> None:
-    """Require paired data and the exact evaluated K=8 teacher."""
     if candidate["data_fingerprint"] != baseline["data_fingerprint"]:
         raise ValueError("candidate and K=8 training data differ")
     if candidate.get("teacher_checkpoint_sha256") != baseline.get(
@@ -164,7 +157,6 @@ def validate_training_contract(
     recipe: Path,
     selection: Path,
 ) -> None:
-    """Bind one training summary to the requested frozen contracts."""
     expected = {
         "benchmark_protocol_sha256": protocol["protocol_sha256"],
         "training_data_sha256": file_sha256(data),
@@ -197,7 +189,6 @@ def build_manifest(
     selection: Path,
     training_version: int,
 ) -> dict:
-    """Build one stage registration."""
     suffix = "_".join(str(seed) for seed in seeds)
     labels = {2: "aligned", 3: "power_aware"}
     label = labels[training_version]
@@ -266,7 +257,6 @@ def build_manifest(
 
 
 def build_latency_manifest(protocol: dict) -> dict:
-    """Register the fixed Cold K=3 latency reference."""
     config = ROOT / "config" / "nrx_large.cfg"
     weights = ROOT / "weights" / "nrx_large_weights"
     digest = file_sha256(config)
@@ -298,7 +288,6 @@ def build_latency_manifest(protocol: dict) -> dict:
 
 
 def add_artifacts(mapping: dict, manifest: dict, paths: list[Path]) -> None:
-    """Add verified manifest artifacts to a path map."""
     by_digest = {file_sha256(path): path.resolve() for path in paths}
     for record in manifest_artifacts(manifest):
         digest = record["sha256"]
@@ -308,12 +297,10 @@ def add_artifacts(mapping: dict, manifest: dict, paths: list[Path]) -> None:
 
 
 def write_json(path: Path, value: dict) -> None:
-    """Write one deterministic JSON artifact."""
     path.write_text(json.dumps(value, indent=2) + "\n", encoding="utf-8")
 
 
 def main() -> None:
-    """Register one calibration or benchmark stage."""
     args = build_parser().parse_args()
     protocol = load_benchmark_protocol(args.protocol)
     updates, seeds = stage_contract(protocol, args.stage)

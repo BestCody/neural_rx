@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""Connect frozen receivers to temporal benchmark v1."""
 
 from __future__ import annotations
 
@@ -110,7 +109,6 @@ class _ArtifactGuard:
 
 
 class V18BenchmarkAdapter(_ArtifactGuard):
-    """Run V18 with streamed Segment-Safe PD-L8 memory."""
 
     temporal_config_name = "temporal_receiver_v18_segment_safe.json"
     threshold_name = "segment_safe_pd_l8_threshold.json"
@@ -332,7 +330,6 @@ class V18BenchmarkAdapter(_ArtifactGuard):
 
 
 class ColdNeuralRxBenchmarkAdapter(_ArtifactGuard):
-    """Run a frozen stateless Neural RX checkpoint."""
 
     def __init__(
         self,
@@ -478,7 +475,6 @@ class ColdNeuralRxBenchmarkAdapter(_ArtifactGuard):
 
 
 class PerfectCSIKBestBenchmarkAdapter(_ArtifactGuard):
-    """Run the frozen perfect-CSI K-Best oracle."""
 
     def __init__(
         self,
@@ -564,15 +560,12 @@ class PerfectCSIKBestBenchmarkAdapter(_ArtifactGuard):
 
 
 def make_v18_segment_safe_adapter(**kwargs):
-    """Build one segment-safe V18 adapter."""
     return V18BenchmarkAdapter(**kwargs)
 
 
 def make_cold_nrx_adapter(**kwargs):
-    """Build one Cold Neural RX adapter."""
     return ColdNeuralRxBenchmarkAdapter(**kwargs)
 
 
 def make_perfect_csi_kbest_adapter(**kwargs):
-    """Build one perfect-CSI K-Best adapter."""
     return PerfectCSIKBestBenchmarkAdapter(**kwargs)

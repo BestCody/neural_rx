@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""Define the immutable Temporal Neural RX benchmark."""
 
 from __future__ import annotations
 
@@ -49,7 +48,6 @@ METRICS = (
 
 
 def _condition(provider, role, offset, **settings):
-    """Build one condition entry."""
     return {
         "provider": provider,
         "role": role,
@@ -60,7 +58,6 @@ def _condition(provider, role, offset, **settings):
 
 
 def build_benchmark_protocol() -> dict:
-    """Build benchmark v1."""
     conditions = {
         "historical_tdl_b100": _condition(
             "independent_tdl",
@@ -363,7 +360,6 @@ def build_benchmark_protocol() -> dict:
 
 
 def _seed_intervals(protocol: dict):
-    """Return all episode seed intervals."""
     intervals = []
     conditions = protocol["condition_order"]
     domains = protocol["seed_domains"]
@@ -389,7 +385,6 @@ def _seed_intervals(protocol: dict):
 
 
 def validate_benchmark_protocol(protocol: dict) -> None:
-    """Validate benchmark v1."""
     verify_payload(protocol, field="protocol_sha256")
     if protocol != build_benchmark_protocol():
         raise ValueError("benchmark protocol differs from its recipe")
@@ -493,7 +488,6 @@ def validate_benchmark_protocol(protocol: dict) -> None:
 
 
 def load_benchmark_protocol(path: Path | str) -> dict:
-    """Load benchmark v1."""
     protocol = json.loads(Path(path).read_text(encoding="utf-8"))
     validate_benchmark_protocol(protocol)
     return protocol
@@ -502,7 +496,6 @@ def load_benchmark_protocol(path: Path | str) -> dict:
 def resolved_condition_settings(
     protocol: dict, condition: str, num_tbs: int
 ) -> dict:
-    """Resolve horizon-dependent scenario settings."""
     if condition not in CONDITIONS:
         raise ValueError("unknown benchmark condition")
     settings = dict(protocol["conditions"][condition])
@@ -520,7 +513,6 @@ def stage_seed_bundle(
     condition: str,
     episode_offset: int = 0,
 ) -> dict[str, int]:
-    """Return one stage's deterministic seed domains."""
     if stage not in STAGES:
         raise ValueError("unknown benchmark stage")
     if condition not in CONDITIONS:
@@ -542,14 +534,12 @@ def stage_seed_bundle(
 
 
 def stage_condition_names(protocol: dict, stage: str) -> tuple[str, ...]:
-    """Return the conditions evaluated by one stage."""
     if stage not in STAGES:
         raise ValueError("unknown benchmark stage")
     return tuple(protocol["stages"][stage]["condition_names"])
 
 
 def stage_method_names(protocol: dict, stage: str) -> tuple[str, ...]:
-    """Return every method required by one stage."""
     if stage not in STAGES:
         raise ValueError("unknown benchmark stage")
     execution = protocol["execution"]
@@ -565,7 +555,6 @@ def stage_method_names(protocol: dict, stage: str) -> tuple[str, ...]:
 def stage_reference_method_names(
     protocol: dict, stage: str
 ) -> tuple[str, ...]:
-    """Return reference methods required by one stage."""
     execution = protocol["execution"]
     methods = (
         list(execution["latency_only_reference_methods"])
@@ -579,7 +568,6 @@ def stage_reference_method_names(
 def stage_accuracy_reference_method_names(
     protocol: dict, stage: str
 ) -> tuple[str, ...]:
-    """Return reference methods with accuracy measurements."""
     methods = list(protocol["execution"]["accuracy_reference_methods"])
     if protocol["stages"][stage]["include_static_references"]:
         methods += list(protocol["execution"]["static_reference_methods"])
@@ -591,7 +579,6 @@ def calibration_seed_bundle(
     condition: str,
     episode_offset: int = 0,
 ) -> dict[str, int]:
-    """Return deterministic calibration seed domains."""
     if condition not in CONDITIONS:
         raise ValueError("unknown benchmark condition")
     settings = protocol["calibration"]

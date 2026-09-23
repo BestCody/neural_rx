@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""Cache paired references and compose candidate benchmark runs."""
 
 from __future__ import annotations
 
@@ -25,7 +24,6 @@ from temporal_generalization_protocol import seal_payload, verify_payload
 
 
 def _descriptors(arrays: dict[str, np.ndarray]) -> dict:
-    """Describe stored arrays."""
     return {
         name: {"shape": list(value.shape), "dtype": str(value.dtype)}
         for name, value in arrays.items()
@@ -33,7 +31,6 @@ def _descriptors(arrays: dict[str, np.ndarray]) -> dict:
 
 
 def _validate_finite(arrays: dict[str, np.ndarray]) -> None:
-    """Reject non-finite numeric output."""
     for name, value in arrays.items():
         value = np.asarray(value)
         if value.dtype.kind in "fc" and not np.all(np.isfinite(value)):
@@ -41,7 +38,6 @@ def _validate_finite(arrays: dict[str, np.ndarray]) -> None:
 
 
 def _validate_preflight(actual: dict, expected: list[str]) -> None:
-    """Require the exact frozen preflight set."""
     if set(actual) != set(expected):
         raise ValueError("benchmark cache preflight checks differ")
     if not all(value is True for value in actual.values()):
@@ -55,7 +51,6 @@ def _write_npz_bundle(
     payload: dict,
     digest_field: str,
 ) -> Path:
-    """Write arrays and one sealed JSON descriptor."""
     destination.mkdir(parents=True, exist_ok=True)
     raw_path = destination / filename
     np.savez_compressed(raw_path, **arrays)
@@ -78,7 +73,6 @@ def _load_npz_bundle(
     type_value: str,
     digest_field: str,
 ) -> tuple[dict, dict[str, np.ndarray]]:
-    """Load one sealed JSON and NPZ pair."""
     path = Path(path).expanduser().resolve()
     payload = json.loads(path.read_text(encoding="utf-8"))
     verify_payload(payload, field=digest_field)
@@ -95,7 +89,6 @@ def _load_npz_bundle(
 
 
 def _validate_plan_binding(payload: dict, protocol: dict, plan: dict) -> None:
-    """Bind one cache to the immutable episode plan."""
     expected = {
         "protocol_sha256": protocol["protocol_sha256"],
         "calibration_sha256": plan["calibration_sha256"],
@@ -111,7 +104,6 @@ def _validate_plan_binding(payload: dict, protocol: dict, plan: dict) -> None:
 def _validate_reference_manifests(
     baselines: dict[str, dict], protocol: dict, plan: dict
 ) -> None:
-    """Validate all cached reference checkpoints."""
     execution = protocol["execution"]
     expected = set(
         execution["latency_only_reference_methods"]
@@ -133,7 +125,6 @@ def _validate_reference_manifests(
 def _validate_static_reference_manifests(
     baselines: dict[str, dict], protocol: dict, plan: dict
 ) -> None:
-    """Validate seed-independent report references."""
     expected = set(protocol["execution"]["static_reference_methods"])
     if set(baselines) != expected:
         raise ValueError("static reference manifests differ")
@@ -150,7 +141,6 @@ def _validate_static_reference_manifests(
 def validate_candidate_arrays(
     arrays: dict[str, np.ndarray], protocol: dict, plan: dict
 ) -> None:
-    """Validate candidate-only evaluator output."""
     validate_common_arrays(arrays, protocol, plan)
     methods = protocol["execution"]["candidate_methods"]
     validate_method_arrays(arrays, methods, protocol, plan)
@@ -166,7 +156,6 @@ def validate_candidate_arrays(
 def validate_reference_arrays(
     arrays: dict[str, np.ndarray], protocol: dict, plan: dict
 ) -> None:
-    """Validate reusable reference output."""
     validate_common_arrays(arrays, protocol, plan)
     methods = protocol["execution"]["accuracy_reference_methods"]
     validate_method_arrays(arrays, methods, protocol, plan)
@@ -182,7 +171,6 @@ def validate_reference_arrays(
 def validate_static_reference_arrays(
     arrays: dict[str, np.ndarray], protocol: dict, plan: dict
 ) -> None:
-    """Validate seed-independent reference output."""
     validate_common_arrays(arrays, protocol, plan)
     methods = protocol["execution"]["static_reference_methods"]
     validate_method_arrays(arrays, methods, protocol, plan)
@@ -200,7 +188,6 @@ def write_candidate_output(
     preflight: dict[str, bool],
     elapsed_seconds: float,
 ) -> Path:
-    """Write one candidate-only result."""
     validate_candidate_manifest(candidate, protocol)
     validate_stage_training(candidate, protocol, plan["stage"])
     if candidate["manifest_sha256"] != plan["candidate_manifest_sha256"]:
@@ -239,7 +226,6 @@ def write_candidate_output(
 def load_candidate_output(
     path: Path | str, protocol: dict, plan: dict
 ) -> tuple[dict, dict[str, np.ndarray]]:
-    """Load one candidate-only result."""
     payload, arrays = _load_npz_bundle(
         path,
         "output",
@@ -272,7 +258,6 @@ def write_reference_cache(
     preflight: dict[str, bool],
     elapsed_seconds: float,
 ) -> Path:
-    """Write reusable paired baseline results."""
     _validate_reference_manifests(baselines, protocol, plan)
     if int(training_seed) not in baselines["matched_cold_k8"]["training"][
         "seeds"
@@ -310,7 +295,6 @@ def write_reference_cache(
 def load_reference_cache(
     path: Path | str, protocol: dict, plan: dict
 ) -> tuple[dict, dict[str, np.ndarray]]:
-    """Load reusable paired baseline results."""
     payload, arrays = _load_npz_bundle(
         path,
         "cache",
@@ -341,7 +325,6 @@ def write_static_reference_cache(
     preflight: dict[str, bool],
     elapsed_seconds: float,
 ) -> Path:
-    """Write references that do not depend on training seed."""
     _validate_static_reference_manifests(baselines, protocol, plan)
     validate_static_reference_arrays(arrays, protocol, plan)
     _validate_preflight(
@@ -374,7 +357,6 @@ def write_static_reference_cache(
 def load_static_reference_cache(
     path: Path | str, protocol: dict, plan: dict
 ) -> tuple[dict, dict[str, np.ndarray]]:
-    """Load seed-independent report references."""
     payload, arrays = _load_npz_bundle(
         path,
         "cache",
@@ -400,7 +382,6 @@ def compose_run_arrays(
     plan: dict,
     static_references: dict[str, np.ndarray] | None = None,
 ) -> dict[str, np.ndarray]:
-    """Join paired candidate output with cached references."""
     validate_candidate_arrays(candidate, protocol, plan)
     validate_reference_arrays(references, protocol, plan)
     required_static = protocol["stages"][plan["stage"]][
@@ -459,7 +440,6 @@ def compose_run_bundle(
     reference_cache_path: Path | str,
     static_reference_cache_path: Path | str | None = None,
 ) -> Path:
-    """Create one fully scored run without rerunning references."""
     candidate_payload, candidate_arrays = load_candidate_output(
         candidate_output_path, protocol, plan
     )

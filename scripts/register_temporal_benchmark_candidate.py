@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""Register one receiver or baseline for benchmark v1."""
 
 from __future__ import annotations
 
@@ -21,7 +20,7 @@ ROOT = HERE.parent
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description=__doc__)
+    parser = argparse.ArgumentParser(description='Register one receiver or baseline for benchmark v1.')
     parser.add_argument("--spec", type=Path, required=True)
     parser.add_argument("--training-data", type=Path, required=True)
     parser.add_argument("--training-recipe", type=Path, required=True)
@@ -42,7 +41,6 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def _required(mapping: dict, key: str):
-    """Read one required registration field."""
     if key not in mapping:
         raise ValueError(f"candidate spec lacks {key}")
     return mapping[key]

@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""Run calibration, candidate, matched, or static references."""
 
 from __future__ import annotations
 
@@ -34,7 +33,7 @@ ROOT = HERE.parent
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description=__doc__)
+    parser = argparse.ArgumentParser(description='Run calibration, candidate, matched, or static references.')
     parser.add_argument(
         "--mode",
         choices=("calibration", "candidate", "reference", "static-reference"),
@@ -61,14 +60,12 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def _require_path(value: Path | None, label: str) -> Path:
-    """Require one mode-specific file."""
     if value is None:
         raise ValueError(f"{label} is required")
     return value
 
 
 def _load_plan(args, protocol):
-    """Load the calibration and stage plan together."""
     calibration_path = _require_path(args.calibration, "--calibration")
     plan_path = _require_path(args.stage_plan, "--stage-plan")
     calibration = load_calibration_artifact(calibration_path, protocol)
@@ -76,7 +73,6 @@ def _load_plan(args, protocol):
 
 
 def _make_adapter(manifest, method, training_seed, artifact_map, context):
-    """Construct one adapter from verified registered files."""
     artifacts = resolve_manifest_artifacts(manifest, artifact_map)
     return load_adapter(
         manifest["adapter_factory"],
@@ -89,7 +85,6 @@ def _make_adapter(manifest, method, training_seed, artifact_map, context):
 
 
 def _load_matched_baselines(args, protocol):
-    """Load training-seed-matched reference manifests."""
     return {
         "matched_cold_k3": load_candidate_manifest(
             _require_path(args.matched_cold_k3, "--matched-cold-k3"), protocol
@@ -101,7 +96,6 @@ def _load_matched_baselines(args, protocol):
 
 
 def _load_static_baselines(args, protocol):
-    """Load seed-independent report manifests."""
     return {
         "historical_cold_k8": load_candidate_manifest(
             _require_path(args.historical_cold_k8, "--historical-cold-k8"),

@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""Exact coded joint-posterior refinement primitives."""
 
 from __future__ import annotations
 
@@ -11,7 +10,6 @@ from sionna.fec.ldpc.decoding import LDPC5GDecoder
 
 
 class SoftBPOutput(NamedTuple):
-    """Hold one stateful soft BP segment."""
 
     app: tf.Tensor
     extrinsic: tf.Tensor
@@ -20,7 +18,6 @@ class SoftBPOutput(NamedTuple):
 
 
 class ExactJointOutput(NamedTuple):
-    """Hold exact joint-posterior detector messages."""
 
     zero_message: tf.Tensor
     code_message: tf.Tensor
@@ -29,7 +26,6 @@ class ExactJointOutput(NamedTuple):
 
 
 class SoftInformationOutput(NamedTuple):
-    """Hold soft information bits and final decoder decisions."""
 
     logits: tf.Tensor
     hard_bits: tf.Tensor
@@ -38,7 +34,6 @@ class SoftInformationOutput(NamedTuple):
 
 
 class OneLayerGridCodeMap:
-    """Map one-layer grid logits to transmitted code order."""
 
     def __init__(self, ofdm, num_tx: int, bits_per_symbol: int):
         self.num_tx = int(num_tx)
@@ -64,7 +59,6 @@ class OneLayerGridCodeMap:
         self.num_data_symbols = int(indices.shape[1])
 
     def gather_stream_grid(self, value: tf.Tensor) -> tf.Tensor:
-        """Gather each stream's data cells in mapper order."""
         value = tf.convert_to_tensor(value)
         tf.debugging.assert_rank(value, 5)
         tf.debugging.assert_equal(tf.shape(value)[1], self.num_tx)
@@ -83,7 +77,6 @@ class OneLayerGridCodeMap:
         return tf.transpose(value, [1, 0, 2, 3])
 
     def gather_shared_grid(self, value: tf.Tensor) -> tf.Tensor:
-        """Gather aligned data cells from a shared grid."""
         value = tf.convert_to_tensor(value)
         tf.debugging.assert_rank(value, 4)
         value = tf.transpose(value, [0, 2, 1, 3])
@@ -92,7 +85,6 @@ class OneLayerGridCodeMap:
         return tf.gather(value, self.common_indices, axis=1)
 
     def grid_to_coded(self, llr_grid: tf.Tensor) -> tf.Tensor:
-        """Flatten grid logits into transmitted coded-bit order."""
         values = self.gather_stream_grid(llr_grid)
         tf.debugging.assert_equal(
             tf.shape(values)[-1], self.bits_per_symbol
@@ -104,7 +96,6 @@ class OneLayerGridCodeMap:
         )
 
     def coded_to_data(self, coded: tf.Tensor) -> tf.Tensor:
-        """Restore transmitted coded bits to data-symbol order."""
         coded = tf.convert_to_tensor(coded)
         tf.debugging.assert_rank(coded, 3)
         tf.debugging.assert_equal(tf.shape(coded)[1], self.num_tx)
@@ -124,7 +115,6 @@ class OneLayerGridCodeMap:
 
 
 class StatefulSoftTBCode:
-    """Expose stateful soft LDPC messages in TB bit order."""
 
     def __init__(self, tb_encoder, tb_decoder, num_iter: int):
         self.tb_encoder = tb_encoder
@@ -156,7 +146,6 @@ class StatefulSoftTBCode:
         self.llr_max = tf.cast(base._llr_max, tf.float32)
 
     def to_code_blocks(self, llr: tf.Tensor) -> tf.Tensor:
-        """Apply TB inverse maps before LDPC decoding."""
         llr = tf.convert_to_tensor(llr, tf.float32)
         tf.debugging.assert_rank(llr, 3)
         tf.debugging.assert_equal(tf.shape(llr)[1], self.num_tx)
@@ -181,7 +170,6 @@ class StatefulSoftTBCode:
         )
 
     def from_code_blocks(self, value: tf.Tensor) -> tf.Tensor:
-        """Return LDPC code-block values to transmitted order."""
         value = tf.convert_to_tensor(value, tf.float32)
         tf.debugging.assert_rank(value, 4)
         tf.debugging.assert_equal(tf.shape(value)[1], self.num_tx)
@@ -202,7 +190,6 @@ class StatefulSoftTBCode:
         llr: tf.Tensor,
         state: tf.RaggedTensor | None = None,
     ) -> SoftBPOutput:
-        """Run one stateful soft BP segment."""
         code_blocks = self.to_code_blocks(llr)
         clipped = tf.clip_by_value(
             code_blocks,
@@ -223,7 +210,6 @@ class StatefulSoftTBCode:
 
 
 class StatefulSoftTBInformationDecoder(StatefulSoftTBCode):
-    """Resume stateful BP and expose soft transport-block information."""
 
     def __init__(self, tb_encoder, tb_decoder, num_iter: int):
         super().__init__(tb_encoder, tb_decoder, num_iter)
@@ -252,7 +238,6 @@ class StatefulSoftTBInformationDecoder(StatefulSoftTBCode):
         llr: tf.Tensor,
         state: tf.RaggedTensor | None = None,
     ) -> SoftInformationOutput:
-        """Run one BP segment and return payload logits, bits, and CRC."""
         code_blocks = self.to_code_blocks(llr)
         info_logits, next_state = self.decoder([code_blocks, state])
         tf.debugging.assert_all_finite(
@@ -289,7 +274,6 @@ class StatefulSoftTBInformationDecoder(StatefulSoftTBCode):
 
 
 def constellation_table(mapper) -> tuple[tf.Tensor, tf.Tensor]:
-    """Return points and their exact runtime mapper labels."""
     points = tf.convert_to_tensor(mapper.constellation.points)
     bases = np.asarray(mapper._binary_base.numpy(), np.int32)
     indices = np.arange(int(points.shape[0]), dtype=np.int32)[:, None]
@@ -305,7 +289,6 @@ def exact_joint_support(
     num_streams: int,
     candidate_cap: int,
 ) -> tuple[tf.Tensor, tf.Tensor, tf.Tensor]:
-    """Enumerate the complete bounded Cartesian support."""
     points = tf.convert_to_tensor(points)
     labels = tf.convert_to_tensor(labels, tf.float32)
     num_streams = int(num_streams)
@@ -330,7 +313,6 @@ def candidate_log_likelihood(
     received_noise: tf.Tensor,
     candidates: tf.Tensor,
 ) -> tf.Tensor:
-    """Score joint candidates with channel uncertainty."""
     received = tf.convert_to_tensor(received)
     channel = tf.cast(channel, received.dtype)
     candidates = tf.cast(candidates, received.dtype)
@@ -367,7 +349,6 @@ def exact_joint_messages(
     extrinsic: tf.Tensor,
     candidate_bits: tf.Tensor,
 ) -> ExactJointOutput:
-    """Marginalize exact code-aided joint candidates."""
     score = tf.convert_to_tensor(score, tf.float32)
     extrinsic = tf.convert_to_tensor(extrinsic, tf.float32)
     candidate_bits = tf.convert_to_tensor(candidate_bits, tf.float32)
@@ -427,7 +408,6 @@ def two_stream_mutual_information(
     candidate_indices: tf.Tensor,
     constellation_size: int,
 ) -> tf.Tensor:
-    """Measure conditional dependence for exact two-stream support."""
     probability = tf.convert_to_tensor(probability, tf.float32)
     candidate_indices = tf.convert_to_tensor(candidate_indices, tf.int32)
     constellation_size = int(constellation_size)

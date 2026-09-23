@@ -17,7 +17,6 @@ from sionna.nr import PUSCHReceiver, TBDecoder
 
 
 class BaselineReceiver(Layer):
-    """Perfect-CSI K-Best control for the temporal benchmark."""
 
     def __init__(self, sys_parameters, dtype=tf.complex64,
                  return_tb_status=False, mcs_arr_eval_idx=0, **kwargs):

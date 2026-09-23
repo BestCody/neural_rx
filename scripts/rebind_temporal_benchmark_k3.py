@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""Rebind a K=2-latency run to the K=3 protocol."""
 
 from __future__ import annotations
 
@@ -43,8 +42,7 @@ MIGRATED_FIELDS = (
 
 
 def build_parser() -> argparse.ArgumentParser:
-    """Build the command-line parser."""
-    parser = argparse.ArgumentParser(description=__doc__)
+    parser = argparse.ArgumentParser(description='Rebind a K=2-latency run to the K=3 protocol.')
     parser.add_argument("--source-registration", type=Path, required=True)
     parser.add_argument("--source-calibration-result", type=Path, required=True)
     parser.add_argument("--source-calibration", type=Path, required=True)
@@ -59,14 +57,12 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def _replace_one(values: list, old: str, new: str, label: str) -> None:
-    """Replace one required list value."""
     if values.count(old) != 1 or new in values:
         raise ValueError(f"{label} does not contain one {old}")
     values[values.index(old)] = new
 
 
 def k2_latency_predecessor(protocol: dict) -> dict:
-    """Reconstruct the exact K=2-latency predecessor."""
     value = copy.deepcopy(protocol)
     value.pop("protocol_sha256", None)
     _replace_one(
@@ -101,7 +97,6 @@ def k2_latency_predecessor(protocol: dict) -> dict:
 
 
 def _read_json(path: Path) -> dict:
-    """Read one JSON object."""
     value = json.loads(path.read_text(encoding="utf-8"))
     if not isinstance(value, dict):
         raise ValueError(f"{path} must contain an object")
@@ -109,7 +104,6 @@ def _read_json(path: Path) -> dict:
 
 
 def _verified_path(record: dict, artifact_map: dict) -> Path | None:
-    """Resolve one artifact when its bytes remain available."""
     path = artifact_map.get(record["sha256"])
     if path is None:
         return None
@@ -124,7 +118,6 @@ def _verified_path(record: dict, artifact_map: dict) -> Path | None:
 
 
 def _source_code_records(manifest: dict, artifact_map: dict) -> set[tuple]:
-    """Read the training-source checksums from its summary."""
     for record in manifest["support_artifacts"]:
         if record["name"] != "training_summary.json":
             continue
@@ -142,7 +135,6 @@ def _rebind_manifest(
     source_map: dict,
     protocol: dict,
 ) -> tuple[dict, list[Path], list[dict]]:
-    """Rebind one trained manifest without changing weights."""
     source_code = _source_code_records(source, source_map)
     paths = []
     support = []
@@ -180,7 +172,6 @@ def _rebind_manifest(
 def _rebind_calibration_result(
     source: dict, protocol: dict
 ) -> dict:
-    """Rebind latency-independent calibration counts."""
     rebound = copy.deepcopy(source)
     baseline = copy.deepcopy(rebound["baseline_manifest"])
     baseline.pop("manifest_sha256", None)
@@ -194,7 +185,6 @@ def _rebind_calibration_result(
 
 
 def main() -> None:
-    """Create the K=3-bound V3 benchmark artifacts."""
     args = build_parser().parse_args()
     protocol = load_benchmark_protocol(args.protocol)
     predecessor = k2_latency_predecessor(protocol)

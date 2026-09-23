@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""Create one immutable Temporal Neural RX stage plan."""
 
 from __future__ import annotations
 
@@ -21,7 +20,7 @@ ROOT = HERE.parent
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description=__doc__)
+    parser = argparse.ArgumentParser(description='Create one immutable Temporal Neural RX stage plan.')
     parser.add_argument("--stage", choices=STAGES, required=True)
     parser.add_argument("--candidate", type=Path, required=True)
     parser.add_argument("--matched-cold-k3", type=Path, required=True)

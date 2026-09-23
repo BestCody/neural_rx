@@ -18,7 +18,6 @@ from sionna.ofdm import ResourceGridDemapper
 from sionna.nr import TBDecoder, LayerDemapper, PUSCHLSChannelEstimator
 
 class StateInit(Layer):
-    """State Init."""
 
     def __init__(   self,
                     d_s,
@@ -74,7 +73,6 @@ class StateInit(Layer):
         return s0
 
 class AggregateUserStates(Layer):
-    """Aggregate User States."""
 
     def __init__(   self,
                     d_s,
@@ -95,7 +93,6 @@ class AggregateUserStates(Layer):
         self._output_layer = layer(d_s, activation=None, dtype=dtype)
 
     def call(self, inputs):
-        """s, active_tx = inputs"""
 
         s, active_tx = inputs
 
@@ -119,7 +116,6 @@ class AggregateUserStates(Layer):
         return a
 
 class UpdateState(Layer):
-    """Updates the state tensor."""
 
     def __init__(   self,
                     d_s,
@@ -168,7 +164,6 @@ class UpdateState(Layer):
         return s_new
 
 class CGNNIt(Layer):
-    """Implements an iteration of the CGNN detector."""
 
     def __init__(   self,
                     d_s,
@@ -201,7 +196,6 @@ class CGNNIt(Layer):
         return s_new
 
 class ReadoutLLRs(Layer):
-    """Network computing LLRs from the state vectors."""
 
     def __init__(   self,
                     num_bits_per_symbol,
@@ -234,7 +228,6 @@ class ReadoutLLRs(Layer):
         return llr
 
 class ReadoutChEst(Layer):
-    """Network computing channel estimate."""
 
     def __init__(   self,
                     num_rx_ant,
@@ -265,7 +258,6 @@ class ReadoutChEst(Layer):
         return h_hat
 
 class CGNN(Model):
-    """Implements the core neural receiver consisting of"""
 
     def __init__(   self,
                     num_bits_per_symbol,
@@ -339,7 +331,6 @@ class CGNN(Model):
 
     @property
     def apply_multiloss(self):
-        """Apply multiloss."""
         return self._apply_multiloss
 
     @apply_multiloss.setter
@@ -349,7 +340,6 @@ class CGNN(Model):
 
     @property
     def num_it(self):
-        """Number of receiver iterations."""
         return self._num_it
 
     @num_it.setter
@@ -403,7 +393,6 @@ class CGNN(Model):
         return llrs, h_hats
 
 class CGNNOFDM(Model):
-    """CGNNOFDM."""
 
     def __init__(self,
                  sys_parameters,
@@ -539,7 +528,6 @@ class CGNNOFDM(Model):
 
     @property
     def num_it(self):
-        """Num it."""
         return self._cgnn.num_it
 
     @num_it.setter
@@ -650,7 +638,6 @@ class CGNNOFDM(Model):
             return llrs[-1][0], h_hats[-1]
 
 class NeuralPUSCHReceiver(Layer):
-    """Neural PUSCHReceiver."""
 
     def __init__(self,
                 sys_parameters,
@@ -753,7 +740,6 @@ class NeuralPUSCHReceiver(Layer):
 
     def call(self, inputs, mcs_arr_eval=[0], mcs_ue_mask_eval=None,
              h_hat_ext=None):
-        """Apply neural receiver."""
 
         if self._training:
             y, active_tx, b, h, mcs_ue_mask  = inputs

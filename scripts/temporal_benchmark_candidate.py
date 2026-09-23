@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""Define benchmark candidate provenance and adapters."""
 
 from __future__ import annotations
 
@@ -26,7 +25,6 @@ IDENTIFIER = re.compile(r"^[a-z][a-z0-9_]{2,63}$")
 
 
 def file_sha256(path: Path | str) -> str:
-    """Hash one artifact."""
     digest = hashlib.sha256()
     with Path(path).open("rb") as handle:
         for chunk in iter(lambda: handle.read(1024 * 1024), b""):
@@ -35,7 +33,6 @@ def file_sha256(path: Path | str) -> str:
 
 
 def artifact_record(path: Path | str) -> dict:
-    """Record one immutable artifact."""
     path = Path(path).expanduser().resolve()
     if not path.is_file():
         raise FileNotFoundError(path)
@@ -47,7 +44,6 @@ def artifact_record(path: Path | str) -> dict:
 
 
 def manifest_artifacts(manifest: dict) -> list[dict]:
-    """Return every checkpoint and support artifact."""
     return list(manifest.get("checkpoints", [])) + list(
         manifest.get("support_artifacts", [])
     )
@@ -56,7 +52,6 @@ def manifest_artifacts(manifest: dict) -> list[dict]:
 def resolve_manifest_artifacts(
     manifest: dict, artifact_map: dict[str, str]
 ) -> dict[str, Path]:
-    """Resolve and verify registered files by digest."""
     resolved = {}
     for record in manifest_artifacts(manifest):
         digest = record["sha256"]
@@ -100,7 +95,6 @@ def build_candidate_manifest(
     stop_rule: str,
     parent_candidate_id: str | None = None,
 ) -> dict:
-    """Build one sealed candidate registration."""
     return seal_payload({
         "schema_version": 1,
         "manifest": "temporal_benchmark_candidate_v1",
@@ -155,7 +149,6 @@ def _digest(value: Any, label: str) -> None:
 
 
 def validate_candidate_manifest(manifest: dict, protocol: dict) -> None:
-    """Validate one candidate registration."""
     verify_payload(manifest, field="manifest_sha256")
     if manifest.get("manifest") != "temporal_benchmark_candidate_v1":
         raise ValueError("candidate manifest type differs")
@@ -266,14 +259,12 @@ def validate_candidate_manifest(manifest: dict, protocol: dict) -> None:
 
 
 def load_candidate_manifest(path: Path | str, protocol: dict) -> dict:
-    """Load and validate one registration."""
     manifest = json.loads(Path(path).read_text(encoding="utf-8"))
     validate_candidate_manifest(manifest, protocol)
     return manifest
 
 
 def validate_matched_baseline(candidate: dict, baseline: dict) -> None:
-    """Require a genuinely training-matched baseline."""
     if candidate["role"] != "candidate":
         raise ValueError("the first manifest must be a candidate")
     if baseline["role"] != "matched_cold_k8":
@@ -300,7 +291,6 @@ def validate_matched_baseline(candidate: dict, baseline: dict) -> None:
 
 
 def validate_stage_training(manifest: dict, protocol: dict, stage: str) -> None:
-    """Check the training budget for one stage."""
     if stage not in protocol["stages"]:
         raise ValueError("unknown benchmark stage")
     expected = protocol["stages"][stage]
@@ -318,39 +308,37 @@ def validate_stage_training(manifest: dict, protocol: dict, stage: str) -> None:
 
 @runtime_checkable
 class BenchmarkDecoderAdapter(Protocol):
-    """Runtime boundary implemented by each architecture."""
 
     manifest: dict
 
     def start_episode(self) -> None:
-        """Clear all receiver state before an independent episode."""
+        ...
 
     def start_episode_batch(self, batch_size: int) -> None:
-        """Clear state for a batch of independent episodes."""
+        ...
 
     def reset_memory(self) -> None:
-        """Clear temporal state before a reset-control TB."""
+        ...
 
     def state_is_empty(self) -> bool:
-        """Report whether temporal state is empty."""
+        ...
 
     def decode_tb(self, inputs: dict[str, Any]) -> dict[str, Any]:
-        """Decode one TB from current observable inputs."""
+        ...
 
     def decode_tb_batch(
         self, inputs: list[dict[str, Any]]
     ) -> dict[str, Any]:
-        """Decode one aligned TB from independent episodes."""
+        ...
 
     def synchronize(self) -> None:
-        """Wait for asynchronous accelerator work."""
+        ...
 
     def checksums_unchanged(self) -> bool:
-        """Report whether frozen artifacts changed."""
+        ...
 
 
 def load_adapter(factory: str, **kwargs) -> BenchmarkDecoderAdapter:
-    """Load one registered decoder factory."""
     module_name, function_name = factory.split(":", 1)
     module = importlib.import_module(module_name)
     function = getattr(module, function_name, None)
@@ -363,7 +351,6 @@ def load_adapter(factory: str, **kwargs) -> BenchmarkDecoderAdapter:
 
 
 def validate_adapter_output(output: dict, bits_shape: tuple[int, ...]) -> None:
-    """Validate one decoder output without scoring it."""
     required = {"hard_bits", "crc_status", "logits"}
     if set(output) != required:
         raise ValueError("adapter output fields differ")

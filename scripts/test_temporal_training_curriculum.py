@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""Test event-relative temporal training targets."""
 
 from __future__ import annotations
 

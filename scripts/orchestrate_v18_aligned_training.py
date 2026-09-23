@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""Train and register the corrected Segment-Safe screen."""
 
 from __future__ import annotations
 
@@ -21,8 +20,7 @@ SEED = 20_262_001
 
 
 def build_parser() -> argparse.ArgumentParser:
-    """Build the command-line parser."""
-    parser = argparse.ArgumentParser(description=__doc__)
+    parser = argparse.ArgumentParser(description='Train and register the corrected Segment-Safe screen.')
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--gpu", type=int, default=0)
     parser.add_argument("--smoke-only", action="store_true")
@@ -37,7 +35,6 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def run(marker: Path, command: list[str]) -> None:
-    """Run one resumable dependency step."""
     if marker.is_file():
         print(f"ALIGNED_SKIP={marker}", flush=True)
         return
@@ -48,7 +45,6 @@ def run(marker: Path, command: list[str]) -> None:
 
 
 def run_parallel(steps: list[tuple[Path, list[str]]]) -> None:
-    """Run independent resumable evaluation steps concurrently."""
     active = []
     for marker, command in steps:
         if marker.is_file():
@@ -73,7 +69,6 @@ def train_command(
     smoke: bool,
     teacher: Path | None = None,
 ) -> list[str]:
-    """Build one corrected training command."""
     command = [
         sys.executable,
         str(HERE / "train_temporal_benchmark.py"),
@@ -109,7 +104,6 @@ def evaluate_screen(
     candidate_gpu: int,
     reference_gpu: int,
 ) -> None:
-    """Run the unchanged paired Benchmark v1 screen."""
     registration = base / "registration"
     group = base / "group"
     plan = group / "stage_plan.json"
@@ -219,7 +213,6 @@ def evaluate_screen(
 
 
 def main() -> None:
-    """Run teacher-first smoke and screen training."""
     args = build_parser().parse_args()
     base = args.output_dir.expanduser().resolve()
     smoke_k8 = base / "smoke" / "matched_cold_k8"

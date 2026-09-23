@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""Run all receiver ideas through one paired evaluation loop."""
 
 from __future__ import annotations
 
@@ -26,7 +25,6 @@ from temporal_generalization_protocol import seal_payload
 
 @dataclass(frozen=True)
 class BenchmarkEpisode:
-    """Hold one paired channel, payload, and noise realization."""
 
     bits: np.ndarray
     active: np.ndarray
@@ -38,21 +36,18 @@ class BenchmarkEpisode:
 
 @runtime_checkable
 class BenchmarkScenarioBank(Protocol):
-    """Generate an episode solely from its frozen job and index."""
 
     def generate(self, job: dict, episode_index: int) -> BenchmarkEpisode:
-        """Generate one deterministic episode at every planned SNR."""
+        ...
 
 
 def _array(value: Any) -> np.ndarray:
-    """Convert eager tensors and arrays without changing values."""
     if hasattr(value, "numpy"):
         value = value.numpy()
     return np.asarray(value)
 
 
 def _hash_array(digest, value: Any) -> None:
-    """Add one typed array to an episode digest."""
     array = np.ascontiguousarray(_array(value))
     digest.update(str(array.dtype).encode("utf-8"))
     digest.update(np.asarray(array.shape, np.int64).tobytes())
@@ -60,7 +55,6 @@ def _hash_array(digest, value: Any) -> None:
 
 
 def episode_fingerprint(episode: BenchmarkEpisode) -> np.ndarray:
-    """Hash every paired input and the ground-truth payload."""
     digest = hashlib.sha256()
     _hash_array(digest, episode.bits)
     _hash_array(digest, episode.active)
@@ -78,7 +72,6 @@ def episode_fingerprint(episode: BenchmarkEpisode) -> np.ndarray:
 def validate_episode(
     episode: BenchmarkEpisode, protocol: dict, job: dict
 ) -> None:
-    """Validate one provider episode before any receiver sees it."""
     tbs = int(job["num_tbs"])
     users = int(protocol["radio"]["maximum_active_ues"])
     snrs = len(job["snr_db"])
@@ -142,7 +135,6 @@ def validate_episode(
 
 
 def _outputs_equal(left: dict, right: dict) -> bool:
-    """Compare two decoder outputs exactly."""
     return set(left) == set(right) and all(
         np.array_equal(_array(left[name]), _array(right[name]))
         for name in left
@@ -154,7 +146,6 @@ def _deterministic_first_tb(
     inputs: dict,
     bits_shape: tuple[int, ...],
 ) -> bool:
-    """Replay a cold first TB through one adapter."""
     adapter.start_episode()
     first = adapter.decode_tb(inputs)
     adapter.synchronize()
@@ -173,7 +164,6 @@ def _adapter_preflight(
     episode: BenchmarkEpisode,
     oracle_method: str | None,
 ) -> bool:
-    """Replay each method once before timed evaluation."""
     bits_shape = tuple(episode.bits[0].shape)
     passed = True
     for method in methods:
@@ -282,7 +272,6 @@ def evaluate_method_set(
     latency_methods: tuple[str, ...] = (),
     oracle_method: str | None = None,
 ) -> tuple[dict[str, np.ndarray], dict[str, bool], float]:
-    """Evaluate one method set on the immutable paired episode bank."""
     required_adapters = tuple(dict.fromkeys(methods + latency_methods))
     if tuple(adapters) != required_adapters:
         raise ValueError("adapter order differs from the method contract")
@@ -485,7 +474,6 @@ def evaluate_calibration_counts(
     provider: BenchmarkScenarioBank,
     adapter: BenchmarkDecoderAdapter,
 ) -> dict:
-    """Measure the matched Cold K=8 calibration curves."""
     validate_candidate_manifest(adapter.manifest, protocol)
     if adapter.manifest["role"] != "matched_cold_k8":
         raise ValueError("calibration requires matched Cold K=8")

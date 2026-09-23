@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""Test the V18 training-alignment contract."""
 
 from __future__ import annotations
 

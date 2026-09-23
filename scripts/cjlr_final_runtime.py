@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""Build the frozen v18 final-validation decoder runtime."""
 
 from __future__ import annotations
 
@@ -23,7 +22,6 @@ EXPECTED_RECEIVER_CONFIG = {
 
 
 def load_v18_segment_safe_config(path: Path | str) -> dict:
-    """Load the segment-safe V18 configuration."""
     value = json.loads(Path(path).read_text(encoding="utf-8"))
     expected_memory = {
         "type": "segment_safe_pilot_domain_wiener",
@@ -52,7 +50,6 @@ def load_v18_segment_safe_config(path: Path | str) -> dict:
 
 
 class FrozenV18Runtime:
-    """Hold immutable v18 models and the candidate decode graph."""
 
     def __init__(
         self,

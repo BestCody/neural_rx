@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""Shared runtime helpers for the temporal receiver."""
 
 from __future__ import annotations
 
@@ -15,7 +14,6 @@ from utils import E2E_Model, Parameters, load_weights
 
 
 def file_sha256(path: Path | str) -> str:
-    """Hash one file."""
     digest = hashlib.sha256()
     with Path(path).open("rb") as handle:
         for chunk in iter(lambda: handle.read(1024 * 1024), b""):
@@ -24,7 +22,6 @@ def file_sha256(path: Path | str) -> str:
 
 
 def model_checksum(model) -> str:
-    """Hash all model weights in their stored order."""
     digest = hashlib.sha256()
     for variable in model.weights:
         array = np.asarray(variable.numpy())
@@ -35,7 +32,6 @@ def model_checksum(model) -> str:
 
 
 def model_weight_signature(model) -> list[dict]:
-    """Describe ordered weights without runtime-generated names."""
     return [
         {
             "index": index,
@@ -47,7 +43,6 @@ def model_weight_signature(model) -> list[dict]:
 
 
 def model_value_checksum(model) -> str:
-    """Hash ordered model values independently of variable names."""
     digest = hashlib.sha256()
     for record, variable in zip(model_weight_signature(model), model.weights):
         digest.update(str(record["index"]).encode("ascii"))
@@ -64,7 +59,6 @@ def build_backbone(
     num_tx_eval=None,
     n_size_bwp_override=None,
 ):
-    """Build a cold Neural RX backbone."""
     parameters = Parameters(
         config,
         training=training,
@@ -84,7 +78,6 @@ def build_backbone(
 
 
 def prepare_cgnn_inputs(receiver, y, h_hat, active_tx):
-    """Convert received tensors into the frozen CGNN input layout."""
     ofdm = receiver._neural_rx
     num_tx = tf.shape(active_tx)[1]
     y = y[:, 0]
@@ -100,7 +93,6 @@ def prepare_cgnn_inputs(receiver, y, h_hat, active_tx):
 
 
 def demap_llr(ofdm, llr_grid, num_tx, mcs_idx=0):
-    """Map a CGNN output grid back to coded-bit order."""
     llr = tf.cast(llr_grid, tf.float32)
     llr = tf.transpose(llr, [0, 1, 3, 2, 4])
     llr = tf.expand_dims(llr, axis=1)
@@ -113,7 +105,6 @@ def demap_llr(ofdm, llr_grid, num_tx, mcs_idx=0):
 
 
 def assign_selected(backbone, checkpoint, variables) -> None:
-    """Load a shape-checked subset of model weights."""
     with np.load(checkpoint, allow_pickle=False) as archive:
         names = sorted(archive.files)
         if len(names) != len(variables):
@@ -126,7 +117,6 @@ def assign_selected(backbone, checkpoint, variables) -> None:
 
 
 def frozen_cold_state(base_cgnn, inputs) -> tf.Tensor:
-    """Reproduce the frozen CGNN StateInit path."""
     y, pe, channel, _, mcs_mask = inputs
     norm = tf.reduce_mean(tf.square(y), axis=(1, 2, 3), keepdims=True)
     norm = tf.math.divide_no_nan(1.0, tf.sqrt(norm))
@@ -146,7 +136,6 @@ def frozen_cold_state(base_cgnn, inputs) -> tf.Tensor:
 
 
 def readout_llr_grid(base_cgnn, state: tf.Tensor) -> tf.Tensor:
-    """Apply the shared frozen LLR readout."""
     if int(base_cgnn._num_mcss_supported) != 1:
         raise ValueError("the runtime requires one fixed MCS")
     llr = base_cgnn._readout_llrs[0](state)
@@ -160,7 +149,6 @@ def readout_llr_grid(base_cgnn, state: tf.Tensor) -> tf.Tensor:
 
 
 def run_k2(backbone, inputs) -> tf.Tensor:
-    """Run exactly two CGNN iterations."""
     state = frozen_cold_state(backbone, inputs)
     for index in range(2):
         state = backbone._iterations[index]([state, inputs[1], inputs[3]])
@@ -168,7 +156,6 @@ def run_k2(backbone, inputs) -> tf.Tensor:
 
 
 def direct_k2_trainable_variables(base_cgnn) -> list:
-    """Return variables executed by the direct K=2 path."""
     layers = list(base_cgnn._s_init)
     for iteration in base_cgnn._iterations[:2]:
         layers.extend([iteration._state_aggreg, iteration._state_update])
@@ -189,7 +176,6 @@ def select_channel_input(
     history_valid,
     reset_mask=None,
 ) -> tuple[tf.Tensor, tf.Tensor]:
-    """Use history only where valid and not reset."""
     current_ls = tf.convert_to_tensor(current_ls)
     posterior_channel = tf.cast(posterior_channel, current_ls.dtype)
     history_valid = tf.cast(history_valid, tf.bool)
@@ -214,7 +200,6 @@ def select_channel_variance(
     observation_variance,
     available,
 ) -> tf.Tensor:
-    """Match posterior variance to the selected channel."""
     observation = tf.convert_to_tensor(observation_variance, tf.float32)
     posterior = tf.cast(posterior_variance, observation.dtype)
     available = tf.cast(available, tf.bool)
@@ -228,7 +213,6 @@ def select_channel_variance(
 
 
 def stacked_to_complex_channel(channel) -> tf.Tensor:
-    """Convert stacked real and imaginary features to complex."""
     channel = tf.convert_to_tensor(channel, tf.float32)
     width = channel.shape[-1]
     if width is None or int(width) % 2:
@@ -238,7 +222,6 @@ def stacked_to_complex_channel(channel) -> tf.Tensor:
 
 
 def received_to_grid(received) -> tf.Tensor:
-    """Convert receiver order to frequency-symbol grid order."""
     received = tf.convert_to_tensor(received)
     if received.shape.rank != 5 or received.shape[1] != 1:
         raise ValueError("received tensor must have shape [B,1,R,S,F]")
@@ -246,7 +229,6 @@ def received_to_grid(received) -> tf.Tensor:
 
 
 def exact_contributions(physical_channel, transmitted) -> tf.Tensor:
-    """Compute each UE contribution on the received grid."""
     physical_channel = tf.convert_to_tensor(physical_channel)
     transmitted = tf.cast(transmitted, physical_channel.dtype)
     if physical_channel.shape.rank != 7:
@@ -259,7 +241,6 @@ def exact_contributions(physical_channel, transmitted) -> tf.Tensor:
 
 
 def derive_cdm_noise_conversion(estimator, num_tx: int) -> dict:
-    """Derive the LS-to-observation noise conversion."""
     layout = pilot_layout(estimator, int(num_tx))
     group_width = 2 * int(estimator._num_cdm_groups_without_data)
     pilots = np.asarray(estimator._pilot_pattern.pilots.numpy())[
@@ -300,7 +281,6 @@ def derive_cdm_noise_conversion(estimator, num_tx: int) -> dict:
 
 
 def expand_noise(no, target) -> tf.Tensor:
-    """Broadcast scalar noise across an observation tensor."""
     shape = tf.concat([
         tf.shape(no),
         tf.ones([tf.rank(target) - tf.rank(no)], tf.int32),
@@ -309,7 +289,6 @@ def expand_noise(no, target) -> tf.Tensor:
 
 
 def make_snr_batch(base, unit_noise, snr, generator, receiver) -> dict:
-    """Rescale a clean episode and recompute its LS estimate."""
     batch_size = int(base["bits"].shape[0])
     num_tbs = int(base["bits"].shape[1])
     ebno = tf.fill([batch_size], tf.cast(snr, tf.float32))

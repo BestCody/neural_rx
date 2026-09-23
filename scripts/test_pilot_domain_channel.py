@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""Tests for pilot-domain temporal channel estimation."""
 
 import unittest
 

@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""Tests for exact CJLR receiver primitives."""
 
 import sys
 import unittest

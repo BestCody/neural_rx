@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""Test the frozen v18 configuration boundary."""
 
 from __future__ import annotations
 

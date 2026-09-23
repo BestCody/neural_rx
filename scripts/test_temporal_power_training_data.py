@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""Test training-only received-power variation."""
 
 from __future__ import annotations
 

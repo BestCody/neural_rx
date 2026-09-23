@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""Test temporal generalization and reset calibration."""
 
 from __future__ import annotations
 

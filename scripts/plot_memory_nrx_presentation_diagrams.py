@@ -1,4 +1,3 @@
-"""Render explanatory presentation diagrams; no receiver execution."""
 
 import argparse
 from pathlib import Path
@@ -116,7 +115,7 @@ def evaluation():
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description=__doc__)
+    parser = argparse.ArgumentParser(description='Render explanatory presentation diagrams; no receiver execution.')
     parser.add_argument("--output-dir", type=Path, default=OUT)
     parser.add_argument("--prefix", default=PREFIX)
     parser.add_argument(

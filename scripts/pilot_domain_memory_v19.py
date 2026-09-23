@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""V19 streamed Segment-Safe PD-L8 memory."""
 
 from __future__ import annotations
 
@@ -24,10 +23,8 @@ from pilot_domain_memory import (
 class OnlineStreamedSegmentSafePilotDomainMemory(
     OnlineSegmentSafePilotDomainMemory
 ):
-    """Compute only the newest segment-safe PD-L8 posterior."""
 
     def update(self, inputs: dict) -> PilotMemoryPoint:
-        """Consume one TB with batched newest-only Wiener solves."""
         self._tb_index += 1
         y = np.asarray(inputs["received_grid"])
         active = np.asarray(inputs["active"], bool)

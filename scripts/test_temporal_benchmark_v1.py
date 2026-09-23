@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""Test the fixed Temporal Neural RX benchmark contract."""
 
 from __future__ import annotations
 
@@ -63,7 +62,6 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class ZeroAdapter:
-    """Provide a deterministic contract fixture."""
 
     def __init__(self, manifest):
         self.manifest = manifest
@@ -108,7 +106,6 @@ class ZeroAdapter:
 
 
 class SyntheticScenarioBank:
-    """Generate tiny deterministic episodes for runtime tests."""
 
     def generate(self, job, episode_index):
         tbs = int(job["num_tbs"])

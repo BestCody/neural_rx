@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""Tests for optimized exact CJLR primitives."""
 
 import sys
 import unittest

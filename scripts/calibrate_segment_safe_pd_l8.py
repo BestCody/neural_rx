@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""Calibrate the segment-safe PD-L8 guard."""
 
 from __future__ import annotations
 
@@ -22,8 +21,7 @@ ROOT = HERE.parent
 
 
 def build_parser() -> argparse.ArgumentParser:
-    """Build the command-line parser."""
-    parser = argparse.ArgumentParser(description=__doc__)
+    parser = argparse.ArgumentParser(description='Calibrate the segment-safe PD-L8 guard.')
     parser.add_argument(
         "--source-report",
         type=Path,
@@ -39,7 +37,6 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def file_sha256(path: Path) -> str:
-    """Hash one file."""
     digest = hashlib.sha256()
     with path.open("rb") as handle:
         for chunk in iter(lambda: handle.read(1024 * 1024), b""):
@@ -48,7 +45,6 @@ def file_sha256(path: Path) -> str:
 
 
 def build_artifact(report_path: Path) -> dict:
-    """Build one calibrated artifact."""
     report_path = report_path.expanduser().resolve()
     report = json.loads(report_path.read_text(encoding="utf-8"))
     method = report.get("methodology", {})
@@ -85,7 +81,6 @@ def build_artifact(report_path: Path) -> dict:
 
 
 def main() -> None:
-    """Write the calibrated artifact."""
     args = build_parser().parse_args()
     artifact = build_artifact(args.source_report)
     output = args.output.expanduser().resolve()

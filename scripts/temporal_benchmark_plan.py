@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""Calibrate SNRs and build immutable benchmark jobs."""
 
 from __future__ import annotations
 
@@ -23,20 +22,17 @@ from temporal_generalization_protocol import seal_payload, verify_payload
 
 
 def _require_digest(value: str, label: str) -> None:
-    """Require a SHA-256 digest."""
     if not isinstance(value, str) or not re.fullmatch(r"[0-9a-f]{64}", value):
         raise ValueError(f"{label} must be a SHA-256 digest")
 
 
 def corrected_rate(errors: int, blocks: int) -> float:
-    """Return a finite binomial rate."""
     if int(blocks) <= 0 or not 0 <= int(errors) <= int(blocks):
         raise ValueError("invalid error count")
     return (float(errors) + 0.5) / (float(blocks) + 1.0)
 
 
 def decreasing_isotonic(values, weights) -> np.ndarray:
-    """Fit a weighted nonincreasing sequence."""
     values = np.asarray(values, np.float64)
     weights = np.asarray(weights, np.float64)
     if values.ndim != 1 or weights.shape != values.shape:
@@ -66,7 +62,6 @@ def decreasing_isotonic(values, weights) -> np.ndarray:
 
 
 def calibrate_condition(points: list[dict], target: float) -> dict:
-    """Select one stable target-TBLER anchor."""
     if len(points) < 3:
         raise ValueError("calibration requires at least three SNR points")
     points = sorted(points, key=lambda value: float(value["snr_db"]))
@@ -117,7 +112,6 @@ def build_calibration_artifact(
     baseline_manifest_sha256: str,
     curves: dict[str, list[dict]],
 ) -> dict:
-    """Build a sealed matched-K8 SNR calibration."""
     _require_digest(baseline_result_sha256, "baseline result")
     _require_digest(baseline_manifest_sha256, "baseline manifest")
     if set(curves) != set(CONDITIONS):
@@ -169,7 +163,6 @@ def build_calibration_artifact(
 
 
 def validate_calibration_artifact(artifact: dict, protocol: dict) -> None:
-    """Validate a matched-K8 calibration artifact."""
     verify_payload(artifact, field="calibration_sha256")
     if artifact.get("artifact") != "temporal_benchmark_snr_calibration_v1":
         raise ValueError("calibration artifact type differs")
@@ -192,7 +185,6 @@ def validate_calibration_artifact(artifact: dict, protocol: dict) -> None:
 
 
 def load_calibration_artifact(path: Path | str, protocol: dict) -> dict:
-    """Load one sealed SNR calibration."""
     artifact = json.loads(Path(path).read_text(encoding="utf-8"))
     validate_calibration_artifact(artifact, protocol)
     return artifact
@@ -204,7 +196,6 @@ def build_confirmation_authorization(
     candidate_manifest_sha256: str,
     design_freeze_sha256: str,
 ) -> dict:
-    """Explicitly authorize one frozen confirmation run."""
     _require_digest(candidate_manifest_sha256, "candidate manifest")
     _require_digest(design_freeze_sha256, "design freeze")
     return seal_payload({
@@ -224,7 +215,6 @@ def validate_confirmation_authorization(
     calibration: dict,
     candidate_manifest_sha256: str,
 ) -> None:
-    """Validate explicit confirmation authorization."""
     verify_payload(artifact, field="authorization_sha256")
     _require_digest(artifact.get("design_freeze_sha256"), "design freeze")
     expected = {
@@ -251,7 +241,6 @@ def build_stage_plan(
     authorization: dict | None = None,
     episodes_per_condition: int | None = None,
 ) -> dict:
-    """Build one immutable benchmark execution plan."""
     validate_calibration_artifact(calibration, protocol)
     if stage not in STAGES:
         raise ValueError("unknown benchmark stage")
@@ -338,7 +327,6 @@ def build_stage_plan(
 
 
 def validate_stage_plan(plan: dict, protocol: dict, calibration: dict) -> None:
-    """Validate one immutable execution plan."""
     verify_payload(plan, field="plan_sha256")
     validate_calibration_artifact(calibration, protocol)
     if plan.get("plan") != "temporal_benchmark_stage_plan_v1":
@@ -407,7 +395,6 @@ def load_stage_plan(
     protocol: dict,
     calibration: dict,
 ) -> dict:
-    """Load and validate one execution plan."""
     plan = json.loads(Path(path).read_text(encoding="utf-8"))
     validate_stage_plan(plan, protocol, calibration)
     return plan

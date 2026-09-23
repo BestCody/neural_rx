@@ -18,7 +18,6 @@ from .neural_rx import NeuralPUSCHReceiver
 
 
 class E2E_Model(Model):
-    """E2 E Model."""
 
     def __init__(self, sys_parameters, training=False, return_tb_status=False,
                  mcs_arr_eval_idx=0):
@@ -55,7 +54,6 @@ class E2E_Model(Model):
             raise NotImplementedError("Unknown system selected!")
 
     def _active_dmrs_mask(self, batch_size, num_tx, max_num_tx):
-        """Active dmrs mask."""
 
         max_num_tx = tf.cast(max_num_tx, tf.int32)
         num_tx = tf.cast(num_tx, tf.int32)
@@ -72,7 +70,6 @@ class E2E_Model(Model):
 
     def _mask_active_dmrs(self, b, b_hat, num_tx, active_dmrs,
                           mcs_arr_eval_idx, tb_crc_status=None):
-        """Remove inactive users/layers from b and b_hat"""
         batch_size = tf.shape(b)[0]
 
         a_mask = expand_to_rank(active_dmrs, tf.rank(b_hat), axis=-1)
@@ -98,7 +95,6 @@ class E2E_Model(Model):
         return b, b_hat
 
     def _set_transmitter_random_pilots(self):
-        """Set transmitter random pilots."""
         pilot_set = self._sys_parameters.pilots
         num_pilots = tf.shape(pilot_set)[0]
         random_pilot_ind = tf.random.uniform((), 0, num_pilots, dtype=tf.int32)
@@ -108,7 +104,6 @@ class E2E_Model(Model):
 
     def call(self, batch_size, ebno_db, num_tx=None, output_nrx_h_hat=False,
              mcs_arr_eval_idx=None, mcs_ue_mask=None, active_dmrs=None):
-        """defines end-to-end system model."""
 
         if num_tx is None:
             num_tx = self._sys_parameters.max_num_tx

@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""Validate one matched-K=8 and aligned-V18 training pair."""
 
 from __future__ import annotations
 
@@ -13,8 +12,7 @@ from temporal_training_curriculum import STRATA
 
 
 def build_parser() -> argparse.ArgumentParser:
-    """Build the command-line parser."""
-    parser = argparse.ArgumentParser(description=__doc__)
+    parser = argparse.ArgumentParser(description='Validate one matched-K=8 and aligned-V18 training pair.')
     parser.add_argument("--matched-summary", type=Path, required=True)
     parser.add_argument("--candidate-summary", type=Path, required=True)
     parser.add_argument("--output", type=Path)
@@ -22,19 +20,16 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def load_summary(path: Path) -> tuple[dict, Path]:
-    """Load one training summary from an exact path."""
     path = path.expanduser().resolve()
     return json.loads(path.read_text(encoding="utf-8")), path
 
 
 def artifact_matches(summary: dict, field: str) -> bool:
-    """Check one path against its adjacent SHA-256 field."""
     path = Path(summary[field]).expanduser().resolve()
     return path.is_file() and file_sha256(path) == summary[f"{field}_sha256"]
 
 
 def balanced(summary: dict) -> bool:
-    """Require exactly one equal positive count per target stratum."""
     coverage = summary.get("stratum_coverage", {})
     return tuple(coverage) == STRATA and len(set(coverage.values())) == 1 and (
         next(iter(coverage.values()), 0) > 0
@@ -42,7 +37,6 @@ def balanced(summary: dict) -> bool:
 
 
 def finite_history(summary: dict) -> bool:
-    """Require finite positive logged gradients and finite losses."""
     return bool(summary.get("history")) and all(
         math.isfinite(float(row[name]))
         for row in summary["history"]
@@ -53,7 +47,6 @@ def finite_history(summary: dict) -> bool:
 
 
 def validate_pair(matched: dict, candidate: dict, matched_path: Path) -> dict:
-    """Return named checks for one dependency-ordered training pair."""
     training_name = matched.get("training")
     version = {
         "temporal_benchmark_training_v2": 2,
@@ -161,7 +154,6 @@ def validate_pair(matched: dict, candidate: dict, matched_path: Path) -> dict:
 
 
 def main() -> None:
-    """Validate and optionally write the audit."""
     args = build_parser().parse_args()
     matched, matched_path = load_summary(args.matched_summary)
     candidate, _ = load_summary(args.candidate_summary)

@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""Build a comparable Temporal Neural RX leaderboard."""
 
 from __future__ import annotations
 
@@ -35,7 +34,7 @@ from temporal_generalization_protocol import seal_payload
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description=__doc__)
+    parser = argparse.ArgumentParser(description='Build a comparable Temporal Neural RX leaderboard.')
     parser.add_argument("--group", type=Path, action="append", required=True)
     parser.add_argument("--calibration", type=Path, required=True)
     parser.add_argument("--output-dir", type=Path, required=True)
@@ -48,7 +47,6 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def metric_value(score: dict, metric: str) -> float | None:
-    """Extract one registered leaderboard metric."""
     comparisons = score["comparisons"]
     if metric == "mean_k8_gap":
         return comparisons["candidate_gap_to_matched_k8"]["difference"]
@@ -72,7 +70,6 @@ def metric_value(score: dict, metric: str) -> float | None:
 
 
 def registration_gate(score: dict, scores: dict[str, dict]) -> dict:
-    """Judge the predeclared improvement against its parent."""
     registration = score["registration"]
     parent_id = registration.get("parent_candidate_id")
     if parent_id is None:
@@ -117,7 +114,6 @@ def load_group(
     protocol: dict,
     calibration: dict,
 ) -> tuple[dict, list[dict], list[dict]]:
-    """Load one candidate directory."""
     directory = directory.expanduser().resolve()
     plan = load_stage_plan(
         directory / "stage_plan.json", protocol, calibration
@@ -135,7 +131,6 @@ def load_group(
 
 
 def training_signature(score: dict, payload: dict) -> tuple:
-    """Return fields required for one leaderboard."""
     training = payload["candidate"]["training"]
     return (
         score["stage"],
@@ -150,7 +145,6 @@ def training_signature(score: dict, payload: dict) -> tuple:
 def pairing_signature(
     payloads: list[dict], arrays: list[dict], protocol: dict
 ) -> dict[str, dict[str, np.ndarray]]:
-    """Collect arrays that must match across every candidate."""
     signature = {}
     stage = payloads[0]["stage"]
     for payload, values in zip(payloads, arrays):
@@ -179,7 +173,6 @@ def pairing_signature(
 
 
 def validate_pairing_signatures(reference: dict, current: dict) -> None:
-    """Reject unpaired candidate groups or rerun references."""
     if set(current) != set(reference):
         raise ValueError("candidate groups use different training seeds")
     for seed, values in current.items():
@@ -192,7 +185,6 @@ def validate_pairing_signatures(reference: dict, current: dict) -> None:
 
 
 def write_csv(path: Path, scores: list[dict], frontier: set[str]) -> None:
-    """Write a compact leaderboard."""
     with path.open("w", newline="", encoding="utf-8") as handle:
         writer = csv.writer(handle)
         writer.writerow([

@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""Smoke-test real Temporal Benchmark v1 adapters."""
 
 from __future__ import annotations
 
@@ -17,7 +16,7 @@ ROOT = HERE.parent
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description=__doc__)
+    parser = argparse.ArgumentParser(description='Smoke-test real Temporal Benchmark v1 adapters.')
     parser.add_argument("--gpu", type=int, default=0)
     parser.add_argument("--snr-db", type=float, default=2.75)
     parser.add_argument(

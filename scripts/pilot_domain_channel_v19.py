@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""V19 newest-only pilot-domain estimation primitives."""
 
 from __future__ import annotations
 
@@ -49,7 +48,6 @@ def extract_raw_pilot_estimates_cached(
     tf,
     layout: PilotLayout | None = None,
 ) -> tuple[np.ndarray, PilotLayout]:
-    """Extract raw pilots while reusing a validated layout."""
     from sionna.utils import flatten_last_dims
 
     if layout is None:
@@ -104,7 +102,6 @@ def interpolate_pilot_bundle(
     layout: PilotLayout,
     tf,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """Interpolate posterior and observation in one call."""
     posterior = np.asarray(posterior)
     posterior_error = np.asarray(posterior_error)
     observation = np.asarray(observation)
@@ -127,7 +124,6 @@ def interpolate_pilot_bundle(
 
 
 def _toeplitz_projection_batch(matrix: np.ndarray) -> np.ndarray:
-    """Project a batch onto the Hermitian Toeplitz subspace."""
     matrix = np.asarray(matrix)
     if matrix.ndim != 3 or matrix.shape[-1] != matrix.shape[-2]:
         raise ValueError("batched covariance matrices must be square")
@@ -154,7 +150,6 @@ def project_toeplitz_psd_batch(
     tolerance: float = 1e-8,
     max_iterations: int = 100,
 ) -> tuple[np.ndarray, dict]:
-    """Project independent covariances with batched algebra."""
     matrix = np.asarray(matrix, dtype=np.complex128)
     if matrix.ndim != 3 or matrix.shape[-1] != matrix.shape[-2]:
         raise ValueError("batched covariance matrices must be square")
@@ -219,7 +214,6 @@ def pilot_domain_wiener_latest(
     projection_tolerance: float = 1e-8,
     projection_max_iterations: int = 100,
 ) -> tuple[np.ndarray, np.ndarray, dict]:
-    """Calculate only the newest causal Wiener posterior."""
     observation = np.asarray(observation)
     error_variance = np.asarray(error_variance)
     if observation.shape != error_variance.shape or observation.ndim != 6:

@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""Test shared temporal receiver runtime helpers."""
 
 from __future__ import annotations
 

@@ -20,7 +20,6 @@ from sionna.channel import OFDMChannel
 from .channel_models import DoubleTDLChannel
 
 class Parameters:
-    """Simulation parameters"""
     def __init__(self, config_name, system="dummy", training=False,
                  verbose=False, num_tx_eval=None,
                  n_size_bwp_override=None):

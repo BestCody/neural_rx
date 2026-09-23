@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""Join one candidate result with the frozen reference cache."""
 
 from __future__ import annotations
 
@@ -19,7 +18,7 @@ ROOT = HERE.parent
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description=__doc__)
+    parser = argparse.ArgumentParser(description='Join one candidate result with the frozen reference cache.')
     parser.add_argument("--candidate-output", type=Path, required=True)
     parser.add_argument("--reference-cache", type=Path, required=True)
     parser.add_argument("--static-reference-cache", type=Path)
