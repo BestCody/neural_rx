@@ -12,7 +12,7 @@
 import tensorflow as tf
 import numpy as np
 from tensorflow.keras import Model
-from tensorflow.keras.layers import Dense, Conv2D, SeparableConv2D, Layer
+from tensorflow.keras.layers import Dense, SeparableConv2D, Layer
 from sionna.utils import flatten_dims, split_dim, flatten_last_dims, insert_dims, expand_to_rank
 from sionna.ofdm import ResourceGridDemapper
 from sionna.nr import TBDecoder, LayerDemapper, PUSCHLSChannelEstimator
@@ -29,8 +29,6 @@ class StateInit(Layer):
 
         if layer_type=="sepconv":
             layer = SeparableConv2D
-        elif layer_type=="conv":
-            layer = Conv2D
         else:
             raise NotImplementedError("Unknown layer_type selected.")
 
@@ -57,11 +55,8 @@ class StateInit(Layer):
         pe = tf.tile(tf.expand_dims(pe, axis=0), [batch_size, 1, 1, 1, 1])
         pe = flatten_dims(pe, 2, 0)
 
-        if h_hat is not None:
-            h_hat = flatten_dims(h_hat, 2, 0)
-            z = tf.concat([y, pe, h_hat], axis=-1)
-        else:
-            z = tf.concat([y, pe], axis=-1)
+        h_hat = flatten_dims(h_hat, 2, 0)
+        z = tf.concat([y, pe, h_hat], axis=-1)
 
         layers = self._hidden_conv
         for conv in layers:
@@ -127,8 +122,6 @@ class UpdateState(Layer):
 
         if layer_type=="sepconv":
             layer = SeparableConv2D
-        elif layer_type=="conv":
-            layer = Conv2D
         else:
             raise NotImplementedError("Unknown layer_type selected.")
 
@@ -273,7 +266,6 @@ class CGNN(Model):
                     layer_type_readout,
                     training=False,
                     apply_multiloss=False,
-                    var_mcs_masking=False,
                     dtype=tf.float32,
                     **kwargs):
         super().__init__(dtype=dtype,**kwargs)
@@ -281,21 +273,14 @@ class CGNN(Model):
         self._training = training
 
         self._apply_multiloss = apply_multiloss
-        self._var_mcs_masking = var_mcs_masking
 
-        if self._var_mcs_masking:
-            self._s_init = [StateInit(  d_s,
-                                num_units_init,
-                                layer_type=layer_type_conv,
-                                dtype=dtype)]
-        else:
-            self._s_init = []
-            for _ in num_bits_per_symbol:
-                self._s_init.append(
-                    StateInit(  d_s,
-                                num_units_init,
-                                layer_type=layer_type_conv,
-                                dtype=dtype))
+        self._s_init = []
+        for _ in num_bits_per_symbol:
+            self._s_init.append(
+                StateInit(  d_s,
+                            num_units_init,
+                            layer_type=layer_type_conv,
+                            dtype=dtype))
 
         self._iterations = []
         for i in range(num_it):
@@ -308,19 +293,13 @@ class CGNN(Model):
             self._iterations.append(it)
         self._num_it = num_it
 
-        if self._var_mcs_masking:
-            self._readout_llrs = [ReadoutLLRs(np.max(num_bits_per_symbol),
-                                            num_units_readout,
-                                            layer_type=layer_type_readout,
-                                            dtype=dtype)]
-        else:
-            self._readout_llrs = []
-            for num_bits in num_bits_per_symbol:
-                self._readout_llrs.append(
-                    ReadoutLLRs(num_bits,
-                                            num_units_readout,
-                                            layer_type=layer_type_readout,
-                                            dtype=dtype))
+        self._readout_llrs = []
+        for num_bits in num_bits_per_symbol:
+            self._readout_llrs.append(
+                ReadoutLLRs(num_bits,
+                                        num_units_readout,
+                                        layer_type=layer_type_readout,
+                                        dtype=dtype))
         self._readout_chest = ReadoutChEst(num_rx_ant,
                                            num_units_readout,
                                            layer_type=layer_type_readout,
@@ -348,26 +327,30 @@ class CGNN(Model):
             "Invalid number of iterations"
         self._num_it = val
 
+    @staticmethod
+    def input_scale(y):
+        norm = tf.reduce_mean(tf.square(y), axis=(1, 2, 3), keepdims=True)
+        return tf.math.divide_no_nan(1.0, tf.sqrt(norm))
+
+    def initialize_state(self, inputs):
+        y, pe, channel, _, mcs_mask = inputs
+        norm = self.input_scale(y)
+        y = y * norm
+        if channel is not None:
+            channel = channel * tf.expand_dims(norm, axis=1)
+        initial_inputs = (y, pe, channel)
+        state = self._s_init[0](initial_inputs) * expand_to_rank(
+            tf.gather(mcs_mask, indices=0, axis=2), 5, axis=-1
+        )
+        for index in range(1, self._num_mcss_supported):
+            state += self._s_init[index](initial_inputs) * expand_to_rank(
+                tf.gather(mcs_mask, indices=index, axis=2), 5, axis=-1
+            )
+        return state
+
     def call(self, inputs):
-        y, pe, h_hat, active_tx, mcs_ue_mask = inputs
-
-
-        norm_scaling = tf.reduce_mean(tf.square(y), axis=(1,2,3), keepdims=True)
-        norm_scaling = tf.math.divide_no_nan(1., tf.sqrt(norm_scaling))
-        y = y*norm_scaling
-        norm_scaling = tf.expand_dims(norm_scaling, axis=1)
-        if h_hat is not None:
-            h_hat = h_hat*norm_scaling
-
-
-        if self._var_mcs_masking:
-            s = self._s_init[0]((y, pe, h_hat))
-        else:
-            s = self._s_init[0]((y, pe, h_hat)) * expand_to_rank(
-                        tf.gather(mcs_ue_mask, indices=0, axis=2), 5, axis=-1)
-            for idx in range(1, self._num_mcss_supported):
-                s = s + self._s_init[idx]((y, pe, h_hat)) * expand_to_rank(
-                        tf.gather(mcs_ue_mask, indices=idx, axis=2), 5, axis=-1)
+        _, pe, _, active_tx, _ = inputs
+        s = self.initialize_state(inputs)
 
         llrs = []
         h_hats = []
@@ -378,15 +361,7 @@ class CGNN(Model):
             if (self._training and self._apply_multiloss) or i==self._num_it-1:
                 llrs_ = []
                 for idx in range(self._num_mcss_supported):
-                    if self._var_mcs_masking:
-                        llrs__ = self._readout_llrs[0](s)
-                        llrs__ = tf.gather(
-                            llrs__,
-                            indices=tf.range(self._num_bits_per_symbol[idx]),
-                            axis=-1)
-                    else:
-                        llrs__ = self._readout_llrs[idx](s)
-                    llrs_.append(llrs__)
+                    llrs_.append(self._readout_llrs[idx](s))
                 llrs.append(llrs_)
                 h_hats.append(self._readout_chest(s))
 
@@ -413,7 +388,6 @@ class CGNNOFDM(Model):
         super().__init__(**kwargs)
 
         self._training = training
-        self._max_num_tx = max_num_tx
         self._layer_demappers = layer_demappers
         self._sys_parameters = sys_parameters
         self._nrx_dtype = nrx_dtype
@@ -421,18 +395,6 @@ class CGNNOFDM(Model):
         self._num_mcss_supported = len(sys_parameters.mcs_index)
 
         self._rg = sys_parameters.transmitters[0]._resource_grid
-
-        if self._sys_parameters.mask_pilots:
-            print("Masking pilots for pilotless communications.")
-
-        self._mcs_var_mcs_masking = False
-        if hasattr(self._sys_parameters, 'mcs_var_mcs_masking'):
-            self._mcs_var_mcs_masking = self._sys_parameters.mcs_var_mcs_masking
-            print("Var-MCS NRX with masking.")
-        elif len(sys_parameters.mcs_index) > 1:
-            print("Var-MCS NRX with MCS-specific IO layers.")
-        else:
-            pass
 
         num_bits_per_symbol = []
         for mcs_list_idx in range(self._num_mcss_supported):
@@ -453,7 +415,6 @@ class CGNNOFDM(Model):
                           layer_type_dense=layer_type_dense,
                           layer_type_conv=layer_type_conv,
                           layer_type_readout=layer_type_readout,
-                          var_mcs_masking=self._mcs_var_mcs_masking,
                           dtype=nrx_dtype)
 
         self._rg_demapper = ResourceGridDemapper(self._rg,
@@ -549,13 +510,6 @@ class CGNNOFDM(Model):
 
         num_tx = tf.shape(active_tx)[1]
 
-        if self._sys_parameters.mask_pilots:
-            rg_type = self._rg.build_type_grid()
-            rg_type = tf.expand_dims(rg_type, axis=0)
-            rg_type = tf.broadcast_to(rg_type, tf.shape(y))
-            y = tf.where(rg_type==1, tf.constant(0., y.dtype), y)
-
-
         y = y[:,0]
         y = tf.transpose(y, [0, 3, 2, 1])
         y = tf.concat([tf.math.real(y), tf.math.imag(y)], axis=-1)
@@ -565,8 +519,7 @@ class CGNNOFDM(Model):
         y = tf.cast(y, self._nrx_dtype)
         pe = tf.cast(pe, self._nrx_dtype)
 
-        if h_hat_init is not None:
-            h_hat_init = tf.cast(h_hat_init, self._nrx_dtype)
+        h_hat_init = tf.cast(h_hat_init, self._nrx_dtype)
         active_tx = tf.cast(active_tx, self._nrx_dtype)
 
         llrs_, h_hats_ = self._cgnn([y, pe, h_hat_init, active_tx, mcs_ue_mask])
@@ -593,10 +546,7 @@ class CGNNOFDM(Model):
 
                 llrs_[idx] = flatten_last_dims(llrs_[idx], 2)
 
-                if self._layer_demappers is None:
-                    llrs_[idx] = tf.squeeze(llrs_[idx], axis=-2)
-                else:
-                    llrs_[idx] = self._layer_demappers[idx](llrs_[idx])
+                llrs_[idx] = self._layer_demappers[idx](llrs_[idx])
                 _llrs_.append(llrs_[idx])
 
 
@@ -664,11 +614,7 @@ class NeuralPUSCHReceiver(Layer):
                               num_bp_iter=sys_parameters.num_bp_iter,
                               cn_type=sys_parameters.cn_type))
 
-        if hasattr(sys_parameters.transmitters[0], "_precoder"):
-            self._precoding_mat = sys_parameters.transmitters[0]._precoder._w
-        else:
-            self._precoding_mat = tf.ones([sys_parameters.max_num_tx,
-                                           sys_parameters.num_antenna_ports, 1], tf.complex64)
+        self._precoding_mat = sys_parameters.transmitters[0]._precoder._w
 
         rg = sys_parameters.transmitters[0]._resource_grid
         pc =  sys_parameters.pusch_configs[0][0]
@@ -678,10 +624,6 @@ class NeuralPUSCHReceiver(Layer):
                 dmrs_additional_position=pc.dmrs.additional_position,
                 num_cdm_groups_without_data=pc.dmrs.num_cdm_groups_without_data,
                 interpolation_type="nn")
-
-        rg_type = rg.build_type_grid()[:,0]
-        pilot_ind = tf.where(rg_type==1)
-        self._pilot_ind = np.array(pilot_ind)
 
         self._layer_demappers = []
         for mcs_list_idx in range(self._num_mcss_supported):
@@ -710,18 +652,12 @@ class NeuralPUSCHReceiver(Layer):
 
 
         if self._sys_parameters.initial_chest == 'ls':
-            if self._sys_parameters.mask_pilots:
-                raise ValueError("Cannot use initial channel estimator if " \
-                                "pilots are masked.")
             h_hat, _ = self._ls_est([y, 1e-1])
 
             h_hat = h_hat[:,0,:,:num_tx,0]
             h_hat = tf.transpose(h_hat, [0, 2, 4, 3, 1])
             h_hat = tf.concat([tf.math.real(h_hat), tf.math.imag(h_hat)],
                               axis=-1)
-
-        elif self._sys_parameters.initial_chest == None:
-            h_hat = None
 
         return h_hat
 
@@ -738,13 +674,10 @@ class NeuralPUSCHReceiver(Layer):
 
         return h
 
-    def call(self, inputs, mcs_arr_eval=[0], mcs_ue_mask_eval=None,
-             h_hat_ext=None):
+    def call(self, inputs, mcs_arr_eval=[0], mcs_ue_mask_eval=None):
 
         if self._training:
             y, active_tx, b, h, mcs_ue_mask  = inputs
-            if len(mcs_arr_eval)==1 and not isinstance(b, list):
-                b = [b]
             bits = []
             for idx in range(len(mcs_arr_eval)):
                 bits.append(
@@ -765,10 +698,7 @@ class NeuralPUSCHReceiver(Layer):
             y, active_tx = inputs
 
             num_tx = tf.shape(active_tx)[1]
-            if h_hat_ext is not None:
-                h_hat = h_hat_ext
-            else:
-                h_hat = self.estimate_channel(y, num_tx)
+            h_hat = self.estimate_channel(y, num_tx)
 
             llr, h_hat_refined = self._neural_rx(
                                             (y, h_hat, active_tx),

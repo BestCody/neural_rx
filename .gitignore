@@ -11,14 +11,16 @@ __pycache__
 dev
 _build
 logs/
-dev/
 
-/results/
+/results/historical/
 /runs/
-/outputs/
-/scripts/outputs/
 /artifacts/
 /checkpoints/
 /data/
 /saved_models/
 /wandb/
+/models/*
+!/models/pretrained/
+/datasets/
+/experiments/
+/docs/literature_review_20260914/

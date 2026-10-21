@@ -1,0 +1,64 @@
+{
+  "active_receiver": "pilot_filter_learned_blend",
+  "implementation": "scripts/pilot_history_receiver",
+  "receiver_config": "config/memory_receiver.json",
+  "training_recipe": "config/memory_training.json",
+  "selected_checkpoint": {
+    "path": "models/learned_blend_joint_20261019/checkpoint_005000",
+    "campaign_update": 5000,
+    "weights_sha256": "bbe4e4d99b500fe03b5980bced1bec4c64586d7e94ca91832f336ff83a5e2044"
+  },
+  "latest_resumable_checkpoint": {
+    "path": "models/learned_blend_joint_20261019/checkpoint_006000",
+    "campaign_update": 6000,
+    "weights_sha256": "f4990fe7fa7260822eb7b2af8aca25e422870f8b6fa683694819672cef4cb8d5"
+  },
+  "campaign_checkpoints": {
+    "path": "models/learned_blend_joint_20261019",
+    "purpose": "Milestones every 1000 updates (000000-006000), optimizer state, schedule, and training history for the current architecture"
+  },
+  "initializer": {
+    "path": "models/learned_blend/initial_receiver.weights.h5",
+    "sha256": "2139a18e2dd16662a915716b590740760275e2b57c8a0e50ff655c581a8fc501",
+    "purpose": "Complete initialization used by the current campaign; inherited detector plus new blend weights",
+    "provenance": "models/learned_blend/initialization.json",
+    "ancestor_checkpoints_retained": false
+  },
+  "frozen_controls": {
+    "path": "models/pretrained/nrx_large_weights",
+    "sha256": "0e6aa52dc89725bc982710c4a14a2c617295118d7153da1d512e276d62a06592",
+    "methods": [
+      "cold_k2",
+      "cold_k3",
+      "cold_k8"
+    ]
+  },
+  "evidence": {
+    "campaign": "experiments/20261019_learned_blend_joint_training_6000",
+    "selection": "experiments/20261019_learned_blend_joint_training_6000/results/selection.json",
+    "confirmation": "experiments/20261019_learned_blend_joint_training_6000/results/confirmation_005000/results.json",
+    "latency": "experiments/20261019_learned_blend_joint_training_6000/results/latency_005000/results.json"
+  },
+  "result_status": {
+    "campaign_complete": true,
+    "memory_benefit_demonstrated": true,
+    "latency_target_met": true,
+    "cold_k8_statistical_superiority_established": false,
+    "scope": "Recorded results belong to the immutable campaign source, under its declared radio settings and timing boundary"
+  },
+  "evaluation_data": {
+    "retained_disk_banks": [
+      "datasets/evaluation",
+      "datasets/smoke"
+    ],
+    "campaign_cache": "experiments/20261019_learned_blend_joint_training_6000/episodes",
+    "campaign_cache_storage": "RAM-backed tmpfs; recreate from retained source, plans, seeds and anchors after reboot"
+  },
+  "literature": "docs/literature_review_20260914",
+  "artifact_format": {
+    "checkpoint_config": "cnn_autoencoder_finalist.json",
+    "training_protocol": "cnn_memory_training",
+    "seed_namespace": "calibrated_feedback_joint_training_v1",
+    "reason": "Preserve existing checkpoint and deterministic training identities; no retired receiver implementation is selected by these strings"
+  }
+}

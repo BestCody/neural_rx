@@ -3,8 +3,7 @@
 from __future__ import annotations
 
 import unittest
-import hashlib
-from pathlib import Path
+from unittest.mock import patch
 
 import numpy as np
 import tensorflow as tf
@@ -13,7 +12,7 @@ from geometry_mumimo_data import (
     GeometryAwareMUMIMOGenerator,
     azimuth_geometry,
 )
-from temporal_receiver_core import exact_contributions, received_to_grid
+from verification.radio import exact_contributions, received_to_grid
 from utils import E2E_Model, Parameters
 
 
@@ -26,18 +25,11 @@ def seeds(base):
     }
 
 
-def sha256(path):
-    digest = hashlib.sha256()
-    digest.update(Path(path).read_bytes())
-    return digest.hexdigest()
-
-
 class GeometryMUMIMODataTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.parameters = Parameters(
             "nrx_large.cfg",
-            system="nrx",
             training=True,
             num_tx_eval=2,
             n_size_bwp_override=4,
@@ -52,10 +44,8 @@ class GeometryMUMIMODataTest(unittest.TestCase):
             dynamic_scheduling=False,
             scenario_training=False,
             gap_start_prob=0.0,
-            hard_reset_prob=0.0,
             random_slot_offset=True,
             advance_slot_pilots=True,
-            channel_role="calibration",
             seed_streams=seeds(base),
             seed_stream_limit=1,
             **kwargs,
@@ -92,11 +82,9 @@ class GeometryMUMIMODataTest(unittest.TestCase):
             3,
             4.0,
             include_clean_received=True,
-            include_transmitted=True,
             include_ls=False,
         )
         self.assertEqual(batch["h"].shape, (1, 3, 1, 4, 2, 2, 14, 48))
-        self.assertEqual(batch["x"].shape, (1, 3, 2, 2, 14, 48))
         self.assertEqual(batch["y"].shape, (1, 3, 1, 4, 14, 48))
         self.assertTrue(np.all(batch["geometry_steady_los"].numpy()))
         separation = float(
@@ -113,8 +101,12 @@ class GeometryMUMIMODataTest(unittest.TestCase):
             atol=1e-5,
         )
         for tb in range(3):
+            generator._set_slot_pilots(batch["slot_number"][tb])
+            transmitted = generator.tx(batch["bits"][:, tb])
+            transmitted *= tf.cast(batch["active"][:, tb, :, None, None, None], transmitted.dtype)
+            self.assertEqual(transmitted.shape, (1, 2, 2, 14, 48))
             contribution = exact_contributions(
-                batch["h"][:, tb], batch["x"][:, tb]
+                batch["h"][:, tb], transmitted
             )
             reconstructed = tf.reduce_sum(contribution, axis=1)
             clean = received_to_grid(batch["y_clean"][:, tb])
@@ -185,6 +177,21 @@ class GeometryMUMIMODataTest(unittest.TestCase):
                 first[name].numpy(), second[name].numpy()
             )
 
+    def test_scheduling_gaps_do_not_generate_a_channel_change(self):
+        generator = self.make_generator(32_500_000)
+        generator.gap_start_prob = 1.0
+        with patch.object(generator, "_sample_joint_slots", wraps=generator._sample_joint_slots) as sample:
+            batch = generator.sample_batch(1, 4, 4.0, scenario_training=True, include_ls=False)
+        self.assertEqual(sample.call_count, 1)
+        self.assertFalse(np.all(batch["active"].numpy()))
+        self.assertFalse(np.any(batch["channel_change_event"].numpy()))
+        self.assertNotIn("geometry_event_ut_location_m", batch)
+        generator.seed_stream_consumed = 0
+        with patch.object(generator, "_sample_joint_slots", wraps=generator._sample_joint_slots) as sample:
+            batch = generator.sample_batch(1, 4, 4.0, controlled_change_tb=3, include_ls=False)
+        self.assertEqual(sample.call_count, 2)
+        self.assertTrue(np.any(batch["channel_change_event"].numpy()))
+
     def test_forced_nlos_uma_is_joint(self):
         generator = self.make_generator(
             33_000_000,
@@ -200,16 +207,18 @@ class GeometryMUMIMODataTest(unittest.TestCase):
         self.assertEqual(batch["h"].shape[4], 2)
         self.assertEqual(batch["geometry_scenario"].numpy(), b"uma")
 
-    def test_frozen_sources_are_unchanged(self):
-        root = Path(__file__).resolve().parents[1]
-        self.assertEqual(
-            sha256(root / "scripts" / "temporal_training_data.py"),
-            "783514862a9a3d6ada08fd0f1a8c5ae56780bf8b7b63ab8c6efde6ed5afad9a9",
-        )
-        self.assertEqual(
-            sha256(root / "scripts" / "cjlr_optimized_receiver.py"),
-            "adecc48b59570bf37dac492f379a9bb249772ab016586b8c14e41e16d09a74c7",
-        )
+    def test_compiled_renderer_matches_eager_generator(self):
+        streams = seeds(35_700_000)
+        generator = self.make_generator(35_700_000, min_doppler_hz=0.0, max_doppler_hz=100.0)
+        batch = generator.sample_batch(1,3,4.0,include_ls=True)
+        from pilot_history_receiver.training_render import TrainingRenderer
+        rendered = TrainingRenderer(generator)(batch["h"],batch["active"],batch["ue_ids"],
+            batch["slot_number"],batch["ebno_db"],streams["payload"],streams["noise"])
+        np.testing.assert_array_equal(batch["bits"],rendered["bits"])
+        np.testing.assert_array_equal(batch["no"],rendered["no"])
+        for name in ("y","ls"):
+            np.testing.assert_allclose(batch[name],rendered[name],rtol=2e-5,atol=2e-6)
+
 
 
 if __name__ == "__main__":

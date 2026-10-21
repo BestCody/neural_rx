@@ -1,18 +1,34 @@
-#!/usr/bin/env python3
-
 from __future__ import annotations
-
-import math
 
 import numpy as np
 
-from temporal_benchmark_plan import decreasing_isotonic
-from temporal_benchmark_protocol import stage_method_names
-
-
 PERSISTENT = "candidate_persistent"
-RESET = "candidate_reset"
-MATCHED_K8 = "matched_cold_k8"
+REFERENCE_K8 = "frozen_cold_k8"
+TBLER_DEFINITION = "failed_active_user_blocks / evaluated_active_user_blocks"
+
+
+def payload_error_flags(hard_bits, crc_status, truth, active):
+    hard, truth = np.asarray(hard_bits, bool), np.asarray(truth, bool)
+    crc, active = np.asarray(crc_status, bool), np.asarray(active, bool)
+    if hard.ndim < 1 or hard.shape != truth.shape:
+        raise ValueError("Decoded and transmitted payload shapes differ")
+    if crc.shape != hard.shape[:-1] or active.shape != crc.shape:
+        raise ValueError("CRC and activity shapes must match payload blocks")
+    errors = np.any(hard != truth, axis=-1) & active
+    disagreement = np.logical_xor(errors, ~crc) & active
+    return errors, disagreement
+
+
+def crc_diagnostics(errors, disagreement):
+    errors, disagreement = np.asarray(errors, bool), np.asarray(disagreement, bool)
+    if errors.shape != disagreement.shape:
+        raise ValueError("CRC and payload-error shapes differ")
+    return {
+        "undetected_payload_errors": int(np.sum(errors & disagreement)),
+        "crc_failures_with_correct_payload": int(np.sum(~errors & disagreement)),
+    }
+
+
 def primary_snr_index(protocol: dict, stage: str) -> int:
     name = protocol["statistics"]["primary_snr_point"]
     points = protocol["stages"][stage]["snr_points"]
@@ -28,11 +44,18 @@ def window_slice(bounds: list[int], num_tbs: int) -> slice:
     return slice(first - 1, last)
 
 
-def episode_rates(
+def block_error_rate(errors, blocks, *, allow_empty=False):
+    errors, blocks = np.broadcast_arrays(np.asarray(errors, np.float64), np.asarray(blocks))
+    if np.any(blocks < 0) or (not allow_empty and np.any(blocks == 0)):
+        raise ValueError("Scoring window contains no active user blocks")
+    return np.divide(errors, blocks, out=np.full(errors.shape, np.nan), where=blocks > 0)
+
+
+def episode_counts(
     errors: np.ndarray,
     active: np.ndarray,
     window: slice,
-) -> np.ndarray:
+) -> tuple[np.ndarray, np.ndarray]:
     errors = np.asarray(errors, bool)
     active = np.asarray(active, bool)
     if errors.ndim != 5 or active.ndim != 4:
@@ -45,49 +68,61 @@ def episode_rates(
     selected_active = active[:, None, :, window, :]
     counts = np.sum(selected_error & selected_active, axis=(3, 4))
     blocks = np.sum(selected_active, axis=(3, 4))
-    return np.divide(
-        counts,
-        blocks,
-        out=np.zeros_like(counts, dtype=np.float64),
-        where=blocks > 0,
-    )
+    return counts, np.broadcast_to(blocks, counts.shape)
 
 
-def _bootstrap_units(
-    values: list[np.ndarray],
+def pooled_tbler(errors, active, window):
+    counts, blocks = episode_counts(errors, active, window)
+    return block_error_rate(counts.sum(axis=-1), blocks.sum(axis=-1))
+
+
+def _bootstrap_counts(
+    values: list[tuple[np.ndarray, np.ndarray]],
     condition_indices: list[int],
     draws: int,
     rng: np.random.RandomState,
-) -> tuple[float, np.ndarray, np.ndarray]:
+) -> tuple[np.ndarray, np.ndarray, float, np.ndarray]:
     runs = len(values)
     conditions = len(condition_indices)
-    if runs == 0 or conditions == 0:
-        raise ValueError("bootstrap requires runs and conditions")
-    points = np.zeros((runs, conditions), np.float64)
-    sampled = np.zeros((runs, conditions, draws), np.float64)
-    for run, value in enumerate(values):
-        value = np.asarray(value, np.float64)
-        if value.ndim != 3:
-            raise ValueError("bootstrap values must be condition, SNR, episode")
-        for position, condition in enumerate(condition_indices):
-            episodes = np.mean(value[condition], axis=0)
-            points[run, position] = float(np.mean(episodes))
-            selection = rng.randint(
-                0, len(episodes), size=(int(draws), len(episodes))
-            )
-            sampled[run, position] = np.mean(
-                episodes[selection], axis=1
-            )
-    training_selection = rng.randint(0, runs, size=(int(draws), runs))
-    by_draw = np.transpose(sampled, (2, 0, 1))
-    chosen = np.take_along_axis(
-        by_draw,
-        training_selection[:, :, None],
-        axis=1,
-    )
-    mean_samples = np.mean(chosen, axis=(1, 2))
-    condition_samples = np.mean(chosen, axis=1)
-    return float(np.mean(points)), mean_samples, condition_samples
+    if runs == 0 or conditions == 0 or draws < 1:
+        raise ValueError("bootstrap requires runs, conditions, and draws")
+    selected = []
+    for counts, blocks in values:
+        if counts.ndim != 3 or blocks.shape != counts.shape or counts.shape[-1] == 0:
+            raise ValueError("bootstrap counts must be term, condition, episode")
+        selected.append((counts[:, condition_indices], blocks[:, condition_indices]))
+    counts = sum(value.sum(axis=-1) for value, _ in selected)
+    blocks = sum(value.sum(axis=-1) for _, value in selected)
+    points = block_error_rate(counts, blocks).sum(axis=0)
+    sampled_counts = np.zeros((int(draws), *counts.shape), np.float64)
+    sampled_blocks = np.zeros_like(sampled_counts)
+    for _ in range(runs):
+        chosen_runs = rng.randint(0, runs, size=int(draws))
+        for run, (numerator, denominator) in enumerate(selected):
+            rows = np.flatnonzero(chosen_runs == run)
+            if len(rows) == 0:
+                continue
+            episodes = numerator.shape[-1]
+            for condition in range(conditions):
+                selection = rng.randint(0, episodes, size=(len(rows), episodes))
+                sampled_counts[rows, :, condition] += numerator[:, condition][:, selection].sum(axis=-1).T
+                sampled_blocks[rows, :, condition] += denominator[:, condition][:, selection].sum(axis=-1).T
+    valid = np.all(sampled_blocks > 0, axis=(1, 2))
+    if not np.any(valid):
+        raise ValueError("No bootstrap samples contain active blocks in every scoring window")
+    samples = block_error_rate(sampled_counts[valid], sampled_blocks[valid]).sum(axis=1)
+    pooled = float(block_error_rate(counts.sum(axis=-1), blocks.sum(axis=-1)).sum())
+    pooled_samples = block_error_rate(sampled_counts[valid].sum(axis=-1),
+                                     sampled_blocks[valid].sum(axis=-1)).sum(axis=-1)
+    return points, samples, pooled, pooled_samples
+
+
+def _difference_counts(arrays, left, right, window, snr_index):
+    counts, blocks = episode_counts(arrays[f"errors_{left}"], arrays["active"], window)
+    if right is not None:
+        other, _ = episode_counts(arrays[f"errors_{right}"], arrays["active"], window)
+        counts = counts - other
+    return counts[:, snr_index], blocks[:, snr_index]
 
 
 def paired_summary(
@@ -108,30 +143,19 @@ def paired_summary(
     differences = []
     snr_index = primary_snr_index(protocol, stage)
     for arrays in runs:
-        left_rate = episode_rates(
-            arrays[f"errors_{left}"], arrays["active"], window
-        )
-        right_rate = episode_rates(
-            arrays[f"errors_{right}"], arrays["active"], window
-        )
-        differences.append(
-            (left_rate - right_rate)[:, snr_index:snr_index + 1]
-        )
-    point, samples, condition_samples = _bootstrap_units(
+        counts, blocks = _difference_counts(arrays, left, right, window, snr_index)
+        differences.append((counts[None], blocks[None]))
+    points, condition_samples, point, samples = _bootstrap_counts(
         differences, core, draws, rng
     )
-    condition_points = {
-        name: float(np.mean([
-            np.mean(value[index]) for value in differences
-        ]))
-        for name, index in zip(protocol["core_conditions"], core)
-    }
+    condition_points = dict(zip(protocol["core_conditions"], map(float, points)))
     worst_samples = np.max(condition_samples, axis=1)
     return {
         "left": left,
         "right": right,
         "difference": point,
         "difference_percentage_points": 100.0 * point,
+        "bootstrap_valid_samples": len(samples),
         "ci95": [
             float(np.quantile(samples, 0.025)),
             float(np.quantile(samples, 0.975)),
@@ -158,23 +182,21 @@ def method_summary(
     names = protocol["stages"][stage]["condition_names"]
     snr_index = primary_snr_index(protocol, stage)
     per_condition = {}
-    per_condition_all_snr = {}
+    counts = [episode_counts(arrays[f"errors_{method}"], arrays["active"], window)
+              for arrays in runs]
+    failures = sum(value.sum(axis=-1) for value, _ in counts)
+    blocks = sum(value.sum(axis=-1) for _, value in counts)
+    values = block_error_rate(failures, blocks)
     for index, name in enumerate(names):
-        values = [
-            episode_rates(
-                arrays[f"errors_{method}"], arrays["active"], window
-            )[index]
-            for arrays in runs
-        ]
-        per_condition[name] = float(np.mean([
-            value[snr_index] for value in values
-        ]))
-        per_condition_all_snr[name] = float(np.mean(values))
-    core = [per_condition[name] for name in protocol["core_conditions"]]
+        per_condition[name] = float(values[index, snr_index])
+    core = [names.index(name) for name in protocol["core_conditions"]]
+    core_errors = int(failures[core, snr_index].sum())
+    core_blocks = int(blocks[core, snr_index].sum())
     return {
-        "core_mean_tbler": float(np.mean(core)),
+        "core_tbler": float(block_error_rate(core_errors, core_blocks)),
+        "core_errors": core_errors,
+        "core_blocks": core_blocks,
         "per_condition_tbler": per_condition,
-        "per_condition_all_snr_mean_tbler": per_condition_all_snr,
     }
 
 
@@ -184,6 +206,7 @@ def late_drift_summary(
     stage: str,
     draws: int,
     rng: np.random.RandomState,
+    reference: str | None = None,
 ) -> dict | None:
     tbs = int(protocol["stages"][stage]["num_tbs"])
     if tbs < int(protocol["windows"]["late"][1]):
@@ -194,25 +217,22 @@ def late_drift_summary(
     stationary = [
         names.index(name) for name in protocol["stationary_conditions"]
     ]
+    if not stationary:
+        return None
     differences = []
     snr_index = primary_snr_index(protocol, stage)
     for arrays in runs:
-        early = episode_rates(
-            arrays[f"errors_{PERSISTENT}"], arrays["active"], mature
-        )
-        final = episode_rates(
-            arrays[f"errors_{PERSISTENT}"], arrays["active"], late
-        )
-        differences.append(
-            (final - early)[:, snr_index:snr_index + 1]
-        )
-    point, samples, _ = _bootstrap_units(
+        early, early_blocks = _difference_counts(arrays, PERSISTENT, reference, mature, snr_index)
+        final, final_blocks = _difference_counts(arrays, PERSISTENT, reference, late, snr_index)
+        differences.append((np.stack((final, -early)), np.stack((final_blocks, early_blocks))))
+    _, _, point, samples = _bootstrap_counts(
         differences, stationary, draws, rng
     )
     return {
-        "definition": "late TBLER minus mature TBLER",
+        "definition": "late TBLER minus mature TBLER" if reference is None else f"late minus mature persistent-vs-{reference} TBLER gap",
         "difference": point,
         "difference_percentage_points": 100.0 * point,
+        "bootstrap_valid_samples": len(samples),
         "ci95": [
             float(np.quantile(samples, 0.025)),
             float(np.quantile(samples, 0.975)),
@@ -220,131 +240,29 @@ def late_drift_summary(
     }
 
 
-def episode_outage_summary(
-    runs: list[dict[str, np.ndarray]],
-    protocol: dict,
-    stage: str,
-) -> dict:
-    tbs = int(protocol["stages"][stage]["num_tbs"])
-    window = window_slice(
-        protocol["stages"][stage]["scoring_window"], tbs
-    )
-    threshold = float(protocol["statistics"]["episode_outage_threshold"])
-    names = protocol["stages"][stage]["condition_names"]
-    snr_index = primary_snr_index(protocol, stage)
-    values = {}
-    for index, name in enumerate(names):
-        rates = [
-            episode_rates(
-                arrays[f"errors_{PERSISTENT}"], arrays["active"], window
-            )[index]
-            for arrays in runs
-        ]
-        values[name] = float(np.mean([
-            np.mean(rate[snr_index] > threshold) for rate in rates
-        ]))
-    return {
-        "threshold": threshold,
-        "per_condition": values,
-        "core_mean": float(np.mean([
-            values[name] for name in protocol["core_conditions"]
-        ])),
-    }
-
-
-def snr_crossing(
-    snrs: np.ndarray,
-    errors: np.ndarray,
-    blocks: np.ndarray,
-    target: float,
-) -> dict:
-    snrs = np.asarray(snrs, np.float64)
-    errors = np.asarray(errors, np.int64)
-    blocks = np.asarray(blocks, np.int64)
-    rates = (errors + 0.5) / (blocks + 1.0)
-    fitted = decreasing_isotonic(rates, blocks)
-    crossing = None
-    for index in range(len(snrs) - 1):
-        if fitted[index] >= target >= fitted[index + 1]:
-            if fitted[index] == fitted[index + 1]:
-                crossing = float((snrs[index] + snrs[index + 1]) / 2.0)
-            else:
-                fraction = (
-                    math.log(target) - math.log(fitted[index])
-                ) / (math.log(fitted[index + 1]) - math.log(fitted[index]))
-                crossing = float(
-                    snrs[index]
-                    + fraction * (snrs[index + 1] - snrs[index])
-                )
-            break
-    return {
-        "snr_at_target_db": crossing,
-        "target_bracketed": crossing is not None,
-        "raw_tbler": rates.tolist(),
-        "isotonic_tbler": fitted.tolist(),
-    }
-
-
-def snr_target_summary(
-    runs: list[dict[str, np.ndarray]],
-    protocol: dict,
-    stage: str,
-) -> dict:
-    target = float(protocol["objective"]["target_tbler"])
-    tbs = int(protocol["stages"][stage]["num_tbs"])
-    window = window_slice(
-        protocol["stages"][stage]["scoring_window"], tbs
-    )
-    result = {}
-    for condition_index, name in enumerate(
-        protocol["stages"][stage]["condition_names"]
-    ):
-        snrs = runs[0]["snr_db"][condition_index]
-        methods = {}
-        for method in (PERSISTENT, MATCHED_K8):
-            total_errors = np.zeros(len(snrs), np.int64)
-            total_blocks = np.zeros(len(snrs), np.int64)
-            for arrays in runs:
-                active = arrays["active"][condition_index, :, window]
-                for snr_index in range(len(snrs)):
-                    error = arrays[f"errors_{method}"][
-                        condition_index, snr_index, :, window
-                    ]
-                    total_errors[snr_index] += int(np.sum(error & active))
-                    total_blocks[snr_index] += int(np.sum(active))
-            methods[method] = snr_crossing(
-                snrs, total_errors, total_blocks, target
-            )
-        candidate = methods[PERSISTENT]["snr_at_target_db"]
-        baseline = methods[MATCHED_K8]["snr_at_target_db"]
-        result[name] = {
-            "methods": methods,
-            "candidate_minus_matched_k8_db": (
-                None if candidate is None or baseline is None
-                else float(candidate - baseline)
-            ),
-        }
-    return result
-
-
 def adaptation_summary(
     runs: list[dict[str, np.ndarray]],
     protocol: dict,
     stage: str,
+    reference: str = REFERENCE_K8,
 ) -> dict | None:
     tbs = int(next(iter(runs))["active"].shape[2])
     if tbs < 64:
         return None
     name = "controlled_topology_change"
-    index = protocol["stages"][stage]["condition_names"].index(name)
+    names = protocol["stages"][stage]["condition_names"]
+    if name not in names:
+        return None
+    index = names.index(name)
     snr_index = primary_snr_index(protocol, stage)
-    traces = []
+    failures = np.zeros(tbs, np.int64)
+    blocks = np.zeros(tbs, np.int64)
     for arrays in runs:
         active = arrays["active"][index]
         candidate = arrays[f"errors_{PERSISTENT}"][
             index, snr_index:snr_index + 1
         ]
-        baseline = arrays[f"errors_{MATCHED_K8}"][
+        baseline = arrays[f"errors_{reference}"][
             index, snr_index:snr_index + 1
         ]
         candidate_error = (candidate & active[None]).astype(np.int64)
@@ -353,26 +271,23 @@ def adaptation_summary(
             candidate_error - baseline_error, axis=(0, 1, 3)
         )
         denominator = np.sum(active, axis=(0, 2)) * candidate.shape[0]
-        traces.append(np.divide(
-            numerator,
-            denominator,
-            out=np.zeros(tbs, np.float64),
-            where=denominator > 0,
-        ))
-    trace = np.mean(traces, axis=0)
+        failures += numerator
+        blocks += denominator
+    trace = block_error_rate(failures, blocks, allow_empty=True)
     immediate = window_slice(
         protocol["windows"]["immediate_post_change"], tbs
     )
     late = window_slice(protocol["windows"]["late_post_change"], tbs)
     result = {
-        "definition": "candidate minus matched-K8 TBLER",
-        "per_tb_gap": trace.tolist(),
-        "immediate_mean_gap": float(np.mean(trace[immediate])),
-        "late_mean_gap": float(np.mean(trace[late])),
-        "post_change_excess_area": float(np.sum(trace[immediate.start:])),
+        "definition": f"candidate minus {reference} TBLER",
+        "per_tb_gap": [None if np.isnan(value) else float(value) for value in trace],
+        "immediate_mean_gap": float(block_error_rate(failures[immediate].sum(), blocks[immediate].sum())),
+        "late_mean_gap": float(block_error_rate(failures[late].sum(), blocks[late].sum())),
+        "post_change_excess_area": (float(np.sum(trace[immediate.start:]))
+                                    if np.all(blocks[immediate.start:] > 0) else None),
     }
     result["schedule_reentry"] = schedule_reentry_summary(
-        runs, protocol, stage
+        runs, protocol, stage, reference=reference
     )
     return result
 
@@ -382,6 +297,7 @@ def schedule_reentry_summary(
     protocol: dict,
     stage: str,
     horizon: int = 4,
+    reference: str = REFERENCE_K8,
 ) -> dict:
     index = protocol["stages"][stage]["condition_names"].index(
         "schedule_gap_reentry"
@@ -394,7 +310,7 @@ def schedule_reentry_summary(
         active = arrays["active"][index]
         ue_ids = arrays["ue_ids"][index]
         candidate = arrays[f"errors_{PERSISTENT}"][index, snr_index]
-        baseline = arrays[f"errors_{MATCHED_K8}"][index, snr_index]
+        baseline = arrays[f"errors_{reference}"][index, snr_index]
         for episode in range(active.shape[0]):
             seen = set()
             previous = set()
@@ -425,14 +341,9 @@ def schedule_reentry_summary(
                         counts[lag] += 1
                 seen |= current
                 previous = current
-    trace = np.divide(
-        sums,
-        counts,
-        out=np.full(int(horizon), np.nan, np.float64),
-        where=counts > 0,
-    )
+    trace = block_error_rate(sums, counts, allow_empty=True)
     return {
-        "definition": "candidate minus matched-K8 TBLER after UE re-entry",
+        "definition": f"candidate minus {reference} TBLER after UE re-entry",
         "event_count": int(event_count),
         "samples_per_lag": counts.tolist(),
         "per_lag_gap": [None if np.isnan(value) else float(value) for value in trace],
@@ -440,210 +351,3 @@ def schedule_reentry_summary(
             None if np.all(np.isnan(trace)) else float(np.nansum(trace))
         ),
     }
-
-
-def latency_summary(
-    runs: list[dict[str, np.ndarray]], protocol: dict
-) -> dict:
-    timing = protocol["execution"]["latency"]
-    methods = timing["candidate_methods"] + timing["reference_methods"]
-    summaries = {}
-    for method in methods:
-        values = np.concatenate([
-            np.asarray(arrays[f"latency_ms_{method}"], np.float64)
-            for arrays in runs
-        ])
-        summaries[method] = {
-            "samples": int(len(values)),
-            "p50_ms": float(np.quantile(values, 0.50)),
-            "p95_ms": float(np.quantile(values, 0.95)),
-        }
-    candidate = summaries["candidate_persistent"]
-    relative = {}
-    for method in timing["reference_methods"]:
-        reference = summaries[method]
-        relative[method] = {
-            "p50_ratio": candidate["p50_ms"] / reference["p50_ms"],
-            "p95_ratio": candidate["p95_ms"] / reference["p95_ms"],
-            "p50_delta_ms": candidate["p50_ms"] - reference["p50_ms"],
-            "p95_delta_ms": candidate["p95_ms"] - reference["p95_ms"],
-        }
-    return {
-        **candidate,
-        "reference_method": protocol["ranking"]["latency_reference"],
-        "methods": summaries,
-        "relative_to": relative,
-    }
-
-
-def confirmation_precision_summary(
-    protocol: dict,
-    stage: str,
-    episodes: int,
-    k8_gap: dict,
-    memory_gain: dict,
-) -> dict | None:
-    if stage != "confirmation":
-        return None
-    target = float(protocol["statistics"]["confirmation_ci_half_width"])
-    intervals = {
-        "worst_core_k8_gap": k8_gap["worst_condition_ci95"],
-        "memory_gain": memory_gain["ci95"],
-    }
-    half_widths = {
-        name: 0.5 * (float(bounds[1]) - float(bounds[0]))
-        for name, bounds in intervals.items()
-    }
-    observed = max(half_widths.values())
-    schedule = [
-        int(value)
-        for value in protocol["stages"][stage]["episode_schedule"]
-    ]
-    remaining = [value for value in schedule if value > int(episodes)]
-    target_met = observed <= target
-    return {
-        "episodes_per_condition": int(episodes),
-        "target_ci_half_width": target,
-        "half_widths": half_widths,
-        "target_met": bool(target_met),
-        "maximum_reached": not remaining,
-        "next_episode_count": (
-            None if target_met or not remaining else remaining[0]
-        ),
-    }
-
-
-def validate_run_group(payloads: list[dict], arrays: list[dict], protocol: dict):
-    if not payloads or len(payloads) != len(arrays):
-        raise ValueError("run group is empty or incomplete")
-    manifest = payloads[0]["candidate"]
-    stage = payloads[0]["stage"]
-    manifest_hash = manifest["manifest_sha256"]
-    expected_seeds = set(manifest["training"]["seeds"])
-    actual_seeds = set()
-    reference_fingerprints = arrays[0]["episode_fingerprint"]
-    reference_snr = arrays[0]["snr_db"]
-    for payload, values in zip(payloads, arrays):
-        if payload["stage"] != stage:
-            raise ValueError("candidate stages differ")
-        if payload["candidate"]["manifest_sha256"] != manifest_hash:
-            raise ValueError("candidate manifests differ")
-        seed = int(payload["training_seed"])
-        if seed in actual_seeds:
-            raise ValueError("duplicate candidate training seed")
-        actual_seeds.add(seed)
-        if not np.array_equal(
-            values["episode_fingerprint"], reference_fingerprints
-        ):
-            raise ValueError("training seeds saw different episodes")
-        if not np.array_equal(values["snr_db"], reference_snr):
-            raise ValueError("training seeds saw different SNRs")
-    required = int(protocol["stages"][stage]["required_training_seeds"])
-    if actual_seeds != expected_seeds or len(actual_seeds) != required:
-        raise ValueError("training-seed coverage differs")
-    return manifest, stage
-
-
-def score_run_group(
-    payloads: list[dict],
-    arrays: list[dict[str, np.ndarray]],
-    protocol: dict,
-) -> dict:
-    manifest, stage = validate_run_group(payloads, arrays, protocol)
-    draws = int(protocol["statistics"]["bootstrap_samples"])
-    rng = np.random.RandomState(20_261_220)
-    k8_gap = paired_summary(
-        arrays, PERSISTENT, MATCHED_K8, protocol, stage, draws, rng
-    )
-    memory_gain = paired_summary(
-        arrays, RESET, PERSISTENT, protocol, stage, draws, rng
-    )
-    result = {
-        "candidate_id": manifest["candidate_id"],
-        "candidate_manifest_sha256": manifest["manifest_sha256"],
-        "stage": stage,
-        "training_seeds": sorted(payload["training_seed"] for payload in payloads),
-        "methods": {
-            method: method_summary(arrays, method, protocol, stage)
-            for method in stage_method_names(protocol, stage)
-        },
-        "comparisons": {
-            "candidate_gap_to_matched_k8": k8_gap,
-            "memory_gain": memory_gain,
-        },
-        "late_drift": late_drift_summary(
-            arrays, protocol, stage, draws, rng
-        ),
-        "episode_outage": episode_outage_summary(
-            arrays, protocol, stage
-        ),
-        "adaptation": adaptation_summary(arrays, protocol, stage),
-        "latency": latency_summary(arrays, protocol),
-        "snr_at_target": (
-            None if len(protocol["stages"][stage]["snr_points"]) < 3
-            else snr_target_summary(arrays, protocol, stage)
-        ),
-        "registration": manifest["registration"],
-    }
-    result["confirmation_precision"] = confirmation_precision_summary(
-        protocol,
-        stage,
-        int(arrays[0]["active"].shape[1]),
-        k8_gap,
-        memory_gain,
-    )
-    return result
-
-
-def pareto_frontier(scores: list[dict]) -> list[str]:
-    metrics = {}
-    for score in scores:
-        gap = score["comparisons"]["candidate_gap_to_matched_k8"]
-        metrics[score["candidate_id"]] = (
-            gap["worst_condition_difference"],
-            gap["difference"],
-            -score["comparisons"]["memory_gain"]["difference"],
-            _latency_rank_value(score),
-        )
-    frontier = []
-    for candidate, point in metrics.items():
-        dominated = False
-        for other, comparison in metrics.items():
-            if other == candidate:
-                continue
-            no_worse = all(a <= b for a, b in zip(comparison, point))
-            strictly = any(a < b for a, b in zip(comparison, point))
-            if no_worse and strictly:
-                dominated = True
-                break
-        if not dominated:
-            frontier.append(candidate)
-    return sorted(frontier)
-
-
-def rank_frontier(scores: list[dict]) -> list[str]:
-    frontier = set(pareto_frontier(scores))
-
-    def key(score):
-        gap = score["comparisons"]["candidate_gap_to_matched_k8"]
-        return (
-            gap["worst_condition_difference"],
-            gap["difference"],
-            -score["comparisons"]["memory_gain"]["difference"],
-            _latency_rank_value(score),
-            score["candidate_id"],
-        )
-
-    return [
-        score["candidate_id"]
-        for score in sorted(
-            (value for value in scores if value["candidate_id"] in frontier),
-            key=key,
-        )
-    ]
-
-
-def _latency_rank_value(score: dict) -> float:
-    latency = score["latency"]
-    reference = latency["reference_method"]
-    return float(latency["relative_to"][reference]["p95_ratio"])

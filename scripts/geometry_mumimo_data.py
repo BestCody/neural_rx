@@ -24,8 +24,6 @@ def azimuth_geometry(ut_loc, bs_loc):
         delta[..., 1], delta[..., 0]
     )), 360.0)
     users = ut_loc.shape[1]
-    if users < 2:
-        return angles, np.full([ut_loc.shape[0]], 180.0)
     difference = np.abs(angles[:, :, None] - angles[:, None, :])
     difference = np.minimum(difference, 360.0 - difference)
     diagonal = np.arange(users)
@@ -93,7 +91,7 @@ class GeometryAwareMUMIMOGenerator(TemporalTrainingDataGenerator):
             **kwargs,
         )
 
-    def _make_umi(self, profile):
+    def _make_channel(self, profile):
         carrier = self.p.carrier_frequency
         antennas = int(self.p.num_rx_antennas)
         if antennas == 1:
@@ -244,34 +242,8 @@ class GeometryAwareMUMIMOGenerator(TemporalTrainingDataGenerator):
             "steady": steady_metadata,
             "event": event_metadata,
         }
-        self._update_profile_metadata(steady_metadata, event_metadata)
         return steady
 
-    def _update_profile_metadata(self, steady, event):
-        locations = steady["ut_location_m"].numpy()[0]
-        azimuth = steady["azimuth_deg"].numpy()[0]
-        los = steady["los"].numpy()[0]
-        event_locations = (
-            None if event is None else event["ut_location_m"].numpy()[0]
-        )
-        self.ue_profiles = []
-        for ue_id in range(self.ue_pool_size):
-            self.ue_profiles.append({
-                "ue_id": ue_id,
-                "split_role": self.channel_role,
-                "steady_family": self.geometry_scenario,
-                "steady_model": self.geometry_scenario.upper(),
-                "steady_position_m": locations[ue_id].tolist(),
-                "steady_azimuth_deg": float(azimuth[ue_id]),
-                "steady_los": bool(los[ue_id]),
-                "harsh_family": self.geometry_scenario,
-                "harsh_model": self.geometry_scenario.upper(),
-                "harsh_position_m": (
-                    None
-                    if event_locations is None
-                    else event_locations[ue_id].tolist()
-                ),
-            })
 
     def sample_batch(self, *args, **kwargs):
         result = super().sample_batch(*args, **kwargs)

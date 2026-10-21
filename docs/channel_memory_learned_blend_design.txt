@@ -1,0 +1,878 @@
+STATUS: Implemented and trained. Current commands and selected checkpoint are in
+README.txt. This document records the design rationale at implementation time;
+references to predecessor experiments are historical and those archives have
+been removed. Current campaign evidence is retained separately.
+
+LEARNED BLEND FOR THE CURRENT K2 RECEIVER
+Design only — refined 2026-10-19
+
+Decision
+========
+
+Replace the final evidence combination with one learned, per-bit blend of
+the K2 and physical predictions. Preserve the existing decoder-assisted
+correction. Implement the blend inside the current native correction kernel.
+Train the complete receiver jointly after correctness and latency checks.
+
+The recommended gate compares the two corrected inputs that LDPC could
+receive AND observes whether any scored symbol explanation fits the received
+signal well. It uses eight inputs and 81 parameters, with one additional
+fit statistic extracted during the existing physical-score calculation.
+Decoder continuation, complete gradients, GPU ownership and training remain
+part of this single design. This specification replaces the preceding draft.
+
+The final design review retains one gate and eight inputs. It does not add
+another correction-strength gate, probability-mixture branch or context
+network. The fit input is an explicitly unvalidated hypothesis; the diagnostic
+supports access to physical predictions, not this particular selector. Further
+refinement below concentrates on the decision's limitations, exact training
+semantics, and avoiding repeated GPU work.
+
+This is one proposed production architecture, not a collection of parallel
+receivers. Existing trained checkpoints and experiment source snapshots remain
+immutable evidence. No receiver, configuration, checkpoint, test, or training
+code was changed for this document; no new experiment was launched.
+
+1. Evidence and limits
+======================
+
+Source: experiments/20261019_physical_prediction_substitution/
+Selected checkpoint: models/calibrated_feedback_ldpc18_joint_20261018/
+                     checkpoint_005000/receiver.weights.h5
+SHA256: 25dcfdd5f932ff40b1aa5c1c214b1f0743eda05a22c602ae4ce9093d2c811074
+
+Primary development result, 12,000 active user blocks, TB17-64:
+  Current receiver:       1,977 failures, 16.4750% TBLER
+  Physical substitution:  1,903 failures, 15.8583% TBLER
+  Frozen Cold K8:         1,839 failures, 15.3250% TBLER
+The substitution rescued 88 failures and harmed 14 successes. Forty-three
+rescues were also decoded by K8; 45 were missed by K8. Rescues occurred in
+15 condition/episode combinations, not 88 independent channel realizations.
+
+All eight development conditions together: 340 rescues and 31 harms.
+  Condition              Current  Substitution  K8    Rescued  Harmed
+  TDL-B100                   309           293  445         23       7
+  TDL-C300                   336           310  527         28       2
+  UMi                        575           526  549         51       2
+  UMa                        532           535  487          9      12
+  Channel change             131           111   93         20       0
+  Scheduling/re-entry        739           731  710          8       0
+  Close LOS                  406           290  333        116       0
+  Unequal power              257           180  183         85       8
+
+The eight-condition aggregate must not replace the declared primary four-
+condition metric after observing these results. Anchors differ by condition.
+
+The premise is supported: information already computed by the physical
+operation can improve decoding when used directly. This is not proof that
+a learned gate can identify the beneficial cases or that the physical model
+is accurate everywhere. K2 and physical predictions use the same received
+signal and learned channel estimates; they are correlated.
+
+Even a perfect choice between the two COMPLETE decoded block outputs leaves
+1,889 primary failures, 50 more than K8. Thus merely learning a block-level
+switch is insufficient on this bank. A bit-level combination and joint weight
+adaptation can produce different decoder outputs, but that improvement is
+unproved. The gate is a credible next mechanism, not a guaranteed solution.
+
+2. Precise inference equation
+=============================
+
+All variables below use the same target-bit order and sign convention:
+  L: clipped K2 input actually used for the first eight LDPC iterations.
+  P: physical-only bit margin from the already cached pair scores.
+  Q: conditioned physical margin using calibrated first-stage code evidence.
+     The target bit's own code evidence is excluded from this marginal.
+  D = Q-P: existing decoder-assisted correction before its learned strength.
+  s = sigmoid(correction_logit): existing learned global correction strength.
+  a: new learned scalar in [0,1] for this target bit.
+
+Let U = s*D denote the correction actually applied, and define:
+  B0 = L+U: current corrected input.
+  B1 = P+U: physical-substitution corrected input.
+
+Current:  J_old = B0
+Proposed: J_new = J_old + a*(P-L)
+                 = (1-a)*B0 + a*B1
+                 = (1-a)*L + a*P + U
+
+The new term replaces part of L; it does not add another full copy of P.
+The complete input is between B0 and B1, not necessarily between L and P.
+This is a blend of bit log-likelihood ratios, not a mixture of probabilities
+and not a claim that the two sources are statistically independent.
+
+In particular, a=0.5 does not mean a 50% probability that either decoded bit
+is correct, nor does it generally give the average of their probabilities.
+For illustrative corrected inputs B0=20 and B1=-1, halfway blending still
+favors the first bit value. The input changes sign only when a exceeds 20/21.
+The gate therefore needs to learn confidence calibration as well as source
+preference. Do not interpret its average value as a physical reliability rate.
+
+Retain this LLR combination because it contains the measured substitution
+and current-control endpoints and fits the existing decoder-input contract.
+A probability mixture would interpolate the same endpoints differently,
+with different gradients and additional nonlinear arithmetic. Neither the
+diagnostic nor this analysis establishes it as better; it is not added as
+another production mode.
+
+Maintain the original computation of E = posterior_after_8 - L, its learned
+calibration, Q, and s. Do not recompute E from the blended input, replace L
+inside the existing calibration, or run another physical-score calculation.
+These would be additional, untested changes to the meaning of the correction.
+
+P remains unclipped before blending, matching the diagnostic. L retains its
+existing first-stage clipping. Keep the final Sionna decoder's normal clipping;
+do not silently add a new P temperature, limiter, rescaling, or clipping rule.
+Untransmitted, filler, padded, and inactive positions retain their existing
+values. Only valid transmitted target-bit positions receive a replacement.
+
+Compute J_old with its existing floating-point operation order, then add the
+replacement. This supports direct endpoint comparisons with the diagnostic.
+Exact endpoint checks still need execution validation; algebra alone does not
+establish bitwise equivalence after compiler and reduction changes.
+
+3. Gate inputs: corrected choices and physical fit
+===================================================
+
+The previous draft fed the unscaled difference D into the gate. That obscures
+how much correction reaches LDPC when learned strength s changes. It also
+described confidence before correction, although correction can reverse or
+cancel a prediction. Instead, derive features from B0, B1 and U.
+
+For example, L=+4, P=-2, U=-3 gives B0=+1 and B1=-5. The useful question is
+which of +1 and -5 should enter the decoder, including their interaction with
+the common correction; the gate must not only compare +4 with -2. These are
+illustrative values, not thresholds or measured examples.
+
+Let C be the existing positive decoder LLR limit. Use one common scale:
+  T = C + abs(B0) + abs(B1) + abs(U)
+  b0 = B0/T, b1 = B1/T, u = U/T
+  endpoint_features = [abs(b0), abs(b1), b0*b1, abs(b1-b0),
+                       abs(u), b0*u, b1*u]
+
+The first four features describe endpoint confidence, agreement and distance.
+The last three describe the correction and whether it reinforces or opposes
+each endpoint. U remains correlated evidence, not an independent reliability
+measurement. The physical prediction includes uncertainty, but a large margin
+is not proof that the assumed channel model is correct.
+
+Use a common denominator rather than independently saturating three scalars.
+It preserves their relative sizes when they exceed C, and uses one reciprocal.
+Absolute scale is still represented: abs(b0)+abs(b1)+abs(u) equals (T-C)/T.
+Thus this is not normalization that erases confidence altogether. Do not clip
+B0, B1 or U to C before extracting features. Cancellation before the decoder's
+final clipping can matter. Differentiate through T as well.
+
+The seven endpoint features alone have an information limit. Each physical
+bit margin is a difference of log-sums of pair scores. Adding the same offset
+to all pair scores leaves P unchanged; Q is also unchanged when its evidence
+is held fixed. Thus relative margins do not reveal a uniformly poor absolute
+fit. A larger network seeing only those margins cannot reconstruct the lost
+offset. K2's scalar prediction is not a guaranteed substitute for that context.
+
+Add ONE dimensionless fit feature, calculated from values already evaluated
+for physical scoring. For each candidate symbol combination k:
+  d_k = sum across receive antennas of squared whitened residual magnitudes
+  physical_score_k = -logdet(covariance_for_k) - d_k
+  rho = min_k(d_k) / number_of_receive_antennas
+  fit = rho / (1+rho)
+
+Whitening is the existing adjustment for receiver noise and channel uncertainty.
+It is already performed; no new matrix factorization or symbol search is needed.
+The same fit value serves all target bits at that pair/data position. It is
+current-TB evidence, not another observation retained across TBs.
+
+Interpretation: if even the smallest normalized mismatch is large, none of the
+tested combinations fits closely under the assumed uncertainty. A small value
+does NOT prove that the winning bits or channel estimate are correct. An
+incorrect combination can also fit well. The gate learns how to use this
+feature alongside the margins; there is no fit threshold, forced fallback,
+or rule that a low value must select physical evidence.
+
+Use residual energy, not raw maximum pair score: the latter also includes a
+log-determinant that changes with channel/noise scale. Use the MINIMUM residual
+across candidates, not residual at the maximum-score candidate. The latter
+can jump at score ties when candidate covariance determinants differ. The
+minimum is continuous, though its derivative is piecewise defined.
+
+There are limits to this statistic. Different constellation points can have
+different uncertainty; a high-uncertainty candidate may make rho small even
+when it has low total likelihood. More candidates also make a small minimum
+easier to obtain. Antenna normalization does not turn rho into a calibrated
+error probability or make all modulations and user counts interchangeable.
+It is a one-sided clue about poor fit, not a certificate of reliable evidence.
+No new operating-point threshold or modulation-specific learned gate is added.
+
+The existing loss on channel uncertainty remains important: the learned
+covariance influences both P/Q and this feature. Inflating covariance could
+artificially reduce rho. Channel supervision and decoded losses constrain
+that behavior, but do not prove it cannot occur. Do not detach covariance to
+hide the issue or introduce an unvalidated covariance clamp in this pass.
+
+A concrete counterexample explains why fit must remain an unrestricted gate
+input. For an illustrative single-antenna Gaussian score, squared residual 4
+with variance 1 gives d=4 and score -4. The same residual with variance 100
+gives d=0.04 but score approximately -4.65 because of its log-determinant
+penalty. The minimum residual selects the latter even though its full score
+is worse. These are explanatory numbers, not recorded radio measurements.
+
+The feature intentionally asks whether ANY candidate is close under its own
+uncertainty; it does not report the residual of the most likely candidate.
+Do not force the network to prefer physical evidence monotonically as rho
+decreases. The learned coefficient may use or ignore it in conjunction with
+the endpoint features. Low rho cannot distinguish an excellent estimate from
+an excessively permissive uncertainty model.
+
+Alternatives do not remove all assumptions for free. Residual at the best
+full-score candidate can be discontinuous at candidate switches. Averaging
+residuals with likelihood weights changes both the reduction and its gradient.
+A noise-referenced absolute likelihood needs a defined reference scale and
+has its own dependence on constellation and candidate count. None has been
+validated here. Keep the defined minimum as a bounded hypothesis rather than
+repeatedly replacing it with another unmeasured statistic.
+
+Define f as the seven endpoint features followed by fit. One shared network
+produces a for each transmitted target bit:
+  hidden = ReLU(f * W1 + b_hidden)
+  a = sigmoid(hidden * w_out + b_out)
+  W1: [8,H], b_hidden: [H], w_out: [H], b_out: scalar; H=8 initially.
+
+Append fit without putting it into the denominator T for endpoint features.
+Setting its W1 row to zero can reproduce any gate from the preceding seven-
+feature definition. This preserves that representational ability; it does not
+guarantee that optimization finds the better solution or that latency is free.
+
+There are 10H+1 = 81 learned values. Eight is a declared hidden-width choice,
+not a measured optimum. No tensor dimension or parameter depends on the
+number of PRBs, physical UE identity, episode index or benchmark scenario.
+All users and bit positions share these parameters. Do not expose scenario
+names, SNR anchors, event labels, ground truth or historical error masks.
+
+Simultaneously negating L, P and U, with fit held fixed, leaves f and a
+unchanged and negates J.
+Thus the blend does not prefer bit zero or one, and the same rule works on
+either side of a consistent scrambling-sign conversion. This is a property
+of this combination, not a proof of symmetry of the whole receiver.
+
+Do not provide the target bit's raw LDPC extrinsic value or posterior as
+another gate input. Q already removes that bit's direct code prior. Keep that
+exclusion; do not add a route that reinserts the same prior through a gate.
+Other bits' evidence still comes from an iterative decoder and can be
+correlated with the target. The proposal does not promise independent messages.
+
+No extra covariance, memory-age, syndrome or neural-state grid enters the
+gate. The fit statistic adds information that relative margins discard, using
+existing physical work. Adding a broader context network now would create a
+different cost and training problem. The remaining hypothesis is that these
+four available scalars contain enough information for a useful local mixture.
+The substitution diagnostic did NOT measure the value of the new fit feature;
+its justification here is mathematical and architectural, not empirical.
+
+4. Exactly what blending can and cannot change
+==============================================
+
+A separate coefficient per bit can mix evidence within a failed block. LDPC
+can then produce a block that neither endpoint decoder produced. This is why
+the perfect whole-block chooser's 1,889 failures are not a lower bound for
+bit-level blending. Nor do they prove that bit-level blending will do better.
+
+For fixed upstream weights, J remains in the interval between B0 and B1:
+  - Opposite signs allow changing which bit value is preferred.
+  - Matching signs allow changing confidence, not that input's preferred bit.
+  - If P=L, the gate has no effect and its parameter/fit-path gradients are
+    zero for that bit. Gradients into P and Q need not be zero: changing the
+    underlying predictions can still help.
+  - If both endpoints are beyond the same decoder clipping limit, every blend
+    yields the same clipped input for that bit. It cannot help there directly.
+  - If the entire clipped input vector is identical, the retained state and
+    deterministic decoder produce the same output. Gate variation is then
+    irrelevant, even if its raw values look interesting.
+
+LDPC can correct a bit even when both its input endpoints have the wrong sign,
+using changes elsewhere in the code block. Joint training can also improve L,
+P, U and the first-eight state themselves. Neither is a guaranteed rescue.
+
+This is not an independent third detector, a new source of channel knowledge,
+or an extra neural round. It cannot identify every shared channel-model error.
+Adding a new gate for U or extrapolation outside the endpoint interval would
+change this hypothesis and lose the simple endpoint interpretation; neither
+is part of the recommended design.
+
+5. Decoder continuation and complete receiver flow
+===================================================
+
+  Current LS + seven valid raw pilot records per physical UE
+                           |
+                Existing learned channel model
+                           |
+              Initializer -> CGNN round 1 -> round 2
+                           |
+                      K2 input L
+                           |
+              LDPC 8 -> posterior and retained state S8
+                           |
+             Cached P + calibrated evidence -> Q, U
+                           |
+          B0, B1, U, physical fit -> small per-bit gate a
+                           |
+                 J = B0 + a*(P-L)
+                           |
+                LDPC 10 with inputs J and S8
+                           |
+                 Payload, CRC, memory commit
+
+This is dependency order, not a request to serialize physical preparation
+that is already scheduled independently. Keep current preparation and caching.
+
+The local Sionna 0.18 implementation was inspected: LDPCBPDecoder.call first
+combines the supplied channel input with the retained messages in _vn_update,
+then performs the check-node update. At an iteration boundary its state holds
+check-node results grouped by variable, despite the variable name msg_vn.
+The final marginal is the supplied channel input plus summed retained messages.
+
+Consequently J takes effect in the FIRST resumed iteration. Do not manually
+subtract old L from the saved state, add J-L to every edge, or restart decoding.
+Those operations would change the decoder. S8 does depend on old L through
+the first eight iterations, but it is not an extra literal copy of L waiting
+to be removed. The earlier vague statement that state "favors K2" should not
+be treated as evidence of an implementation defect.
+
+There is one final decoder call. Training must retain both gradient routes:
+through J, and through S8 into the first eight iterations and the detector.
+Final decoder clipping remains ordinary Sionna clipping with its true gradient;
+do not introduce a straight-through approximation to make gradients look larger.
+
+K=2 specifically counts CGNN iterations. Learned channel processing,
+calibration and this post-decoder gate are additional learned calculations.
+Describe them in the architecture and include them in receiver latency;
+do not describe the complete receiver as having only two neural operations.
+
+Memory still stores raw pilot observations. The gate has no cross-TB state.
+Keep identity routing, expiry, scheduling/re-entry, configuration resets, locks
+and transactional commit after successful completion. Bit predictions and gate
+values never enter another UE's memory or the next TB's history.
+
+Reset operation runs the same blend with current-only channel information.
+Invalid history is not a reason to disable it. A gain with reset as well as
+persistent memory is possible; the memory claim requires their separate
+same-weights comparison and must not be inferred from a blend gain alone.
+
+For more than two users, P includes the existing K2-based estimates of other
+users' interference. It is not an independent purely physical detector there.
+Preserve partner selection and the same blend equation. The wanted-target mask
+assigns each target to one pair route; apply U and replacement once per target,
+and add L once globally. A partner's evidence can matter even when that pair
+does not own the partner's output. Do not mask away such cross-user gradients.
+This does not extend today's supported radio layouts or certify untrained ones.
+
+6. Native execution, parallelism and latency budget
+====================================================
+
+Evaluate the gate inside PilotPairCorrection after Q is available. Read P
+from the existing cache and L from existing bit addresses. Store directly in
+the existing decoder-order output. Do not materialize full-grid features,
+hidden activations, blend coefficients, B0 or B1 in global memory for inference.
+
+Produce the fit statistic inside the ALREADY scheduled physical-score kernel:
+  - Reuse each computed squared residual. Keep the original subtraction order
+    for the physical score while separately summing residual energy. Replacing
+    repeated score subtractions with -logdet-sum(d) can change rounding and
+    must not silently change the inherited likelihood calculation.
+  - Reduce a per-thread minimum across the existing block. This adds residual
+    accumulation and a minimum reduction, not new residual evaluations, a
+    second constellation search or exponential operations for a soft minimum.
+  - Return rho in a separate [batch, data_positions] FP32 output for each
+    existing pair route. This is one extra scalar per position, not eight
+    or 56 feature values. It does require a small GPU buffer allocation.
+  - Keep the existing pair-score cache stride unchanged. Appending one float
+    to every row can spoil aligned row starts; a compact separate plane avoids
+    that unnecessary change to a much larger cache. At two-user 16-QAM it adds
+    one float alongside 264 existing floats per position, about 0.38% storage.
+  - Both outputs complete under the existing score-operation event. Retain
+    their buffers until correction completes, including cancellation/error
+    paths. No new stream, host wait or CPU copy is required.
+
+Do not recover d as -score-logdet for this statistic: subtracting large terms
+can lose accuracy, and d was available before that subtraction. Empty/disabled
+routes must return the declared output shapes and initialized data; invalid
+targets never interpret the placeholder rho as evidence of good physical fit.
+
+The current final bit loop assigns one thread to each bit. For two 16-QAM
+users that is only eight threads evaluating final bit expressions. Appending
+an entire serial MLP to each of these threads is not the recommended mapping.
+
+First factor the fit contribution, which is identical for all bits at this
+pair/data position:
+  prefix[h] = b_hidden[h] + W1[7,h]*fit
+  hidden[j,h] = ReLU(prefix[h] + sum over k=0..6 of f[j,k]*W1[k,h])
+
+Compute the H prefix values once per position and reuse them for every valid
+target bit. These H values occupy only per-block shared storage (32 bytes at
+H=8); do not cache a new H-value grid between the score and correction stages.
+There is no averaging of bit-specific information: only an exactly shared
+term is factored. All seven endpoint features remain separate for each bit.
+
+The prefix needs fit and weights but not Q. Place its calculation before the
+existing barrier that makes the conditioned marginals available, with explicit
+scratch ownership, so the design does not require an additional block barrier.
+Do not alias scratch still needed by scoring, calibration or backward replay.
+The canonical new-gate expression uses prefix first in both native code and
+its reference; mathematical reassociation alone does not prove bitwise equality.
+This does not authorize reassociating the inherited physical-score arithmetic.
+
+Then reuse the block cooperatively for the gate:
+  - Assign a group of lanes to each bit; for H=8, eight lanes compute the
+    eight hidden units in parallel. A leader computes and broadcasts f.
+  - W1 is feature-major [8,H], so neighboring hidden lanes read neighboring
+    weights. Each lane uses its shared prefix and seven per-bit feature terms.
+    Reduce the weighted hidden outputs, then one leader applies sigmoid and
+    writes that target's result.
+  - Derive group width from H and warp capacity; iterate over hidden units
+    or bits when necessary. There is no branch selecting a special learned
+    model for two users, 132 PRBs or a named benchmark.
+  - Padded/inactive groups still participate in required synchronization.
+    Never put a block barrier under a nonuniform target-validity condition.
+  - Keep the physical marginal reductions and their numerical definitions.
+    New gate reductions have a fixed order within a group.
+
+This is a concrete proposed mapping, not a measured claim about occupancy.
+Account for registers and shared memory in both forward and backward. Gate
+scratch must not inadvertently disable beneficial existing vector caching or
+reduce block residency enough to erase the margin. The launch derives its
+workspace from constellation, antenna count, H and device capacity.
+
+The 81 FP32 parameters occupy 324 bytes. They are current invocation inputs,
+not mutable process-global CUDA constants or host-cached weight values.
+Small per-block scratch and registers suffice; no separate neural inference
+launch, new CPU synchronization, physical-score pass, factorization, search
+or decoder iteration is required. Existing output initialization remains.
+
+Naive gate evaluation takes 72 network MACs per bit at H=8. Factoring fit
+takes 64 per bit plus eight once per pair/data position. With eight target
+bits at a two-user 16-QAM position, that is 520 rather than 576 network MACs,
+about 9.7% less GATE arithmetic. Counting even pilot positions as data gives
+a deliberately loose bound of 11,531,520 network MACs per TB at 132 PRBs and
+14 symbols, instead of 12,773,376 for the unfactored gate.
+This arithmetic count is not a latency prediction. Extra memory traffic and
+reduced GPU occupancy can dominate such a small network. Include the separate
+fit buffer and residual/minimum reductions in the latency accounting; they
+are not free merely because the pair search already exists. The 9.7% figure
+is not a receiver speedup; it is a reduction in one proposed addition's work.
+
+The latest complete timing was 42.5716 ms p95 against Cold K3's 43.4227 ms,
+a margin of about 0.8511 ms or 1.96%. That is the entire observed allowance,
+not a per-component budget or guarantee for a future run. Expect added work,
+not an inference speedup. The design is plausible within this allowance but
+has no demonstrated pass. No confident millisecond estimate is justified yet.
+
+Retain the exact timing contract: prepared FULL-GRID LS input to decoded
+payload, including transfers, memory work, detection, decoding, CRC and
+completion synchronization. Initial LS estimation AND initial interpolation
+are excluded. This is not raw received-grid timing or paper detector timing.
+Cold K3 retains 20 LDPC iterations and comparable shared execution. Rerun the
+complete comparison under the same conditions, rather than subtracting kernel
+measurements or spending the old margin as if it were invariant.
+
+Keep scratch owned by the invocation/TensorFlow outputs. No new locks or
+global mutable gate buffers are needed. Concurrent receiver instances cannot
+share writable scratch or history. Immutable weights may be read concurrently;
+independently trained models must not share mutable gate buffers. Existing
+per-instance memory transactions remain the ownership boundary.
+
+7. Full backward calculation
+=============================
+
+The cached forward P is stop-gradient in today's code. The custom native
+backward recomputes physical marginals and reconstructs their useful gradients.
+A differentiable-looking gate outside it would miss physical gradients unless
+that contract also changes. Implement the combination in both directions and
+do not differentiate the cache a second time.
+
+The gate is a(B0,B1,U,fit), with fit=rho/(1+rho).
+Let h=P-L. Let a0, a1 and aU be its partial derivatives with respect to these
+first three inputs, holding fit fixed and including their common normalization.
+Let af be its partial derivative with respect to fit. Define:
+  c0 = 1-a + h*a0
+  c1 = a + h*a1
+  cU = h*aU
+  w = c0+c1+cU = 1 + h*(a0+a1+aU)
+
+Treat L, P, Q and s as intermediate independent quantities. Then:
+  dJ/dL = c0
+  dJ/dP = c1 - s*w
+  dJ/dQ = s*w
+  dJ/ds = (Q-P)*w
+  dJ/drho = h*af / (1+rho)^2
+  dJ/d(gate parameters) = h * da/d(gate parameters)
+
+The extra factor w on the strength derivative is essential: changing strength
+changes both the added correction and what the gate sees. Keeping the earlier
+dJ/ds=Q-P would silently omit that path. Sigmoid(correction_logit) adds its
+usual derivative. Use zero subgradients at abs/ReLU kinks consistently with
+the independent reference; do not detach T, endpoint features, or U.
+
+These are local derivatives, not the whole receiver gradient. Seed both
+marginal backward calculations with them, then add paths through calibrated
+code evidence, L, P, first-stage posterior, channel estimates and uncertainty.
+For a constant gate they reduce to 1-a, a-s, s and Q-P as expected.
+
+Use one explicit residual meaning, R=U+a*(P-L), for native gradient bookkeeping.
+The native contribution to L excludes the outer identity: dR/dL=c0-1 before
+calibration/evidence chains. For a fused J=L+R output, the wrapper adds the
+identity exactly once. If its input is the posterior, also chain through
+E=active*(posterior-L), including subtraction from L. The unfused multi-user
+caller adds L+sum(R); it must not multiply R by s again. Keep shape and sign
+conversions explicit and update all native input/output and gradient indices.
+
+For zero E, Q=P under the existing calibration, yet a*(P-L) still supplies a
+direct physical learning route. The common physical score gradient must
+combine its appearances in P and Q before propagating to channel quantities;
+do not count the same score twice. The own-prior exclusion in Q remains.
+
+Fit is shared by the owned target bits at a pair/data position. Sum their
+incoming-gradient-weighted dJ/drho ONCE to obtain g_rho. Recompute residual
+energies in the native backward, just as physical margins are recomputed;
+the cached fit output remains a forward cache, not a detached training branch.
+
+The factored hidden prefix has a matching backward calculation. Let psi[j,h]
+be the loss derivative of hidden preactivation h for target bit j, including
+the incoming loss derivative, (P-L), sigmoid and ReLU derivatives. Then:
+  xi[h] = sum over owned target bits j of psi[j,h]
+  hidden_bias_gradient[h] += xi[h]
+  W1_fit_row_gradient[h] += fit * xi[h]
+  g_fit = sum over h of W1[7,h] * xi[h]
+  g_rho = g_fit / (1+rho)^2
+
+This is the same shared-feature gradient described above, not a second
+contribution to add to it. The other seven W1 rows retain their per-bit
+feature products; output-layer gradients retain their per-bit activations.
+Accumulate only owned target outputs into xi while preserving partner
+evidence gradients from the subsequent physical marginal calculation. Reduce
+in a defined order. Factoring does not introduce another variable, gradient
+normalization or division by the number of target bits. Dividing here would
+silently weaken learning at positions with more coded bits.
+
+For K minimizing candidates with exactly equal minimum d_k, use the symmetric
+gradient convention (average of active branches):
+  contribution to d(loss)/d(d_k) = g_rho / (N_receive_antennas * K)
+  for each minimizing k; zero for the other candidates.
+
+For a unique minimum, K=1. The derivative is not unique at ties; averaging
+the active branches avoids arbitrarily preferring the first pair/UE ordering.
+Do not define a hand-tuned near-tie tolerance. Numerical gradient checks must
+use ordinary non-tie points and separately verify this specified convention.
+
+The physical score is S_k=-logdet_k-d_k. If its existing score derivative is
+g_Sk, the residual-energy derivative becomes -g_Sk plus the fit contribution.
+The logdet derivative remains -g_Sk; fit has no independent logdet term.
+Inject the extra derivative into residual/whitening propagation, not blindly
+into g_Sk, which would introduce a spurious logdet gradient. Both routes still
+depend on the same covariance through whitening and must be combined there.
+
+Count tied minima and apply their contributions in a fixed reduction order.
+Any extra backward scratch must be included in the shared-memory budget; a
+forward cache input receives no second gradient if this native path already
+reconstructs its dependencies. Forward and recomputation must use the same
+residual-energy accumulation and normalization.
+
+The coded loss on pre-clipped J can still teach calibration when final LDPC
+clipping removes the payload derivative. This is an existing reason to retain
+both coded and decoded supervision, not a reason to bypass clipping. Both
+routes through final input J and state S8 must reach the trainable detector.
+
+Raw pilot measurements, schedules, index and constellation tables remain fixed.
+Keep gradients for learned channel-filter/uncertainty weights and history reads;
+do not resurrect the costly raw-observation gradients removed previously.
+
+Recompute small gate activations inside the backward work unit. Accumulate
+81 parameter sums per batch/cell in invocation-owned storage, then reduce in
+a defined order. No cross-block floating-point atomics. Disabled cells must
+initialize every new gradient output, including parameter and strength sums.
+Inactive target outputs have zero incoming gradients, but active targets can
+still require evidence gradients through other users. Preserve that distinction.
+Two-GPU accumulation keeps its existing global normalization and one Adam step.
+
+8. Joint training and initialization
+====================================
+
+Start from checkpoint_005000 above. Copy every inherited tensor exactly,
+including detector, channel mean/slopes, uncertainty, calibration and strength.
+The new blend variables alone are initialized. This is a new joint campaign,
+not continuation of an optimizer that has never seen the gate.
+
+Use seeded Glorot W1, zero hidden bias, and zero output weights/bias. Initially
+a=0.5 for every valid bit. This avoids random preference for either source
+while giving finite sigmoid derivatives. It is a neutral initialization, not
+a claim that the halfway mixture is optimal or matches parent outputs.
+
+All variables are trainable from update 1. One mathematical detail must be
+explicit: zero output weights make W1's first-update gradient zero; output
+weights/bias and the inherited receiver can learn immediately. Once output
+weights change, gradients reach W1. This is not a frozen training phase.
+Do not force a saturated endpoint, freeze the detector, train the gate alone,
+or impose a penalty keeping inherited weights near their starting values.
+
+Retain the current complete objective:
+  - Coded loss: equal average of BCE on initial K2 predictions, first-eight
+    posterior and final corrected input J.
+  - Payload loss: the current half mean bit loss / half normalized log-sum-exp
+    block-error surrogate after the final ten iterations.
+  - Channel uncertainty NLL with weight 0.1, keeping scale tied to channel
+    targets as well as to how useful physical margins are for decoding.
+  - Coded and payload weights 1 and 1; persistent/reset ratio 1:0.5.
+  - Existing loss normalization, all active TBs, paired-history weighting,
+    inactive-user masking and eight-episode/one-Adam-update semantics.
+
+The corrected-input loss trains the mixture directly; payload loss teaches
+whether it helps the actual remaining decoder. Initial/posterior losses
+preserve useful supervision for K2 and the first eight iterations, whose
+state and evidence remain essential. These are smooth objectives; actual
+pooled decoded TBLER remains the selection and success criterion.
+
+The gate does not require a separate label saying which receiver should win.
+For gate logit z and h=P-L, the local chain rule is:
+  d(loss)/dz = d(loss)/dJ * h * a*(1-a)
+For the corrected-bit BCE alone, d(loss)/dJ is sigmoid(J)-true_bit, before
+the existing loss weights. This teaches movement toward useful bit evidence.
+The payload derivative also considers the remaining decoder and can favor a
+different confidence than a standalone bit classifier. Preserve both terms;
+do not replace the payload objective with endpoint-classification labels.
+
+Initial-K2 and first-eight-posterior losses have no direct path into the new
+gate, since those outputs precede it. Channel NLL likewise supervises the
+channel model, not gate labels. The gate is directly trained by corrected-bit
+and decoded-payload losses; the inherited modules receive their full existing
+combination. This distinction matters when interpreting learning behavior.
+
+Do not add a loss that simply minimizes rho. Lowering a fit statistic is not
+the research objective and could encourage inflated uncertainty. Its weights
+and upstream paths learn only through the existing receiver objectives.
+
+A small gate gradient is not automatically a failure: h=0 means there is no
+choice to make, a correctly decoded confident bit has little BCE error, and
+the true final clipping can remove the local payload derivative. Saturation
+on confidently WRONG disagreements is the concerning case. Such distinctions
+belong in a retained analysis if needed, not new always-on inference logging.
+
+Do not train on development rescue/harm labels, an oracle bit selector, or a
+loss forcing gate variability. Do not add a separate P loss or remove channel
+NLL at the same time. That would confound the mechanism comparison. A nearly
+constant gate can be the best solution; visually varied gates are not a goal.
+
+Use a fresh recorded data seed, fresh Adam state and the existing broad fresh
+training distribution: multiple PRBs, channel families/speeds, power gaps,
+noise levels, scheduling and channel changes. Keep the current 1e-4 joint rate,
+32-update warmup, gradient clipping and development-based rate policy. These
+are retained starting settings, not demonstrated optimal choices for blending.
+Do not target saved failing blocks or tune thresholds to scenario anchors.
+
+Keep full raw-history access and differentiation of learned reads. There are
+no learned recurrent writes in this architecture. Preserve the efficient
+batching, shared-input transport and two-GPU execution semantics already used.
+
+The user controls the update budget; 6,000 new updates is a possible campaign,
+not a ceiling. Keep checkpoint saves every 64 updates plus development points,
+and development checks every 1,000 updates. Both intervals remain configurable.
+Training/evaluation runtime is a planning concern, not an acceptance metric
+for the receiver. No run is launched by this document.
+
+9. Model loading and implementation boundaries
+===============================================
+
+Create the four gate variable tensors eagerly with their known shapes. The
+current model.call path builds detection but does not execute physical.finish;
+a lazily built Dense gate could otherwise be absent from optimizer registration,
+initial checkpoint loading or replica broadcasts. Do not rely on an eventual
+decode call to create trainable weights.
+
+Register W1, hidden bias, output weights and output bias exactly once in the
+optimization list. Both GPU replicas receive identical initialized tensors;
+derive packed gradient sizes from the final variable list. Save all new Adam
+slots, update count and learning-rate state for subsequent real continuations.
+
+Give the architecture explicit blend feature-definition and width metadata.
+Require complete name/shape/value migration of inherited variables, and an
+exact expected set of new variables; no skip_mismatch loading. The current
+migration helper's seven-added-calibration-parameter assumption must change.
+Parent update count and new campaign count remain separate provenance fields.
+
+The coordinated implementation touches these boundaries:
+  model.py: variables, metadata and optimization registration.
+  decoder_correction.py: score/fit outputs, blend inputs, residual semantics.
+  native_ops/pair_scores.cc: additional fit output and shape/lifetime contract.
+  native_ops/pair_correction.{cc,cu.cc}: forward, backward, workspace, shapes.
+  native_ops/__init__.py: complete registered gradient/identity/evidence chain.
+  checkpoint migration/export and training variable/replica metadata.
+
+The score cache keeps its existing numerical content and stride. Its separate
+fit output needs explicit shape checks and handling in all pair routes,
+including dynamically empty multi-user routes. Forward fit caching and native
+backward reconstruction are one versioned interface; never silently load a
+native binary built for the old interface. Existing native source-based build
+identification should invalidate it normally. Do not add a compatibility
+dispatcher retaining both production implementations.
+
+receiver_decoding.py's LDPC algorithm, code mapping, memory storage/routing,
+channel-model architecture and training loss definitions need no mechanism
+change. Integration still needs verification at those boundaries. Replace
+the production architecture in place; do not keep multiple live variants.
+Immutable checkpoint files and experiment source snapshots remain evidence.
+
+10. Validation and decision sequence
+=====================================
+
+These are design requirements, not tests executed or code written in this pass.
+Implementing checks requires the user's explicit test authorization.
+
+Before a long training run, verify the meaningful failure modes:
+  1. Exact inherited-tensor migration, all new variables registered, complete
+     save/restore and consistent two-GPU initialization/gradient packing.
+  2. a=0 reproduces the old input and a=1 the retained substitution calculation.
+     Use comparison fixtures, not permanent inference modes. The diagnostic
+     used old corrected input plus (P-L), so preserve that arithmetic order.
+  3. Independent forward and gradient reference for L, P, Q, s and all gate
+     parameters, including normalization and correction-strength dependence,
+     and the complete fit-to-residual/covariance path. Check fit from direct
+     residual energies, not a circular reference using the cached statistic.
+     Include P=L, zero evidence, sign flips, cancellation, large finite values,
+     clipping, unique/tied minima, and gradients after the first head update.
+     Check that changing fit alone can change a after initialization while
+     using a reference fixture with nonzero fit dependence; it must not alter
+     P, Q or the original evidence calibration. With its W1 row zero, the
+     feature must have no effect on a or its upstream fit gradient.
+     Compare factored and unfactored gate expressions within numerical
+     tolerance, including the shared-fit row and hidden-bias gradients.
+     Multiple active target bits must contribute a sum, not a mean; padding
+     and inactive targets must not change that sum. Reference the defining
+     per-bit expression rather than copying the native prefix reduction.
+  4. Continued decoding and training gradients through both J and S8; no
+     manual state rebasing, detached state, or double-counted identity gradient.
+  5. Scrambling, transmitted-bit addresses, fillers and masks. Supported one,
+     two and more-user layouts apply the blend once per owned target while
+     retaining necessary partner gradients. Disabled cells return defined data.
+  6. UE reorder/reset/expiry/re-entry, failure recovery and concurrent instances
+     preserve existing memory behavior. Inactive history cannot contaminate
+     active UEs; shared scratch cannot race between calls.
+  7. Complete receiver p95 against Cold K3 under the existing timing contract.
+     Include score generation, fit buffer/reduction and correction together;
+     no precomputed fit input outside the timer. Component timings or a reduced
+     data configuration cannot certify this. Exercise the full valid-bit
+     workload, including nonzero trained gate weights; do not infer speed from
+     an initialization path that a compiler could simplify.
+
+After one joint campaign, select by the declared PRIMARY pooled development
+TBLER: total failed active scored blocks / total active scored blocks. Report
+scenario results too; do not switch to the more favorable eight-condition
+aggregate or an average of episode percentages. Keep the original endpoint
+diagnostic as a frozen record of the starting receiver.
+
+On development episodes, compare the learned gate with a=0, a=0.5 and a=1
+using the SAME selected trained weights and decoder state. These are bounded
+experiment ablations of one model, not four training campaigns or a grid search.
+The halfway control distinguishes adaptive selection from an ordinary fixed
+mixture. Report rescued/harmed blocks and remaining K8-solvable failures.
+Do not select an endpoint per block using ground truth.
+
+A learned gate's improvement over both endpoints does not by itself prove
+adaptation beats a constant mixture; the halfway control helps address this
+but does not exhaust all possible constants. Do not claim mathematical
+optimality. If a simple fixed blend is equally effective, explain that finding
+and reconsider whether the adaptive network deserves inference cost.
+
+The adaptive comparison must also preserve the actual first-eight state,
+original Q/calibration and channel history for every branch. Only the final
+combination changes. Report which previously shared failures are rescued,
+not merely whether the model switches between old endpoint successes. That
+is the route needed to exceed the frozen whole-block chooser's limitation.
+
+If claiming that physical fit itself improves accuracy, a same-weights run
+replacing only that feature by one fixed value can measure dependence, but
+does not reproduce training without it. Such a perturbation can be out of
+distribution. A strong feature-specific training claim would need a matched
+training control; do not infer it solely from gate weights or from this design.
+No additional training arms or diagnostics are launched or required here.
+
+Likewise, retraining all weights can improve TBLER even without the new gate.
+Same-weights ablations isolate deployed behavior after joint training, not
+the effect of extra training updates versus a matched continuation. Without
+that additional control, report the trained receiver's measured targets and
+memory benefit, rather than attributing every gain to the blending mechanism.
+
+Finally, use fresh confirmation episodes for selected persistent memory,
+same weights reset each TB, and frozen K8. Previous confirmation data examined
+during diagnosis is no longer untouched. Repeat complete latency with trained
+weights. Assess TBLER uncertainty using whole episodes as the repeated units,
+since neighboring TBs share channel history; do not treat every block as an
+independent channel draw. A narrow measured lead needs corresponding caution.
+
+Success still requires lower declared-primary TBLER than frozen K8, lower
+receiver latency than Cold K3, and a same-weights benefit from history. A
+blend improvement alone does not establish all three simultaneously.
+
+11. Remaining risks and recommendation
+=======================================
+
+The design now specifies the actual endpoint decision, decoder-state behavior,
+complete chain rule and a cooperative GPU implementation. These are design
+ambiguities resolved by inspection and reasoning, not measured accuracy gains.
+
+Three empirical uncertainties remain central:
+  - Observability: B0, B1, U and fit may still look similar for beneficial and
+    harmful substitutions. A wrong explanation can fit well, particularly
+    under a loose uncertainty model. Relative margins plus residual fit do
+    not identify every shared channel-model error.
+  - Learnability: decoded-loss gradients, clipping and correlated sources may
+    produce a constant or saturated gate without closing the primary K8 gap.
+    Joint training can also change both endpoints and their error overlap.
+  - Latency: small arithmetic does not guarantee preserving the 0.85 ms lead.
+    Register/shared-memory pressure and launch behavior need a full measurement.
+
+The observability limit is concrete. Two data positions can present the same
+B0, B1, U and fit while having different correct bits. This gate must then
+return the same coefficient, irrespective of hidden width. It can learn the
+average useful decision given those inputs, not an oracle answer unavailable
+from them. The observed rescue/harm counts alone do not establish how often
+this ambiguity occurs. Full joint training can improve the upstream evidence,
+but does not turn that missing evidence into an observed fact.
+
+This is why this refinement does not add hidden units or a second selector
+merely to sound more capable. The execution change removes repeated shared
+work, and the training contract preserves the intended gradients. Neither
+demonstrates a stronger ability to identify the rescued blocks. The physical
+fit feature remains a reasoned hypothesis to validate in the single proposed
+architecture, not a solved reliability measurement.
+
+There is no evidence-based exact probability of success. The diagnostic supports
+one well-defined attempt to use information currently omitted from the final
+input; it does not justify promising a K8 win or introducing a larger MoE,
+attention reader, second correction gate or additional decoder pass now.
+
+Recommendation: implement this single refined combination when authorized,
+verify its endpoint and gradient contracts, measure full latency, then train
+jointly. The existing receiver, weights, tests and running jobs are unchanged
+by this design pass.
+
+The next useful decision boundary is empirical, not another larger gate by
+default. The design specifies one additional input and its complete
+execution/training contract; this refinement makes its limitations and shared
+GPU calculation explicit. It does not justify claiming that a success
+probability increased by a particular amount or continuing to add unmeasured
+features until the proposal sounds certain.
+
+Local evidence consulted
+=========================
+
+experiments/20261019_physical_prediction_substitution/results/development/report.txt
+experiments/20261019_physical_prediction_substitution/run.py
+experiments/20261018_ldpc18_joint_training_6000/results/latency_005000/results.json
+scripts/cnn_autoencoder/model.py
+scripts/cnn_autoencoder/decoder_correction.py
+scripts/cnn_autoencoder/native_ops/pair_correction.cu.cc
+scripts/cnn_autoencoder/native_ops/pair_scores.cc
+scripts/cnn_autoencoder/native_ops/pair_correction.cc
+scripts/cnn_autoencoder/native_ops/__init__.py
+scripts/cnn_autoencoder/training_execution.py
+scripts/cnn_autoencoder/training.py
+scripts/receiver_decoding.py
+config/cnn_memory_training.json
+Installed sionna/fec/ldpc/decoding.py: _vn_update and LDPCBPDecoder.call.

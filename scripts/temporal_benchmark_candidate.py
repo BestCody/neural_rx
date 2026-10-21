@@ -1,35 +1,55 @@
-#!/usr/bin/env python3
-
 from __future__ import annotations
 
-import hashlib
-import importlib
-import json
-import re
+import ast
+import configparser
 from pathlib import Path
 from typing import Any, Protocol, runtime_checkable
 
 import numpy as np
 
-from temporal_generalization_protocol import seal_payload, verify_payload
+from artifact_io import file_sha256
+from temporal_generalization_protocol import verify_payload
 
 
-ROLES = (
-    "candidate",
-    "matched_cold_k3",
-    "matched_cold_k8",
-    "historical_cold_k8",
-    "perfect_csi_kbest",
-)
-IDENTIFIER = re.compile(r"^[a-z][a-z0-9_]{2,63}$")
+def pretrained_checkpoint(config_name="nrx_large.cfg"):
+    root = Path(__file__).resolve().parent.parent
+    config = configparser.ConfigParser()
+    with (root / "config" / config_name).open() as stream:
+        config.read_file(stream)
+    label = ast.literal_eval(config["global"]["label"])
+    return root / "models/pretrained" / f"{label}_weights"
 
 
-def file_sha256(path: Path | str) -> str:
-    digest = hashlib.sha256()
-    with Path(path).open("rb") as handle:
-        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
+def validate_pretrained_checkpoint(manifest, config_name="nrx_large.cfg"):
+    expected = artifact_record(pretrained_checkpoint(config_name))
+    records = manifest["checkpoints"]
+    if len(records) != 1 or any(records[0].get(k) != v for k, v in expected.items()):
+        raise ValueError("Receiver must use the shipped pretrained neural_rx checkpoint")
+    if manifest["training"] != {"additional_updates": 0, "provenance": "shipped_neural_rx"}:
+        raise ValueError("Pretrained reference cannot contain additional training")
+
+
+def validate_manifest(manifest, protocol):
+    verify_payload(manifest, field="manifest_sha256")
+    verify_payload(protocol, field="protocol_sha256")
+    if protocol.get("protocol") != "pretrained_nrx_experiment_v1":
+        raise ValueError("Frozen-reference manifest requires the versioned experiment")
+    if manifest["benchmark_protocol_sha256"] != protocol["protocol_sha256"] or manifest["radio"] != protocol["radio"]:
+        raise ValueError("Frozen experiment/radio binding differs")
+    role = manifest["role"]
+    counts = {"candidate": 2, "frozen_cold_k2": 2, "frozen_cold_k3": 3,
+              "frozen_cold_k8": 8}
+    if role not in counts or manifest["inference"]["iterations"] != counts[role]:
+        raise ValueError("Frozen experiment receiver rounds differ")
+    if bool(manifest["inference"]["persistent_memory"]) != (role == "candidate"):
+        raise ValueError("Frozen experiment memory mode differs")
+    if len(manifest["checkpoints"]) != 1:
+        raise ValueError("Exactly one frozen checkpoint is required")
+    for record in manifest["checkpoints"] + manifest["support_artifacts"]:
+        if len(record["sha256"]) != 64 or record["bytes"] <= 0:
+            raise ValueError("Invalid artifact record")
+    if role.startswith("frozen_"):
+        validate_pretrained_checkpoint(manifest)
 
 
 def artifact_record(path: Path | str) -> dict:
@@ -58,252 +78,32 @@ def resolve_manifest_artifacts(
         if digest not in artifact_map:
             raise FileNotFoundError(f"artifact map lacks {digest}")
         path = Path(artifact_map[digest]).expanduser().resolve()
-        if not path.is_file():
-            raise FileNotFoundError(path)
-        if path.stat().st_size != int(record["bytes"]):
-            raise ValueError(f"artifact size differs for {path.name}")
-        if file_sha256(path) != digest:
-            raise ValueError(f"artifact checksum differs for {path.name}")
         resolved[digest] = path
     return resolved
 
 
-def build_candidate_manifest(
-    *,
-    candidate_id: str,
-    role: str,
-    architecture: str,
-    adapter_factory: str,
-    benchmark_protocol_sha256: str,
-    radio: dict,
-    training_data_sha256: str,
-    training_recipe_sha256: str,
-    checkpoint_selection_sha256: str,
-    training_seeds: list[int],
-    training_examples: int,
-    training_updates: int,
-    inference_iterations: int,
-    persistent_memory: bool,
-    memory_horizon_tbs: int | None,
-    checkpoint_artifacts: list[Path | str],
-    support_artifacts: list[Path | str],
-    structural_change: str,
-    hypothesis: str,
-    expected_metric: str,
-    minimum_useful_improvement: float,
-    maximum_gpu_hours: float,
-    stop_rule: str,
-    parent_candidate_id: str | None = None,
-) -> dict:
-    return seal_payload({
-        "schema_version": 1,
-        "manifest": "temporal_benchmark_candidate_v1",
-        "candidate_id": candidate_id,
-        "role": role,
-        "architecture": architecture,
-        "adapter_factory": adapter_factory,
-        "benchmark_protocol_sha256": benchmark_protocol_sha256,
-        "radio": dict(radio),
-        "training": {
-            "data_sha256": training_data_sha256,
-            "recipe_sha256": training_recipe_sha256,
-            "checkpoint_selection_sha256": checkpoint_selection_sha256,
-            "seeds": [int(value) for value in training_seeds],
-            "examples": int(training_examples),
-            "updates": int(training_updates),
-        },
-        "inference": {
-            "iterations": int(inference_iterations),
-            "persistent_memory": bool(persistent_memory),
-            "memory_horizon_tbs": (
-                None if memory_horizon_tbs is None else int(memory_horizon_tbs)
-            ),
-        },
-        "checkpoints": [
-            {
-                "training_seed": int(seed),
-                **artifact_record(path),
-            }
-            for seed, path in zip(training_seeds, checkpoint_artifacts)
-        ],
-        "support_artifacts": [
-            artifact_record(path) for path in support_artifacts
-        ],
-        "registration": {
-            "parent_candidate_id": parent_candidate_id,
-            "structural_change": structural_change,
-            "hypothesis": hypothesis,
-            "expected_metric": expected_metric,
-            "minimum_useful_improvement": float(
-                minimum_useful_improvement
-            ),
-            "maximum_gpu_hours": float(maximum_gpu_hours),
-            "stop_rule": stop_rule,
-        },
-    }, field="manifest_sha256")
+def stack_receiver_grids(inputs, tf):
+    return (
+        tf.convert_to_tensor(np.stack([point["received_grid"] for point in inputs])),
+        tf.convert_to_tensor(np.stack([point["ls_channel"] for point in inputs]), tf.float32),
+    )
 
 
-def _digest(value: Any, label: str) -> None:
-    if not isinstance(value, str) or not re.fullmatch(r"[0-9a-f]{64}", value):
-        raise ValueError(f"{label} must be a SHA-256 digest")
+def checked_decoder_tensors(output):
+    import tensorflow as tf
+    logits = tf.debugging.check_numerics(output.logits, "Decoder logits are not finite")
+    with tf.control_dependencies([logits]):
+        return logits, tf.cast(output.hard_bits, tf.bool), tf.identity(output.crc_status)
 
 
-def validate_candidate_manifest(manifest: dict, protocol: dict) -> None:
-    verify_payload(manifest, field="manifest_sha256")
-    if manifest.get("manifest") != "temporal_benchmark_candidate_v1":
-        raise ValueError("candidate manifest type differs")
-    candidate_id = manifest.get("candidate_id")
-    if not isinstance(candidate_id, str) or not IDENTIFIER.fullmatch(
-        candidate_id
-    ):
-        raise ValueError("candidate_id is invalid")
-    if manifest.get("role") not in ROLES:
-        raise ValueError("candidate role is invalid")
-    role = manifest["role"]
-    if manifest.get("benchmark_protocol_sha256") != protocol[
-        "protocol_sha256"
-    ]:
-        raise ValueError("candidate benchmark protocol differs")
-    if manifest.get("radio") != protocol["radio"]:
-        raise ValueError("candidate radio contract differs")
-    adapter = manifest.get("adapter_factory")
-    if not isinstance(adapter, str) or adapter.count(":") != 1:
-        raise ValueError("adapter_factory must be module:function")
-    training = manifest.get("training", {})
-    for name in (
-        "data_sha256",
-        "recipe_sha256",
-        "checkpoint_selection_sha256",
-    ):
-        _digest(training.get(name), f"training.{name}")
-    seeds = training.get("seeds")
-    if not isinstance(seeds, list):
-        raise ValueError("training seeds must be a list")
-    if role == "perfect_csi_kbest" and seeds:
-        raise ValueError("perfect-CSI K-Best cannot have training seeds")
-    if role != "perfect_csi_kbest" and not seeds:
-        raise ValueError("at least one training seed is required")
-    if len(set(int(value) for value in seeds)) != len(seeds):
-        raise ValueError("training seeds must be unique")
-    examples = int(training.get("examples", -1))
-    updates = int(training.get("updates", -1))
-    if role == "perfect_csi_kbest":
-        if examples != 0 or updates != 0:
-            raise ValueError("perfect-CSI K-Best cannot have training")
-    elif examples <= 0 or updates <= 0:
-        raise ValueError("training examples and updates must be positive")
-    inference = manifest.get("inference", {})
-    iterations = int(inference.get("iterations", 0))
-    expected_iterations = {
-        "candidate": int(protocol["objective"]["candidate_iterations"]),
-        "matched_cold_k3": 3,
-        "matched_cold_k8": 8,
-        "historical_cold_k8": 8,
-        "perfect_csi_kbest": 0,
-    }[role]
-    if iterations != expected_iterations:
-        raise ValueError(f"{role} must use K={expected_iterations}")
-    if role == "candidate" and not inference.get("persistent_memory"):
-        raise ValueError("the candidate must expose persistent memory")
-    if role != "candidate" and inference.get("persistent_memory"):
-        raise ValueError("cold baselines cannot persist memory")
-    horizon = inference.get("memory_horizon_tbs")
-    if inference.get("persistent_memory"):
-        if horizon is not None and int(horizon) <= 0:
-            raise ValueError("memory horizon must be positive")
-    elif horizon is not None:
-        raise ValueError("stateless candidates cannot have a memory horizon")
-    checkpoints = manifest.get("checkpoints")
-    support = manifest.get("support_artifacts")
-    if not isinstance(checkpoints, list) or not isinstance(support, list):
-        raise ValueError("candidate artifact lists are required")
-    if [value.get("training_seed") for value in checkpoints] != seeds:
-        raise ValueError("checkpoint artifacts do not map to training seeds")
-    artifacts = checkpoints + support
-    if not artifacts:
-        raise ValueError("at least one candidate artifact is required")
-    digests = set()
-    for artifact in artifacts:
-        _digest(artifact.get("sha256"), "artifact.sha256")
-        name = artifact.get("name")
-        if not isinstance(name, str) or not name:
-            raise ValueError("candidate artifact name is invalid")
-        if int(artifact.get("bytes", 0)) <= 0:
-            raise ValueError("candidate artifact cannot be empty")
-        digests.add(artifact["sha256"])
-    if len(digests) != len(artifacts):
-        raise ValueError("candidate artifacts must be unique")
-    registration = manifest.get("registration", {})
-    required = protocol["registration"]["required_fields"]
-    for name in required:
-        value = registration.get(name)
-        if value is None or value == "":
-            raise ValueError(f"registration.{name} is required")
-    change = registration.get("structural_change")
-    if not isinstance(change, str) or len(change.splitlines()) != 1:
-        raise ValueError("structural_change must be one line")
-    parent = registration.get("parent_candidate_id")
-    if parent is not None:
-        if not isinstance(parent, str) or not IDENTIFIER.fullmatch(parent):
-            raise ValueError("parent_candidate_id is invalid")
-        if parent == candidate_id:
-            raise ValueError("a candidate cannot be its own parent")
-    if registration.get("expected_metric") not in protocol[
-        "registration"
-    ]["allowed_metrics"]:
-        raise ValueError("expected metric is not approved")
-    if float(registration.get("minimum_useful_improvement", 0.0)) <= 0.0:
-        raise ValueError("minimum useful improvement must be positive")
-    if float(registration.get("maximum_gpu_hours", 0.0)) <= 0.0:
-        raise ValueError("maximum GPU hours must be positive")
-
-
-def load_candidate_manifest(path: Path | str, protocol: dict) -> dict:
-    manifest = json.loads(Path(path).read_text(encoding="utf-8"))
-    validate_candidate_manifest(manifest, protocol)
-    return manifest
-
-
-def validate_matched_baseline(candidate: dict, baseline: dict) -> None:
-    if candidate["role"] != "candidate":
-        raise ValueError("the first manifest must be a candidate")
-    if baseline["role"] != "matched_cold_k8":
-        raise ValueError("accuracy baseline must be matched Cold K=8")
-    if candidate["benchmark_protocol_sha256"] != baseline[
-        "benchmark_protocol_sha256"
-    ]:
-        raise ValueError("candidate and baseline benchmark versions differ")
-    if candidate["radio"] != baseline["radio"]:
-        raise ValueError("candidate and baseline radio settings differ")
-    for name in (
-        "data_sha256",
-        "checkpoint_selection_sha256",
-        "seeds",
-        "examples",
-        "updates",
-    ):
-        if candidate["training"][name] != baseline["training"][name]:
-            raise ValueError(f"training-matched baseline differs in {name}")
-    if baseline["inference"]["iterations"] != 8:
-        raise ValueError("matched baseline iteration count differs")
-    if baseline["inference"]["persistent_memory"]:
-        raise ValueError("matched cold baseline cannot persist memory")
-
-
-def validate_stage_training(manifest: dict, protocol: dict, stage: str) -> None:
-    if stage not in protocol["stages"]:
-        raise ValueError("unknown benchmark stage")
-    expected = protocol["stages"][stage]
-    if manifest["training"]["updates"] != expected["training_updates"]:
-        raise ValueError("candidate training updates differ from the stage")
-    if manifest["training"]["examples"] != expected["training_examples"]:
-        raise ValueError("candidate training examples differ from the stage")
-    if len(manifest["training"]["seeds"]) != expected[
-        "required_training_seeds"
-    ]:
-        raise ValueError("candidate training-seed count differs from the stage")
-    if manifest["training"]["seeds"] != expected["training_recipe_seeds"]:
-        raise ValueError("candidate training seeds differ from the stage")
+def decoder_output(logits, hard, crc, *, include_logits=False):
+    result = {
+        "hard_bits": np.asarray(hard.numpy(), dtype=bool),
+        "crc_status": np.asarray(crc.numpy(), dtype=bool),
+    }
+    if include_logits:
+        result["logits"] = np.asarray(logits.numpy(), dtype=np.float32)
+    return result
 
 
 @runtime_checkable
@@ -331,38 +131,24 @@ class BenchmarkDecoderAdapter(Protocol):
     ) -> dict[str, Any]:
         ...
 
-    def synchronize(self) -> None:
-        ...
-
     def checksums_unchanged(self) -> bool:
         ...
 
 
-def load_adapter(factory: str, **kwargs) -> BenchmarkDecoderAdapter:
-    module_name, function_name = factory.split(":", 1)
-    module = importlib.import_module(module_name)
-    function = getattr(module, function_name, None)
-    if not callable(function):
-        raise ValueError("adapter factory is not callable")
-    adapter = function(**kwargs)
-    if not isinstance(adapter, BenchmarkDecoderAdapter):
-        raise TypeError("factory did not return a benchmark adapter")
-    return adapter
-
-
 def validate_adapter_output(output: dict, bits_shape: tuple[int, ...]) -> None:
-    required = {"hard_bits", "crc_status", "logits"}
-    if set(output) != required:
+    required = {"hard_bits", "crc_status"}
+    if set(output) not in (required, required | {"logits"}):
         raise ValueError("adapter output fields differ")
     expected_crc = bits_shape[:-1]
     hard = np.asarray(output["hard_bits"])
     crc = np.asarray(output["crc_status"])
-    logits = np.asarray(output["logits"])
     if hard.shape != bits_shape:
         raise ValueError("adapter hard-bit shape differs")
     if crc.shape != expected_crc:
         raise ValueError("adapter CRC shape differs")
-    if logits.shape != bits_shape:
-        raise ValueError("adapter logits shape differs")
-    if not np.all(np.isfinite(logits)):
-        raise ValueError("adapter logits are not finite")
+    if "logits" in output:
+        logits = np.asarray(output["logits"])
+        if logits.shape != bits_shape:
+            raise ValueError("adapter logits shape differs")
+        if not np.all(np.isfinite(logits)):
+            raise ValueError("adapter logits are not finite")

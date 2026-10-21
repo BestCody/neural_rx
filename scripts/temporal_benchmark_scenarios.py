@@ -37,12 +37,13 @@ class PowerControlledGeometryGenerator(GeometryAwareMUMIMOGenerator):
 
 class TemporalBenchmarkScenarioBank:
 
-    def __init__(self, parameters, e2e_model, tf_module):
+    def __init__(self, parameters, e2e_model, tf_module, rt_bank=None):
         self.parameters = parameters
         self.e2e_model = e2e_model
         self.receiver = e2e_model._receiver
         self.tf = tf_module
         self.generators = {}
+        self.rt_bank = rt_bank
 
     def _seed_streams(self, job: dict, episode_index: int) -> dict:
         return {
@@ -54,12 +55,8 @@ class TemporalBenchmarkScenarioBank:
         return {
             "seed_streams": self._seed_streams(job, episode_index),
             "seed_stream_limit": 1,
-            "channel_role": "calibration",
             "random_slot_offset": True,
             "advance_slot_pilots": True,
-            "channel_change_prob": 0.0,
-            "ebno_drop_prob": 0.0,
-            "hard_reset_prob": 0.0,
         }
 
     @staticmethod
@@ -88,6 +85,12 @@ class TemporalBenchmarkScenarioBank:
         provider = job["provider"]
         settings = job["provider_settings"]
         common = self._common_kwargs(job, episode_index)
+        if provider == "ray_traced":
+            from rt_channel_data import RayTracedGenerator
+            if self.rt_bank is None or self.rt_bank.sha256 != settings["channel_bank_sha256"]:
+                raise ValueError("The requested RT bank differs from the supplied paths")
+            return RayTracedGenerator(self.parameters, self.e2e_model, self.rt_bank,
+                                      dynamic_scheduling=False, scenario_training=False, **common)
         if provider == "independent_tdl":
             profile = self._tdl_profile(settings)
             return TemporalTrainingDataGenerator(
@@ -161,7 +164,8 @@ class TemporalBenchmarkScenarioBank:
         generator = self.generators[key]
         generator.seed_streams = self._seed_streams(job, episode_index)
         generator.seed_stream_consumed = 0
-        generator.seed_stream_limit = 1
+        if job["provider"] == "ray_traced":
+            generator.episode_index = int(episode_index)
         return generator
 
     def generate(self, job: dict, episode_index: int) -> BenchmarkEpisode:
@@ -183,7 +187,6 @@ class TemporalBenchmarkScenarioBank:
             scenario_training=scenario_training,
             controlled_change_tb=controlled_change,
             include_clean_received=True,
-            include_transmitted=True,
             include_ls=False,
         )
         scale = self.tf.cast(
@@ -205,10 +208,8 @@ class TemporalBenchmarkScenarioBank:
         pool_change = base["channel_change_event"].numpy()[0].astype(bool)
         scheduled_change = np.take_along_axis(pool_change, ue_ids, axis=1)
         receiver_inputs = []
-        oracle_inputs = []
         for batch in batches:
             point_receiver = []
-            point_oracle = []
             for tb in range(int(job["num_tbs"])):
                 inputs = {
                     "active": active[tb],
@@ -221,17 +222,11 @@ class TemporalBenchmarkScenarioBank:
                     "ue_ids": batch["ue_ids"].numpy()[0, tb],
                 }
                 point_receiver.append(inputs)
-                point_oracle.append({
-                    **inputs,
-                    "perfect_channel": batch["h"].numpy()[0, tb],
-                })
             receiver_inputs.append(tuple(point_receiver))
-            oracle_inputs.append(tuple(point_oracle))
         return BenchmarkEpisode(
             bits=bits,
             active=active,
             ue_ids=ue_ids,
             channel_change_event=scheduled_change,
             receiver_inputs=tuple(receiver_inputs),
-            oracle_inputs=tuple(oracle_inputs),
         )

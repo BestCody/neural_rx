@@ -40,22 +40,12 @@ class DoubleTDLChannel(tf.keras.layers.Layer):
                  resource_grid,
                  num_rx_ant=4,
                  num_tx_ant=2,
-                 norm_channel=False,
-                 correlation="low"):
+                 norm_channel=False):
         super().__init__()
 
-        assert correlation in ["low", "medium", "high"]
+        print("Loading DoubleTDL with low correlation.")
 
-        print(f"Loading DoubleTDL with {correlation} correlation.")
-
-        if correlation=="low":
-            alpha = beta = 0
-        elif correlation=="medium":
-            alpha = 0.9
-            beta = 0.3
-        else:
-            alpha = 0.9
-            beta = 0.9
+        alpha = beta = 0
 
         tx_corr_mat = ue_correlation_matrix(num_tx_ant, beta)
         rx_corr_mat = gnb_correlation_matrix(num_rx_ant, alpha)

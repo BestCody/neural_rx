@@ -1,0 +1,126 @@
+Offline Sionna RT evaluation: Munich
+
+The channel source uses Sionna RT 2.0.1 in a separate environment. The existing
+TensorFlow/Sionna 0.18 receiver environment consumes NumPy path archives; it
+does not import the ray tracer. Receiver weights, training, LDPC, and latency
+measurement boundaries are unchanged.
+
+Scene reference
+  Design of a Standard-Compliant Real-Time Neural Receiver for 5G NR, Section V
+  https://arxiv.org/abs/2409.02912
+  https://github.com/NVlabs/neural_rx/blob/b22b9ceccb7a7eb953314ae9ada5e847f6028324/notebooks/site_specific_neural_receivers.ipynb
+  Configuration: config/rt_munich.json
+
+  The base station is at [-210, 50, 106] metres on the Frauenkirche. Both UE
+  routes use the released notebook's waypoint coordinates, with speeds of
+  3.5 and 3.0 m/s. Both ends use isotropic antenna patterns at 2.14 GHz.
+  The base station has two vertically arranged, dual-polarized elements
+  (four antenna ports), matching the notebook's num_rows=2, num_cols=1.
+  This is a detail where the notebook differs from the paper's horizontal-array
+  description. Each UE has two horizontally arranged antenna ports.
+  Element spacing is half a wavelength.
+
+  The solver uses six ray interactions, 10 million samples per source, direct
+  paths, specular reflection, and diffraction. Diffuse reflection and refraction
+  are disabled. As in the notebook, tracing starts at the base station and the
+  resulting channels are reversed to the uplink direction. The strongest 48
+  paths per antenna pair are retained; delays and Doppler use the same indices.
+  Shorter path lists are padded with zero coefficients.
+
+Reused motion utility
+  https://github.com/zhouyou-gu/ocudu-gpu-channel
+  revision f95dabd0d13db3b24e9a4b04c919ad3620468f11
+  Motion from apps/sionna_bridge/run_bridge.py
+  License: licenses/ocudu-gpu-channel.txt
+
+The live OCUDU bridge, ZMQ transport, sample filtering, and broker are not needed
+for this offline evaluation. The previous street-canyon setup is no longer an
+active configuration; its saved experiments remain in their original folders.
+
+Channel generation
+  Each UE independently samples an index from 10,000 positions spaced uniformly
+  by distance along its route. Only starts with a straight local-motion interval
+  long enough for the complete episode are eligible. Indices are sampled with
+  replacement, as independent episodes; they do not identify consecutive TBs.
+  Sionna traces all UE-to-base-station paths in the same scene.
+  A draw with no received path for any UE is rejected and another is sampled.
+  Rejections are logged and retries are bounded by max_attempts_per_episode.
+  Exported arrays contain initial baseband path coefficients, synchronized path
+  delays, and path Doppler frequencies. UE identity follows config.users order.
+  No payload bits, decoder outputs, or receiver memory enter the ray tracer.
+
+Channel evolution
+  Path coefficient at time t = initial coefficient * exp(j * 2*pi * Doppler * t).
+  This is Sionna RT's local Doppler evolution. t advances by the existing PHY
+  resource grid's OFDM-symbol duration, including its configured cyclic prefix.
+  It never restarts at TB boundaries or when a UE is absent from the schedule.
+  Frequency responses use exp(-j * 2*pi * subcarrier frequency * path delay).
+  Initial coefficients already contain carrier phase; it is not applied again.
+  normalize_delays=true follows the notebook's ideal synchronization: the first
+  arrival for each link has zero delay. This reference is established once per
+  episode, not recalculated at TB boundaries.
+
+Scope
+  Paths, delays, and velocities stay fixed within the declared max_duration_s.
+  This approximates short-term movement; it does not model changing visibility,
+  turns, blockage, or newly appearing paths inside an episode. Route turns
+  inside the declared interval are rejected. Different episodes are independent.
+  The frequency-domain PHY retains its existing ideal synchronization and
+  no-intercarrier-interference assumptions. This is not a live radio test.
+  The paper randomly pairs individual trajectory samples. Our extension pairs
+  episode starts, then processes consecutive TBs using advancing Doppler phase.
+  New episodes trace their own positions; we do not re-trace geometry per TB.
+  Sionna RT 2.0.1 differs from the original TensorFlow-based ray tracer. Matching
+  scene settings does not promise identical rays or reproduce published TBLER.
+
+Power and noise
+  per_ue_episode uses one positive scale per UE, calculated over the complete
+  declared local-motion interval and the evaluation bandwidth. The same scale
+  applies to every TB. It removes path-loss differences while retaining fading,
+  antenna relationships, and phase. This represents ideal per-UE power control.
+  Set power_normalization to none to retain physical path loss; those Eb/N0
+  values then have a different received-power interpretation and need their own
+  calibration. Neither mode normalizes each TB independently.
+  The original notebook normalizes each independent OFDM grid. Keeping one scale
+  for our entire episode preserves the fading relationships across its TBs.
+
+Integration
+  The existing transmitter generates fresh payload bits and DMRS per TB, mixes
+  simultaneous UE signals, adds seeded noise, and computes the current LS
+  estimate. The shared episode cache saves exactly these receiver inputs.
+  Persistent, reset, and Cold receivers use identical cached episodes and the
+  existing active-block TBLER definition and scoring windows. Paths are never
+  supplied to the receivers. RT results are a separate scenario report; the
+  existing statistical-channel benchmark keeps its original meaning.
+
+Commands (run from the repository root)
+  RT_PYTHON scripts/export_rt_channels.py --config config/rt_munich.json
+      --split calibration --seed 20261015 --episodes 8
+      --output-dir experiments/DATE_NAME/results/calibration_channel_bank
+  RT_PYTHON scripts/export_rt_channels.py --config config/rt_munich.json
+      --split confirmation --seed 20261014 --episodes 32
+      --output-dir experiments/DATE_NAME/results/confirmation_channel_bank
+  PHY_PYTHON scripts/run_temporal_benchmark.py --rt-channel-bank BANK_DIRECTORY
+      --experiment-checkpoint models/learned_blend_joint_20261019/checkpoint_005000
+      --experiment-phase smoke --experiment-episodes 2
+      --episode-cache experiments/DATE_NAME/episodes
+      --reference-cache experiments/DATE_NAME/reference_cache
+      --output-dir experiments/DATE_NAME/results/benchmark
+
+RT_PYTHON is /home/h3lou/miniforge3/envs/sionna2/bin/python on this machine.
+PHY_PYTHON is /home/h3lou/miniforge3/envs/neural_rx/bin/python.
+Use distinct experiment directories with run.py, config.json, provenance.json,
+source snapshots, results/, and run.log. Export never overwrites a channel bank.
+
+For full comparisons, export separate calibration and confirmation banks with
+different seeds and matching scene/radio settings. Set split accordingly.
+The existing calibration phase produces anchors.json. Supply that file with
+--experiment-anchors for confirmation. Do not reuse statistical-channel anchors.
+The previous street-canyon calibration is also incompatible with Munich.
+Different seeds provide independent draws on the same routes; they do not create
+spatially disjoint routes. No Munich channels are used by the current trainer.
+An integration smoke result is not sufficient evidence of accuracy superiority.
+
+UE count is defined by the users list, not fixed by the exporter. Antenna arrays
+are configurable. The current trained receiver/configuration still supports two
+simultaneous UEs; expanding the channel bank does not validate a larger detector.

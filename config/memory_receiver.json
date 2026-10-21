@@ -1,0 +1,19 @@
+{
+  "architecture": {
+    "cgnn_rounds": 2,
+    "state_features": 56,
+    "memory": "pilot_filter_learned_blend",
+    "blend_features": "corrected_endpoints_residual_fit_v1",
+    "blend_hidden": 8,
+    "history_tbs": 7,
+    "filter_hidden": 16,
+    "error_hidden": 16,
+    "neighbor_radius": 1,
+    "ldpc_iterations": 18,
+    "ldpc_first_iterations": 8
+  },
+  "benchmark_memory": {
+    "capacity": 4,
+    "expiry_tbs": 8
+  }
+}

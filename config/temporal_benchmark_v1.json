@@ -1,17 +1,6 @@
 {
   "schema_version": 1,
-  "protocol": "temporal_nrx_benchmark_v1",
-  "objective": {
-    "candidate_iterations": 2,
-    "target_iterations": 8,
-    "target_tbler": 0.1,
-    "claims": [
-      "matched_k2_approaches_matched_k8",
-      "persistent_memory_improves_same_checkpoint_reset",
-      "memory_is_stable_and_recovers",
-      "quality_justifies_runtime_and_storage"
-    ]
-  },
+  "protocol": "pretrained_nrx_benchmark",
   "radio": {
     "receive_antennas": 4,
     "maximum_active_ues": 2,
@@ -21,47 +10,27 @@
     "noise_axis": "ebno_db",
     "advancing_slot_pilots": true
   },
-  "methods": [
-    "candidate_persistent",
-    "candidate_reset",
-    "matched_cold_k3",
-    "matched_cold_k8",
-    "historical_cold_k8",
-    "perfect_csi_kbest"
-  ],
   "conditions": {
     "historical_tdl_b100": {
       "provider": "independent_tdl",
-      "role": "historical_report",
-      "seed_offset": 0,
       "receiver_inputs": [],
       "profile": "B100",
       "doppler_hz": [
         0.0,
         400.0
-      ],
-      "fixed_ues": true,
-      "pathloss": false,
-      "shadow_fading": false
+      ]
     },
     "historical_tdl_c300": {
       "provider": "independent_tdl",
-      "role": "historical_report",
-      "seed_offset": 500,
       "receiver_inputs": [],
       "profile": "C300",
       "doppler_hz": [
         0.0,
         100.0
-      ],
-      "fixed_ues": true,
-      "pathloss": false,
-      "shadow_fading": false
+      ]
     },
     "natural_umi": {
       "provider": "shared_geometry",
-      "role": "core",
-      "seed_offset": 1000,
       "receiver_inputs": [],
       "scenario": "umi",
       "force_los": null,
@@ -82,14 +51,10 @@
           175.0,
           400.0
         ]
-      ],
-      "pathloss": false,
-      "shadow_fading": false
+      ]
     },
     "natural_uma": {
       "provider": "shared_geometry",
-      "role": "core",
-      "seed_offset": 2000,
       "receiver_inputs": [],
       "scenario": "uma",
       "force_los": null,
@@ -110,39 +75,27 @@
           175.0,
           400.0
         ]
-      ],
-      "pathloss": false,
-      "shadow_fading": false
+      ]
     },
     "controlled_topology_change": {
       "provider": "shared_geometry_change",
-      "role": "core",
-      "seed_offset": 3000,
       "receiver_inputs": [],
       "scenario": "umi",
       "change_fraction": 0.5,
-      "force_los": null,
-      "pathloss": false,
-      "shadow_fading": false
+      "force_los": null
     },
     "schedule_gap_reentry": {
       "provider": "shared_geometry_schedule",
-      "role": "core",
-      "seed_offset": 4000,
       "receiver_inputs": [],
       "scenario": "umi",
       "gap_start_probability": 0.05,
       "maximum_gap_tbs": 4,
       "ue_pool_size": 4,
       "schedule_switch_probability": 0.25,
-      "schedule_reorder_probability": 0.25,
-      "pathloss": false,
-      "shadow_fading": false
+      "schedule_reorder_probability": 0.25
     },
     "close_los": {
       "provider": "shared_geometry",
-      "role": "stress",
-      "seed_offset": 5000,
       "receiver_inputs": [],
       "scenario": "umi",
       "force_los": true,
@@ -155,14 +108,10 @@
           0.0,
           400.0
         ]
-      ],
-      "pathloss": false,
-      "shadow_fading": false
+      ]
     },
     "near_far": {
       "provider": "shared_geometry_power",
-      "role": "stress",
-      "seed_offset": 6000,
       "receiver_inputs": [],
       "scenario": "umi",
       "force_los": null,
@@ -170,8 +119,6 @@
         6.0,
         12.0
       ],
-      "pathloss": false,
-      "shadow_fading": false,
       "power_control": "controlled_residual_gap"
     }
   },
@@ -203,144 +150,11 @@
     "close_los",
     "near_far"
   ],
-  "calibration": {
-    "seed_base": 40000000,
-    "episodes_per_condition": 64,
-    "num_tbs": 16,
-    "snr_grid_db": [
-      0.0,
-      1.0,
-      2.0,
-      3.0,
-      4.0,
-      5.0,
-      6.0,
-      7.0,
-      8.0,
-      9.0,
-      10.0
-    ],
-    "baseline": "matched_cold_k8",
-    "target_tbler": 0.1,
-    "neighbor_offset_db": 1.0,
-    "artifact_required": true,
-    "training_updates": 6000,
-    "training_examples": 6000,
-    "training_recipe_seed": 20262000
-  },
-  "stages": {
-    "screen": {
-      "seed_base": 41000000,
-      "condition_names": [
-        "natural_umi",
-        "natural_uma",
-        "controlled_topology_change",
-        "schedule_gap_reentry"
-      ],
-      "episodes_per_condition": 16,
-      "episode_schedule": [
-        16
-      ],
-      "num_tbs": 16,
-      "snr_points": [
-        "anchor"
-      ],
-      "training_updates": 500,
-      "training_examples": 500,
-      "training_recipe_seeds": [
-        20262001
-      ],
-      "required_training_seeds": 1,
-      "scoring_window": [
-        9,
-        16
-      ],
-      "confirmation": false,
-      "include_static_references": false
-    },
-    "development": {
-      "seed_base": 42000000,
-      "condition_names": [
-        "natural_umi",
-        "natural_uma",
-        "controlled_topology_change",
-        "schedule_gap_reentry"
-      ],
-      "episodes_per_condition": 64,
-      "episode_schedule": [
-        64
-      ],
-      "num_tbs": 64,
-      "snr_points": [
-        "lower",
-        "anchor",
-        "upper"
-      ],
-      "training_updates": 6000,
-      "training_examples": 6000,
-      "training_recipe_seeds": [
-        20262002
-      ],
-      "required_training_seeds": 1,
-      "scoring_window": [
-        17,
-        64
-      ],
-      "confirmation": false,
-      "include_static_references": false
-    },
-    "confirmation": {
-      "seed_base": 44000000,
-      "condition_names": [
-        "historical_tdl_b100",
-        "historical_tdl_c300",
-        "natural_umi",
-        "natural_uma",
-        "controlled_topology_change",
-        "schedule_gap_reentry",
-        "close_los",
-        "near_far"
-      ],
-      "episodes_per_condition": 64,
-      "episode_schedule": [
-        64,
-        128,
-        256
-      ],
-      "num_tbs": 64,
-      "snr_points": [
-        "anchor"
-      ],
-      "training_updates": 6000,
-      "training_examples": 6000,
-      "training_recipe_seeds": [
-        20261001,
-        20261002,
-        20261003
-      ],
-      "required_training_seeds": 3,
-      "scoring_window": [
-        17,
-        64
-      ],
-      "confirmation": true,
-      "locked": true,
-      "include_static_references": true
-    }
-  },
   "seed_domains": {
     "channel": 0,
     "payload": 100000,
     "noise": 200000,
     "schedule": 300000
-  },
-  "training": {
-    "equal_examples_required": true,
-    "matched_distribution_required": true,
-    "matched_recipe_seeds_required": true,
-    "fixed_checkpoint_selection_required": true,
-    "matched_k8_control_required": true,
-    "fixed_latency_k3_checkpoint_required": true
   },
   "windows": {
     "warmup": [
@@ -369,45 +183,10 @@
     ]
   },
   "statistics": {
-    "independent_unit": "episode",
     "bootstrap_samples": 10000,
-    "confidence_level": 0.95,
-    "confirmation_resamples_training_seeds": true,
-    "episode_outage_threshold": 0.5,
-    "equal_core_condition_weight": true,
     "primary_snr_point": "anchor",
-    "confirmation_ci_half_width": 0.01
-  },
-  "ranking": {
-    "primary_metric": "worst_core_k8_gap",
-    "tie_break_order": [
-      "mean_k8_gap",
-      "memory_gain_descending",
-      "latency_p95"
-    ],
-    "use_pareto_frontier": true,
-    "stress_conditions_affect_ranking": false,
-    "historical_condition_affects_ranking": false,
-    "latency_reference": "matched_cold_k3"
-  },
-  "registration": {
-    "one_structural_change_required": true,
-    "required_fields": [
-      "hypothesis",
-      "expected_metric",
-      "minimum_useful_improvement",
-      "maximum_gpu_hours",
-      "stop_rule"
-    ],
-    "allowed_metrics": [
-      "mean_k8_gap",
-      "worst_core_k8_gap",
-      "memory_gain",
-      "late_drift",
-      "adaptation_excess_area",
-      "episode_outage",
-      "latency_p95"
-    ]
+    "tbler_definition": "failed_active_user_blocks / evaluated_active_user_blocks",
+    "bootstrap_seed": 64000123
   },
   "execution": {
     "observable_receiver_inputs": [
@@ -418,69 +197,83 @@
       "slot_number",
       "ue_ids"
     ],
-    "oracle_only_inputs": [
-      "perfect_channel"
-    ],
-    "candidate_methods": [
-      "candidate_persistent",
-      "candidate_reset"
-    ],
-    "accuracy_reference_methods": [
-      "matched_cold_k8"
-    ],
-    "latency_only_reference_methods": [
-      "matched_cold_k3"
-    ],
-    "static_reference_methods": [
-      "historical_cold_k8",
-      "perfect_csi_kbest"
-    ],
-    "paired_reference_cache_required": true,
-    "accuracy_episode_batch_size": 8,
+    "accuracy_episode_batch_size": 4,
     "latency": {
-      "candidate_methods": [
-        "candidate_persistent"
-      ],
-      "reference_methods": [
-        "matched_cold_k3"
-      ],
       "condition": "natural_umi",
       "snr_point": "anchor",
       "warmup_samples": 16,
       "sample_count": 128,
-      "batch_size": 1,
-      "includes_synchronization": true
+      "batch_size": 1
+    }
+  },
+  "development_conditions": [
+    "historical_tdl_b100",
+    "historical_tdl_c300",
+    "natural_umi",
+    "natural_uma",
+    "controlled_topology_change",
+    "schedule_gap_reentry",
+    "close_los",
+    "near_far"
+  ],
+  "evaluation_phases": {
+    "smoke": {
+      "episodes": 2,
+      "num_tbs": 8,
+      "scoring_start_tb": 1,
+      "seed": 51000000,
+      "snr_db": [
+        3.0
+      ]
     },
-    "candidate_preflight": [
-      "candidate_artifacts_unchanged",
-      "candidate_crc_matches_payload_error",
-      "candidate_deterministic_replay",
-      "candidate_finite_outputs",
-      "no_future_inputs",
-      "persistent_and_reset_paired",
-      "receiver_inputs_observable",
-      "reset_state_is_empty"
-    ],
-    "matched_reference_preflight": [
-      "matched_reference_artifacts_unchanged",
-      "matched_reference_crc_matches_payload_error",
-      "matched_reference_deterministic_replay",
-      "matched_reference_finite_outputs",
-      "matched_references_paired"
-    ],
-    "static_reference_preflight": [
-      "kbest_oracle_isolated",
-      "static_reference_artifacts_unchanged",
-      "static_reference_crc_matches_payload_error",
-      "static_reference_deterministic_replay",
-      "static_reference_finite_outputs",
-      "static_references_paired"
-    ]
+    "latency": {
+      "episodes": 3,
+      "num_tbs": 64,
+      "scoring_start_tb": 17,
+      "seed": 52000000,
+      "snr_db": [
+        3.0
+      ]
+    },
+    "calibration": {
+      "episodes": 8,
+      "num_tbs": 16,
+      "scoring_start_tb": 9,
+      "seed": 63000000,
+      "snr_db": [
+        -2.0,
+        -1.0,
+        0.0,
+        1.0,
+        2.0,
+        3.0,
+        4.0,
+        5.0,
+        6.0,
+        7.0,
+        8.0,
+        9.0,
+        10.0,
+        11.0,
+        12.0
+      ],
+      "snr_bounds_db": [
+        -10.0,
+        30.0
+      ]
+    },
+    "development": {
+      "episodes": 32,
+      "num_tbs": 64,
+      "scoring_start_tb": 17,
+      "seed": 84000000
+    },
+    "confirmation": {
+      "episodes": 32,
+      "num_tbs": 64,
+      "scoring_start_tb": 17,
+      "seed": 86000000
+    }
   },
-  "versioning": {
-    "silent_protocol_changes_forbidden": true,
-    "cross_version_ranking_forbidden": true,
-    "confirmation_reuse_after_redesign_forbidden": true
-  },
-  "protocol_sha256": "cbd306172d05b6eba4fcb2883d4aa60d46a49bd4608b61174965210bc542c24b"
+  "protocol_sha256": "c72039f621ff43d3ef3a00598fd8be655f68d21bf6d2943f8265ddb613c5d324"
 }

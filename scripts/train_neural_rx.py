@@ -12,83 +12,70 @@
 
 
 import argparse
+import fcntl
+import os
 from pathlib import Path
+import sys
 
 
 ROOT = Path(__file__).resolve().parent.parent
 
-parser = argparse.ArgumentParser()
-parser.add_argument("-config_name", help="config filename", type=str)
-parser.add_argument("-gpu", help="GPU to use", type=int, default=0)
-parser.add_argument("-debug", help="Set debugging configuration", action="store_true", default=False)
 
-args = parser.parse_args()
-
-
-import os
-os.environ["CUDA_VISIBLE_DEVICES"] = f"{args.gpu}"
-os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
-
-import tensorflow as tf
-tf.get_logger().setLevel('ERROR')
-
-gpus = tf.config.list_physical_devices('GPU')
-try:
-    print('Only GPU number', args.gpu, 'used.')
-    tf.config.experimental.set_memory_growth(gpus[0], True)
-except RuntimeError as e:
-    print(e)
-
-import sys
-sys.path.insert(0, str(ROOT))
-
-from utils import E2E_Model, training_loop, Parameters, load_weights
+def training_paths(label, output_dir, initial_weights=None):
+    if Path(label).name != label:
+        raise ValueError("Training label must be a filename")
+    directory = Path(output_dir).expanduser().resolve()
+    destination = directory / f"{label}_weights"
+    if destination.resolve().is_relative_to((ROOT / "models/pretrained").resolve()):
+        raise ValueError("Training output must be outside the pretrained weights directory")
+    if destination.exists():
+        raise FileExistsError("Training output already exists; select a new output directory")
+    initial = (ROOT / "models/pretrained" / f"{label}_weights" if initial_weights is None
+               else Path(initial_weights).expanduser().resolve())
+    if not initial.is_file():
+        raise FileNotFoundError(initial)
+    return initial, destination
 
 
-config_name = args.config_name
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-config_name", help="config filename", type=str, required=True)
+    parser.add_argument("-gpu", help="GPU to use", type=int, default=0)
+    parser.add_argument("-debug", help="Set debugging configuration", action="store_true")
+    parser.add_argument("--output-dir", type=Path, required=True)
+    parser.add_argument("--initial-weights", type=Path)
+    args = parser.parse_args()
+    os.environ["CUDA_VISIBLE_DEVICES"] = str(args.gpu)
+    os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
+    import tensorflow as tf
+    tf.get_logger().setLevel('ERROR')
+    for gpu in tf.config.list_physical_devices('GPU'):
+        tf.config.experimental.set_memory_growth(gpu, True)
+    sys.path.insert(0, str(ROOT))
+    from utils import E2E_Model, training_loop, Parameters, load_weights
+    parameters = Parameters(args.config_name, training=True)
+    label = str(parameters.label)
+    initial, destination = training_paths(label, args.output_dir, args.initial_weights)
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    with (destination.parent / "run.lock").open("a+") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        initial, destination = training_paths(label, args.output_dir, args.initial_weights)
+        if args.debug:
+            tf.config.run_functions_eagerly(True)
+        model = E2E_Model(parameters, training=True)
+        model(1, 1.)
+        model.summary()
+        load_weights(model, str(initial))
+        training_loop(model,
+            label=label, filename=str(destination),
+            training_logdir=str(destination.parent / 'logs'), training_seed=42,
+            training_schedule=parameters.training_schedule,
+            eval_ebno_db_arr=parameters.eval_ebno_db_arr,
+            min_num_tx=parameters.min_num_tx, max_num_tx=parameters.max_num_tx,
+            sys_parameters=parameters,
+            mcs_arr_training_idx=list(range(len(parameters.mcs_index))),
+            xla=parameters.xla)
 
-sys_parameters = Parameters(config_name,
-                            system='nrx',
-                            training=True)
-label = f'{sys_parameters.label}'
-filename = str(ROOT / 'weights' / f'{label}_weights')
-training_logdir = str(ROOT / 'logs')
-training_seed = 42
 
-if args.debug:
-    tf.config.run_functions_eagerly(True)
-    training_logdir = str(ROOT / 'logs' / 'debug')
-
-
-sys_training = E2E_Model(sys_parameters, training=True)
-sys_training(1, 1.)
-sys_training.summary()
-
-if Path(filename).exists():
-    print("\nWeights exist already - loading stored weights.")
-    load_weights(sys_training, filename)
-
-if hasattr(sys_parameters, 'mcs_training_snr_db_offset'):
-    mcs_training_snr_db_offset = sys_parameters.mcs_training_snr_db_offset
-else:
-    mcs_training_snr_db_offset = None
-
-if hasattr(sys_parameters, 'mcs_training_probs'):
-    mcs_training_probs = sys_parameters.mcs_training_probs
-else:
-    mcs_training_probs = None
-
-training_loop(sys_training,
-              label=label,
-              filename=filename,
-              training_logdir=training_logdir,
-              training_seed=training_seed,
-              training_schedule=sys_parameters.training_schedule,
-              eval_ebno_db_arr=sys_parameters.eval_ebno_db_arr,
-              min_num_tx=sys_parameters.min_num_tx,
-              max_num_tx=sys_parameters.max_num_tx,
-              sys_parameters=sys_parameters,
-              mcs_arr_training_idx=list(range(len(sys_parameters.mcs_index))),
-              mcs_training_snr_db_offset=mcs_training_snr_db_offset,
-              mcs_training_probs=mcs_training_probs,
-              xla=sys_parameters.xla)
+if __name__ == "__main__":
+    main()
