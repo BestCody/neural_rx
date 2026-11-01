@@ -1,0 +1,241 @@
+{
+  "stage": "development",
+  "jobs": [
+    {
+      "condition": "historical_tdl_b100",
+      "provider": "independent_tdl",
+      "provider_settings": {
+        "provider": "independent_tdl",
+        "receiver_inputs": [],
+        "profile": "B100",
+        "doppler_hz": [
+          0.0,
+          400.0
+        ]
+      },
+      "episode_count": 32,
+      "num_tbs": 64,
+      "snr_db": [
+        2.0
+      ],
+      "seed_streams": {
+        "channel": 88000000,
+        "payload": 88100000,
+        "noise": 88200000,
+        "schedule": 88300000
+      }
+    },
+    {
+      "condition": "historical_tdl_c300",
+      "provider": "independent_tdl",
+      "provider_settings": {
+        "provider": "independent_tdl",
+        "receiver_inputs": [],
+        "profile": "C300",
+        "doppler_hz": [
+          0.0,
+          100.0
+        ]
+      },
+      "episode_count": 32,
+      "num_tbs": 64,
+      "snr_db": [
+        2.0
+      ],
+      "seed_streams": {
+        "channel": 88001000,
+        "payload": 88101000,
+        "noise": 88201000,
+        "schedule": 88301000
+      }
+    },
+    {
+      "condition": "natural_umi",
+      "provider": "shared_geometry",
+      "provider_settings": {
+        "provider": "shared_geometry",
+        "receiver_inputs": [],
+        "scenario": "umi",
+        "force_los": null,
+        "angular_separation_deg": [
+          0.0,
+          180.0
+        ],
+        "doppler_strata_hz": [
+          [
+            0.0,
+            50.0
+          ],
+          [
+            50.0,
+            175.0
+          ],
+          [
+            175.0,
+            400.0
+          ]
+        ]
+      },
+      "episode_count": 32,
+      "num_tbs": 64,
+      "snr_db": [
+        5.0
+      ],
+      "seed_streams": {
+        "channel": 88002000,
+        "payload": 88102000,
+        "noise": 88202000,
+        "schedule": 88302000
+      }
+    },
+    {
+      "condition": "natural_uma",
+      "provider": "shared_geometry",
+      "provider_settings": {
+        "provider": "shared_geometry",
+        "receiver_inputs": [],
+        "scenario": "uma",
+        "force_los": null,
+        "angular_separation_deg": [
+          0.0,
+          180.0
+        ],
+        "doppler_strata_hz": [
+          [
+            0.0,
+            50.0
+          ],
+          [
+            50.0,
+            175.0
+          ],
+          [
+            175.0,
+            400.0
+          ]
+        ]
+      },
+      "episode_count": 32,
+      "num_tbs": 64,
+      "snr_db": [
+        4.0
+      ],
+      "seed_streams": {
+        "channel": 88003000,
+        "payload": 88103000,
+        "noise": 88203000,
+        "schedule": 88303000
+      }
+    },
+    {
+      "condition": "controlled_topology_change",
+      "provider": "shared_geometry_change",
+      "provider_settings": {
+        "provider": "shared_geometry_change",
+        "receiver_inputs": [],
+        "scenario": "umi",
+        "change_fraction": 0.5,
+        "force_los": null,
+        "change_tb": 33
+      },
+      "episode_count": 32,
+      "num_tbs": 64,
+      "snr_db": [
+        8.0
+      ],
+      "seed_streams": {
+        "channel": 88004000,
+        "payload": 88104000,
+        "noise": 88204000,
+        "schedule": 88304000
+      }
+    },
+    {
+      "condition": "schedule_gap_reentry",
+      "provider": "shared_geometry_schedule",
+      "provider_settings": {
+        "provider": "shared_geometry_schedule",
+        "receiver_inputs": [],
+        "scenario": "umi",
+        "gap_start_probability": 0.05,
+        "maximum_gap_tbs": 4,
+        "ue_pool_size": 4,
+        "schedule_switch_probability": 0.25,
+        "schedule_reorder_probability": 0.25
+      },
+      "episode_count": 32,
+      "num_tbs": 64,
+      "snr_db": [
+        3.0
+      ],
+      "seed_streams": {
+        "channel": 88005000,
+        "payload": 88105000,
+        "noise": 88205000,
+        "schedule": 88305000
+      }
+    },
+    {
+      "condition": "close_los",
+      "provider": "shared_geometry",
+      "provider_settings": {
+        "provider": "shared_geometry",
+        "receiver_inputs": [],
+        "scenario": "umi",
+        "force_los": true,
+        "angular_separation_deg": [
+          0.0,
+          5.0
+        ],
+        "doppler_strata_hz": [
+          [
+            0.0,
+            400.0
+          ]
+        ]
+      },
+      "episode_count": 32,
+      "num_tbs": 64,
+      "snr_db": [
+        9.0
+      ],
+      "seed_streams": {
+        "channel": 88006000,
+        "payload": 88106000,
+        "noise": 88206000,
+        "schedule": 88306000
+      }
+    },
+    {
+      "condition": "near_far",
+      "provider": "shared_geometry_power",
+      "provider_settings": {
+        "provider": "shared_geometry_power",
+        "receiver_inputs": [],
+        "scenario": "umi",
+        "force_los": null,
+        "received_power_gap_db": [
+          6.0,
+          12.0
+        ],
+        "power_control": "controlled_residual_gap"
+      },
+      "episode_count": 32,
+      "num_tbs": 64,
+      "snr_db": [
+        17.0
+      ],
+      "seed_streams": {
+        "channel": 88007000,
+        "payload": 88107000,
+        "noise": 88207000,
+        "schedule": 88307000
+      }
+    }
+  ],
+  "episodes_per_condition": 32,
+  "snr_point_names": [
+    "anchor"
+  ],
+  "protocol_sha256": "04a45c475591603bff09833909147cf0fb50c357b4e7e301aa0c54cd3e0fb6a9"
+}

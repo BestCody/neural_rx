@@ -5,7 +5,7 @@ import math
 
 import numpy as np
 
-from temporal_benchmark_scoring import block_error_rate
+from neural_rx.benchmark.scoring import block_error_rate
 
 
 def decreasing_isotonic(values, weights) -> np.ndarray:
@@ -18,7 +18,7 @@ def decreasing_isotonic(values, weights) -> np.ndarray:
     levels = []
     masses = []
     lengths = []
-    for value, weight in zip(values, weights):
+    for value, weight in zip(values, weights, strict=True):
         levels.append(float(value))
         masses.append(float(weight))
         lengths.append(1)
@@ -33,7 +33,7 @@ def decreasing_isotonic(values, weights) -> np.ndarray:
             lengths[-2:] = [length]
     return np.concatenate([
         np.full(length, level, np.float64)
-        for level, length in zip(levels, lengths)
+        for level, length in zip(levels, lengths, strict=True)
     ])
 
 
@@ -45,7 +45,7 @@ def snr_at_target(snrs, rates, target):
             or not np.all(np.isfinite(rates)) or np.any(np.diff(snrs) <= 0)
             or np.any((rates < 0) | (rates > 1))):
         raise ValueError("Invalid SNR or TBLER values for threshold interpolation")
-    for index, (high, low) in enumerate(zip(rates, rates[1:])):
+    for index, (high, low) in enumerate(zip(rates, rates[1:], strict=False)):
         if high >= target >= low:
             if high == low:
                 return float((snrs[index] + snrs[index + 1]) / 2.0)

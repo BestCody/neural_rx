@@ -54,7 +54,7 @@ def validate_memory_metadata(ids, active, capacity):
         raise ValueError("UE ID exceeds memory-table capacity")
     if not np.all((active == 0) | (active == 1)):
         raise ValueError("Activity must be finite and binary")
-    for row, mask in zip(ids, active.astype(bool, copy=False)):
+    for row, mask in zip(ids, active.astype(bool, copy=False), strict=True):
         if len(np.unique(row[mask])) != len(row[mask]):
             raise ValueError("A physical UE may appear at most once in one scheduled TB")
 

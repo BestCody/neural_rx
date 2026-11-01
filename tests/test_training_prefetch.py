@@ -12,26 +12,29 @@ from unittest import mock
 
 import numpy as np
 
-from pilot_history_receiver.training_prefetch import EpisodePrefetch, _channel_packet
-from pilot_history_receiver.training_transport import BoundedArrayQueue, reserve_packet, SharedArrayStore, open_shared_message
-from pilot_history_receiver.training_options import preparation_arguments, resolve_preparation, visible_gpu_indices
-from train_memory_receiver import parser as trainer_parser
-from run_memory_training import parser as pilot_parser
+from neural_rx.receiver.training_prefetch import EpisodePrefetch, _channel_packet
+from neural_rx.receiver.training_transport import (BoundedArrayQueue, reserve_packet, SharedArrayStore,
+                                                        open_shared_message)
+from neural_rx.receiver.training_options import preparation_arguments, resolve_preparation, visible_gpu_indices
+from neural_rx.cli.train import parser as trainer_parser
+from neural_rx.cli.campaign import parser as pilot_parser
 
 
 class PreparationOptionsTests(unittest.TestCase):
     def test_launchers_select_other_gpu_and_preserve_resolved_child_options(self):
         for parser in (trainer_parser, pilot_parser):
             args = parser().parse_args(["--steps", "6000", "--output-dir", "unused", "--gpu", "5"])
-            with mock.patch("pilot_history_receiver.training_options.visible_gpu_indices", return_value=[2, 5]), \
-                    mock.patch("pilot_history_receiver.training_options.subprocess.run", return_value=mock.Mock(stdout="46068")):
+            with mock.patch("neural_rx.receiver.training_options.visible_gpu_indices", return_value=[2, 5]), \
+                    mock.patch("neural_rx.receiver.training_options.subprocess.run",
+                               return_value=mock.Mock(stdout="46068")):
                 resolve_preparation(args, 8)
             self.assertEqual((args.data_gpu, args.channel_workers, args.prefetch_examples,
                               args.prefetch_memory_mib), (2, 1, 0, 4096))
             child = trainer_parser().parse_args(["--steps", "6000", "--output-dir", "unused", "--gpu", "5"] +
                                                preparation_arguments(args))
-            with mock.patch("pilot_history_receiver.training_options.visible_gpu_indices") as discover, \
-                    mock.patch("pilot_history_receiver.training_options.subprocess.run", return_value=mock.Mock(stdout="46068")):
+            with mock.patch("neural_rx.receiver.training_options.visible_gpu_indices") as discover, \
+                    mock.patch("neural_rx.receiver.training_options.subprocess.run",
+                               return_value=mock.Mock(stdout="46068")):
                 resolve_preparation(child, 8)
             discover.assert_not_called()
             self.assertEqual(preparation_arguments(child), preparation_arguments(args))
@@ -39,10 +42,12 @@ class PreparationOptionsTests(unittest.TestCase):
     def test_single_gpu_and_explicit_disable_stay_disabled_in_child(self):
         for extra in ([], ["--data-gpu", "none"]):
             args = pilot_parser().parse_args(["--steps", "6000", "--output-dir", "unused"] + extra)
-            with mock.patch("pilot_history_receiver.training_options.visible_gpu_indices", return_value=[0]):
+            with mock.patch("neural_rx.receiver.training_options.visible_gpu_indices", return_value=[0]):
                 resolve_preparation(args, 8)
-            child = trainer_parser().parse_args(["--steps", "6000", "--output-dir", "unused"] + preparation_arguments(args))
-            with mock.patch("pilot_history_receiver.training_options.visible_gpu_indices", return_value=[0, 1]) as discover:
+            child = trainer_parser().parse_args(["--steps", "6000", "--output-dir", "unused"]
+                                                + preparation_arguments(args))
+            with mock.patch("neural_rx.receiver.training_options.visible_gpu_indices",
+                            return_value=[0, 1]) as discover:
                 resolve_preparation(child, 8)
             discover.assert_not_called()
             self.assertIsNone(child.data_gpu)
@@ -72,14 +77,14 @@ class PreparationOptionsTests(unittest.TestCase):
         output = mock.Mock(stdout="2, GPU-aaaa\n5, GPU-bbbb\n")
         for mask, expected in ((None, [2, 5]), ("5,2", [5, 2]), ("GPU-bbbb", [5]), ("", []), ("-1", [])):
             with self.subTest(mask=mask), mock.patch.dict(os.environ, {}, clear=True), \
-                    mock.patch("pilot_history_receiver.training_options.subprocess.run", return_value=output):
+                    mock.patch("neural_rx.receiver.training_options.subprocess.run", return_value=output):
                 if mask is not None:
                     os.environ["CUDA_VISIBLE_DEVICES"] = mask
                 self.assertEqual(visible_gpu_indices(), expected)
 
     def test_discovery_failure_does_not_require_extra_gpu(self):
         for error in (FileNotFoundError(), subprocess.TimeoutExpired("nvidia-smi", 5)):
-            with mock.patch("pilot_history_receiver.training_options.subprocess.run", side_effect=error):
+            with mock.patch("neural_rx.receiver.training_options.subprocess.run", side_effect=error):
                 args = trainer_parser().parse_args(["--steps", "6000", "--output-dir", "unused"])
                 resolve_preparation(args, 8)
             self.assertIsNone(args.data_gpu)

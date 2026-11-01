@@ -62,7 +62,8 @@ class PilotHistoryReceiver(tf.keras.Model):
         for layer in self.base._iterations[:2]:
             backbone += layer.trainable_variables
         backbone += self.base._readout_llrs[0].trainable_variables
-        return [self.correction_logit, self.evidence_calibration, *self.blend_variables]+self.channel_memory.trainable_variables, backbone
+        return ([self.correction_logit, self.evidence_calibration, *self.blend_variables]
+                +self.channel_memory.trainable_variables, backbone)
 
     @property
     def blend_variables(self):

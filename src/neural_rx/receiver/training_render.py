@@ -104,7 +104,7 @@ class TrainingRenderer:
             times = tf.range(t, end)
             result = self._batch(channel[t:end], active[t:end], slots[t:end], no[t:end],
                                  payload_seed, noise_seed, times)
-            return end, tuple(array.scatter(times, value) for array, value in zip(arrays, result))
+            return end, tuple(array.scatter(times, value) for array, value in zip(arrays, result, strict=True))
 
         _, arrays = tf.while_loop(lambda t, _: t < length, step, (0, arrays), parallel_iterations=1)
         return tuple(tf.transpose(a.stack(), [1, 0, *range(2, a.element_shape.rank+1)]) for a in arrays)

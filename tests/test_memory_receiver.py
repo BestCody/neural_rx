@@ -10,10 +10,10 @@ from sionna.ofdm import PilotPattern, ResourceGrid
 from sionna.mapping import Mapper
 from sionna.nr import PUSCHLSChannelEstimator
 
-from pilot_history_receiver.model import PilotHistoryReceiver, architecture_settings
-from pilot_history_receiver.pilot_layout import PilotLayout
-from pilot_history_receiver.pilot_history import PilotHistory
-from utils.neural_rx import CGNN
+from neural_rx.receiver.model import PilotHistoryReceiver, architecture_settings
+from neural_rx.receiver.pilot_layout import PilotLayout
+from neural_rx.receiver.pilot_history import PilotHistory
+from neural_rx.backbone.cgnn import CGNN
 
 
 def pilot_layout(prbs=1, dmrs_length=1):
@@ -164,17 +164,17 @@ class ChannelMemoryTest(unittest.TestCase):
                         tf.reduce_mean(tf.math.real(tf.linalg.trace(estimate.covariance))))
             outputs.append((*estimate, channel, loss))
             gradients.append(tape.gradient(loss, [observation, history.observations, *variables]))
-        for actual, expected in zip(outputs[1], outputs[0]):
+        for actual, expected in zip(outputs[1], outputs[0], strict=True):
             np.testing.assert_allclose(actual, expected, rtol=2e-5, atol=2e-6)
         for gradient in gradients[0][:2]:
             self.assertIsNotNone(gradient)
             self.assertGreater(float(tf.linalg.global_norm([gradient])), 0.)
         self.assertEqual(gradients[1][:2], [None, None])
-        for actual, expected in zip(gradients[1][2:], gradients[0][2:]):
+        for actual, expected in zip(gradients[1][2:], gradients[0][2:], strict=True):
             self.assertIsNotNone(actual)
             self.assertTrue(np.isfinite(actual).all())
             np.testing.assert_allclose(actual, expected, rtol=2e-5, atol=2e-6)
-        gradient_map = {id(v): g for v, g in zip(variables, gradients[1][2:])}
+        gradient_map = {id(v): g for v, g in zip(variables, gradients[1][2:], strict=True)}
         for layer in (model.channel_memory.filter, model.channel_memory.error):
             self.assertGreater(float(tf.linalg.global_norm(
                 [gradient_map[id(v)] for v in layer.trainable_variables])), 0.)
@@ -212,7 +212,7 @@ class ChannelMemoryTest(unittest.TestCase):
         poisoned = empty._replace(observations=tf.fill(empty.observations.shape, float('nan')))
         original = model.channel_memory(observation, empty, sample[3], layout=layout)
         actual = model.channel_memory(observation, poisoned, sample[3], layout=layout)
-        for a, b in zip(original, actual):
+        for a, b in zip(original, actual, strict=True):
             np.testing.assert_array_equal(a, b)
         self.assertTrue(np.isfinite(actual.covariance).all())
         self.assertTrue(np.all(np.linalg.eigvalsh(actual.covariance) > 0))
@@ -229,16 +229,19 @@ class ChannelMemoryTest(unittest.TestCase):
         original = model.channel_memory(observation, history, sample[3], layout=layout)
         factor = tf.constant(1.2+.7j, tf.complex64)
         def transform(record):
-            from pilot_history_receiver.channel_filter import complex_channel
+            from neural_rx.receiver.channel_filter import complex_channel
             h = complex_channel(record[..., :-1])*factor
             return tf.concat([tf.math.real(h), tf.math.imag(h), record[..., -1:]*tf.abs(factor)**2], -1)
-        changed = model.channel_memory(transform(observation), history._replace(observations=transform(history.observations)), sample[3], layout=layout)
+        changed = model.channel_memory(transform(observation),
+                                       history._replace(observations=transform(history.observations)),
+                                       sample[3], layout=layout)
         np.testing.assert_allclose(changed.coefficients, original.coefficients*factor, rtol=3e-5, atol=2e-6)
-        np.testing.assert_allclose(changed.covariance, original.covariance*tf.cast(tf.abs(factor)**2, tf.complex64), rtol=3e-5, atol=2e-6)
+        np.testing.assert_allclose(changed.covariance, original.covariance*tf.cast(tf.abs(factor)**2, tf.complex64),
+                                   rtol=3e-5, atol=2e-6)
 
     def test_compact_matrix_channel_loss_matches_direct_positions(self):
-        from pilot_history_receiver.channel_filter import complex_channel
-        from pilot_history_receiver.training_execution import channel_nll
+        from neural_rx.receiver.channel_filter import complex_channel
+        from neural_rx.receiver.training_execution import channel_nll
         model, sample = build_model(), inputs()
         activate_physical_path(model, sample)
         layout = model.layout_for(sample[2])
@@ -253,27 +256,29 @@ class ChannelMemoryTest(unittest.TestCase):
         covariance = tf.reshape(covariance, [1, 2, layout.frequency, layout.symbols, 4, 4])
         factor = tf.linalg.cholesky(covariance)
         white = tf.linalg.triangular_solve(factor, error[..., None])[..., 0]
-        direct = (tf.reduce_sum(tf.abs(white)**2, -1)+2*tf.reduce_sum(tf.math.log(tf.math.real(tf.linalg.diag_part(factor))), -1))/4
+        direct = (tf.reduce_sum(tf.abs(white)**2, -1)
+                  +2*tf.reduce_sum(tf.math.log(tf.math.real(tf.linalg.diag_part(factor))), -1))/4
         expected = tf.reduce_sum(direct*layout.data_mask[None], [2,3])/layout.data_mask.sum((1,2))[None]
         np.testing.assert_allclose(got, expected, rtol=2e-5, atol=2e-5)
         changed = tf.where(layout.data_mask[None, ..., None], truth, truth+7.)
         np.testing.assert_array_equal(layout.channel_targets(changed), targets)
 
     def test_partner_ties_and_reordering_use_physical_identity(self):
-        from pilot_history_receiver.decoder_correction import select_partners
+        from neural_rx.receiver.decoder_correction import select_partners
         channel = tf.ones([1, 2, 3, 4], tf.complex64)
         variance = tf.zeros([1, 2, 3, 4])
         ids = tf.constant([[9, 3, 8, 2]])
         expected = np.array([[[3, 3, 3, 1], [3, 3, 3, 1]]])
         np.testing.assert_array_equal(select_partners(channel, variance, tf.ones([1]), tf.ones([1,4]), ids), expected)
         order = [2,0,3,1]
-        chosen = select_partners(tf.gather(channel, order, axis=-1), variance, tf.ones([1]), tf.ones([1,4]), tf.gather(ids, order, axis=1))
+        chosen = select_partners(tf.gather(channel, order, axis=-1), variance, tf.ones([1]), tf.ones([1,4]),
+                                 tf.gather(ids, order, axis=1))
         np.testing.assert_array_equal(np.array(order)[chosen], expected[:,:,order])
 
 
 class NativeCorrectionTests(unittest.TestCase):
     def test_blend_endpoints_shared_fit_ties_and_sign_symmetry(self):
-        from pilot_history_receiver.decoder_correction import DecoderCorrection
+        from neural_rx.receiver.decoder_correction import DecoderCorrection
         kernel = DecoderCorrection(Mapper('qam', 2), 2)
         rng = np.random.RandomState(417)
         y = tf.constant([[[1+.5j], [2-.5j]]], tf.complex64)
@@ -285,14 +290,18 @@ class NativeCorrectionTests(unittest.TestCase):
         calibration = tf.constant(rng.normal(size=7)*.1, tf.float32)
         strength = tf.constant(.4)
         blend = [tf.constant(rng.normal(size=s)*.2, tf.float32) for s in ((8,8),(8,),(8,),())]
-        phi = tf.ones([2,2,3]); cells = tf.zeros([2], tf.int64)
+        phi = tf.ones([2,2,3])
+        cells = tf.zeros([2], tf.int64)
         enabled = tf.ones([1,1], tf.bool)
-        indices = tf.reshape(tf.range(4,dtype=tf.int64),[1,2,2]); indices = tf.repeat(indices,2,0)
-        def native(values, signs=tf.ones([2,2,2]), fit_override=None):
+        indices = tf.reshape(tf.range(4,dtype=tf.int64),[1,2,2])
+        indices = tf.repeat(indices,2,0)
+        default_signs = tf.ones([2,2,2])
+        def native(values, signs=default_signs, fit_override=None):
             scores, fit = kernel.score(values[0],values[1:4],phi,cells,enabled)
             return kernel.native.pilot_pair_correction(*values[:5],phi,cells,tf.constant([[0,1]],tf.int64),
                 kernel.symbols,kernel.energy_indices,kernel.labels,enabled,indices,signs,tf.ones([1,2,2],tf.bool),
-                *values[5:8],tf.ones([1,2]),scores,fit if fit_override is None else fit_override,*values[8:],llr_limit=20.)
+                *values[5:8],tf.ones([1,2]),scores,fit if fit_override is None else fit_override,
+                *values[8:],llr_limit=20.)
         values = [y,factor,white,logdet,evidence,base,calibration,strength,*blend]
         upstream = tf.constant(rng.normal(size=base.shape),tf.float32)
         outputs, gradients = [], []
@@ -303,9 +312,10 @@ class NativeCorrectionTests(unittest.TestCase):
                     kernel.symbols,np.asarray(kernel.labels),np.asarray(kernel.energy_indices),
                     *values[5:7],20.,strength,blend)
                 loss = tf.reduce_sum(result*tf.cast(upstream,result.dtype))
-            outputs.append(result); gradients.append(tape.gradient(loss,values))
+            outputs.append(result)
+            gradients.append(tape.gradient(loss,values))
         np.testing.assert_allclose(*outputs,rtol=3e-5,atol=2e-6)
-        for actual, expected in zip(gradients[1],gradients[0]):
+        for actual, expected in zip(gradients[1],gradients[0], strict=True):
             np.testing.assert_allclose(actual,tf.convert_to_tensor(expected),rtol=3e-3,atol=2e-5)
         self.assertGreater(float(tf.linalg.norm(gradients[1][0])),1e-6)
         signed = [*values[:4],-evidence,-base,*values[6:]]
@@ -325,12 +335,13 @@ class NativeCorrectionTests(unittest.TestCase):
             np.testing.assert_allclose(native(forced),expected,rtol=2e-5,atol=2e-6)
 
     def test_preparation_matches_tensorflow_outputs_gradients_and_failure_recovery(self):
-        from pilot_history_receiver.decoder_correction import DecoderCorrection
+        from neural_rx.receiver.decoder_correction import DecoderCorrection
         from concurrent.futures import ThreadPoolExecutor
         rng = np.random.RandomState(902)
         for bits, batch, cells, antennas in ((2, 1, 1, 1), (2, 1, 1, 4), (4, 2, 7, 4), (4, 1, 3, 3), (6, 1, 5, 8)):
             kernel = DecoderCorrection(Mapper('qam', bits), bits)
-            z = lambda shape: tf.constant(rng.normal(size=shape)+1j*rng.normal(size=shape), tf.complex64)
+            def z(shape):
+                return tf.constant(rng.normal(size=shape)+1j*rng.normal(size=shape), tf.complex64)
             coefficients = z([batch, cells, 2, antennas, 3])
             a = z([batch, cells, 2, antennas, antennas])*.2
             covariance = tf.linalg.matmul(a, a, adjoint_b=True)
@@ -354,12 +365,12 @@ class NativeCorrectionTests(unittest.TestCase):
                                       2*tf.reduce_sum(tf.math.log(tf.math.real(tf.linalg.diag_part(factor))), -1))
                         if weights is None:
                             weights = [tf.cast(rng.normal(size=x.shape), x.dtype) for x in output]
-                        loss = sum(tf.reduce_sum(tf.math.real(x*w)) for x, w in zip(output, weights))
+                        loss = sum(tf.reduce_sum(tf.math.real(x*w)) for x, w in zip(output, weights, strict=True))
                     outputs.append(output)
                     gradients.append(tape.gradient(loss, values))
-                for actual, expected in zip(outputs[1], outputs[0]):
+                for actual, expected in zip(outputs[1], outputs[0], strict=True):
                     np.testing.assert_array_equal(actual, expected)
-                for actual, expected in zip(gradients[1], gradients[0]):
+                for actual, expected in zip(gradients[1], gradients[0], strict=True):
                     np.testing.assert_allclose(actual, expected, rtol=2e-4, atol=3e-5)
         @tf.function
         def invoke(covariance):
@@ -372,8 +383,8 @@ class NativeCorrectionTests(unittest.TestCase):
         expected = [[x.numpy() for x in invoke(value)] for value in varied]
         with ThreadPoolExecutor(max_workers=3) as workers:
             actual = list(workers.map(lambda value: [x.numpy() for x in invoke(value)], varied))
-        for result, reference_result in zip(actual, expected):
-            for value, reference in zip(result, reference_result):
+        for result, reference_result in zip(actual, expected, strict=True):
+            for value, reference in zip(result, reference_result, strict=True):
                 np.testing.assert_array_equal(value, reference)
 
     @staticmethod
@@ -390,44 +401,48 @@ class NativeCorrectionTests(unittest.TestCase):
         m, q = labels.shape
         group_count = int(round(np.sqrt(factor.shape[2])))
         pair_groups = (energy[:, None]*group_count+energy[None]).reshape(-1)
-        left = tf.repeat(symbols, m); right = tf.tile(symbols, [m])
-        residual = tf.gather(yw, pair_groups, axis=2)-tf.gather(ha, pair_groups, axis=2)*left[None,None,:,None]-tf.gather(hb, pair_groups, axis=2)*right[None,None,:,None]
+        left = tf.repeat(symbols, m)
+        right = tf.tile(symbols, [m])
+        residual = (tf.gather(yw, pair_groups, axis=2)-tf.gather(ha, pair_groups, axis=2)*left[None,None,:,None]
+                    -tf.gather(hb, pair_groups, axis=2)*right[None,None,:,None])
         residual_energy = tf.reduce_sum(tf.abs(residual)**2, -1)
         rho = tf.reduce_min(residual_energy, -1)/tf.cast(tf.shape(y)[-1], tf.float64)
         scores = -residual_energy-tf.gather(logdet, pair_groups, axis=2)
         bits = np.concatenate([np.repeat(labels, m, axis=0), np.tile(labels, (m,1))], -1)
         e = tf.reshape(tf.transpose(evidence, [0,2,1,3]), [tf.shape(evidence)[0], tf.shape(evidence)[2], 2*q])
-        l = tf.reshape(tf.transpose(effective, [0,2,1,3]), tf.shape(e))
+        eff = tf.reshape(tf.transpose(effective, [0,2,1,3]), tf.shape(e))
         def margin(v, bit):
             return (tf.reduce_logsumexp(tf.gather(v,np.flatnonzero(bits[:,bit]),axis=-1),-1)
                     -tf.reduce_logsumexp(tf.gather(v,np.flatnonzero(1-bits[:,bit]),axis=-1),-1))
         physical = tf.stack([margin(scores, bit) for bit in range(2*q)], -1)
-        re, rl, rp = [x/(limit+tf.abs(x)) for x in (e, l, physical)]
+        re, rl, rp = [x/(limit+tf.abs(x)) for x in (e, eff, physical)]
         features = tf.stack([tf.abs(re),tf.abs(rl),tf.abs(rp),re*rl,re*rp,rl*rp], -1)
         e *= 2*tf.sigmoid(tf.reduce_sum(features*calibration[:6], -1)+calibration[6])
         values = []
         for bit in range(2*q):
-            other = bits.copy(); other[:, bit] = 0
+            other = bits.copy()
+            other[:, bit] = 0
             scored = scores+tf.einsum('bnq,sq->bns',e,tf.constant(other, tf.float64))
             values.append(margin(scored,bit)-physical[...,bit])
         delta = tf.stack(values, -1)
         u = tf.cast(strength, tf.float64)*delta
-        b0, b1 = l+u, physical+u
+        b0, b1 = eff+u, physical+u
         normalizer = limit+tf.abs(b0)+tf.abs(b1)+tf.abs(u)
         x0, x1, xu = b0/normalizer, b1/normalizer, u/normalizer
         features = tf.stack([tf.abs(x0), tf.abs(x1), x0*x1, tf.abs(x1-x0), tf.abs(xu), x0*xu, x1*xu,
-                            tf.broadcast_to((rho/(1+rho))[..., None], tf.shape(l))], -1)
+                            tf.broadcast_to((rho/(1+rho))[..., None], tf.shape(eff))], -1)
         kernel, bias, head, offset = [tf.cast(v, tf.float64) for v in blend]
         coefficient = tf.sigmoid(tf.reduce_sum(tf.nn.relu(features@kernel+bias)*head, -1)+offset)
-        result = u+coefficient*(physical-l)
-        to_user = lambda value: tf.transpose(tf.reshape(value,[tf.shape(y)[0],tf.shape(y)[1],2,q]),[0,2,1,3])
+        result = u+coefficient*(physical-eff)
+        def to_user(value):
+            return tf.transpose(tf.reshape(value,[tf.shape(y)[0],tf.shape(y)[1],2,q]),[0,2,1,3])
         return (to_user(result), to_user(physical), to_user(delta), rho) if return_parts else to_user(result)
 
     def test_multi_user_routing_and_single_active_user_match_direct_pairs(self):
         from types import SimpleNamespace
         from scipy.special import logsumexp
-        from pilot_history_receiver.decoder_correction import DecoderCorrection, select_partners
-        from pilot_history_receiver.channel_filter import ChannelEstimate
+        from neural_rx.receiver.decoder_correction import DecoderCorrection, select_partners
+        from neural_rx.receiver.channel_filter import ChannelEstimate
         rng = np.random.RandomState(146)
         kernel = DecoderCorrection(Mapper('qam', 2), 2)
         symbols, labels = np.asarray(kernel.symbols), np.asarray(kernel.labels)
@@ -439,7 +454,8 @@ class NativeCorrectionTests(unittest.TestCase):
             theta = (rng.normal(size=[1,users,1,r,3])+1j*rng.normal(size=[1,users,1,r,3])).astype(np.complex64)*.3
             a = (rng.normal(size=[1,users,1,r,r])+1j*rng.normal(size=[1,users,1,r,r])).astype(np.complex64)*.1
             covariance = a@a.conj().swapaxes(-1,-2)+.1*np.eye(r,dtype=np.complex64)
-            phi = rng.normal(size=[n,users,3]).astype(np.float32); phi[...,0] = 1
+            phi = rng.normal(size=[n,users,3]).astype(np.float32)
+            phi[...,0] = 1
             layout = SimpleNamespace(users=users, code_positions=np.arange(n,dtype=np.int32),
                 code_phi=phi, code_cells=np.zeros(n,np.int32), cell_positions=[np.arange(n,dtype=np.int32)],
                 joint=lambda x: tf.transpose(x,[0,2,1,3,4]))
@@ -473,11 +489,14 @@ class NativeCorrectionTests(unittest.TestCase):
                     pair_bits = np.array([np.r_[labels[i],labels[j]] if v>=0 else labels[i] for i,j in choices])
                     for position in range(n):
                         background = [w for w in range(users) if active[0,w] and w not in (u,v)]
-                        residual_y = y[0,position]-sum((h[position,w]*means[w,position] for w in background),start=np.zeros(r,complex))
+                        residual_y = y[0,position]-sum((h[position,w]*means[w,position] for w in background),
+                                                       start=np.zeros(r,complex))
                         matrix_bg = .4*np.eye(r,dtype=complex)
                         for w in background:
-                            matrix_bg += variance[w,position]*np.outer(h[position,w],h[position,w].conj())+energy[w,position]*covariance[0,w,0]
-                        scores=[]; distances=[]
+                            matrix_bg += (variance[w,position]*np.outer(h[position,w],h[position,w].conj())
+                                          +energy[w,position]*covariance[0,w,0])
+                        scores=[]
+                        distances=[]
                         for i,j in choices:
                             matrix = matrix_bg+abs(symbols[i])**2*covariance[0,u,0]
                             residual = residual_y-h[position,u]*symbols[i]
@@ -489,15 +508,18 @@ class NativeCorrectionTests(unittest.TestCase):
                             scores.append(-distance-np.linalg.slogdet(matrix)[1])
                         scores=np.array(scores)
                         prior = np.r_[e[u,position],e[v,position]] if v>=0 else e[u,position].copy()
-                        base = np.r_[llr[0,u].reshape(n,2)[position],llr[0,v].reshape(n,2)[position]] if v>=0 else llr[0,u].reshape(n,2)[position]
-                        physical = np.array([logsumexp(scores[pair_bits[:,bit] == 1])-logsumexp(scores[pair_bits[:,bit] == 0])
+                        base = (np.r_[llr[0,u].reshape(n,2)[position],llr[0,v].reshape(n,2)[position]] if v>=0
+                                else llr[0,u].reshape(n,2)[position])
+                        physical = np.array([logsumexp(scores[pair_bits[:,bit] == 1])
+                                             -logsumexp(scores[pair_bits[:,bit] == 0])
                                              for bit in range(pair_bits.shape[1])])
                         re,rl,rp = [x/(20+np.abs(x)) for x in (prior,base,physical)]
                         features = np.stack([abs(re),abs(rl),abs(rp),re*rl,re*rp,rl*rp],-1)
                         prior *= 2/(1+np.exp(-(features@calibration[:6]+calibration[6])))
                         for bit in range(2):
                             selected=pair_bits[:,bit].astype(bool)
-                            other=pair_bits.copy();other[:,bit]=0
+                            other=pair_bits.copy()
+                            other[:,bit]=0
                             z=scores+other@prior
                             delta=(logsumexp(z[selected])-logsumexp(z[~selected]))-physical[bit]
                             correction=float(strength)*delta
@@ -511,13 +533,14 @@ class NativeCorrectionTests(unittest.TestCase):
                 np.testing.assert_allclose(actual,expected,rtol=2e-4,atol=5e-6)
 
     def test_native_forward_full_gradients_and_zero_evidence(self):
-        from pilot_history_receiver.native_ops import load
-        from pilot_history_receiver.decoder_correction import DecoderCorrection
+        from neural_rx.receiver.native_ops import load
+        from neural_rx.receiver.decoder_correction import DecoderCorrection
         tf.keras.utils.set_random_seed(901)
         tf.config.experimental.enable_op_determinism()
         kernel = DecoderCorrection(Mapper('qam',4),4)
         rng = np.random.RandomState(88)
-        complex_value = lambda shape: tf.constant(rng.normal(size=shape)+1j*rng.normal(size=shape),tf.complex64)
+        def complex_value(shape):
+            return tf.constant(rng.normal(size=shape)+1j*rng.normal(size=shape),tf.complex64)
         y = complex_value([2,5,3])
         factor = tf.linalg.band_part(complex_value([2,2,9,3,3])*.1,-1,0)
         factor = tf.linalg.set_diag(factor,tf.cast(tf.ones([2,2,9,3])*1.3,tf.complex64))
@@ -526,7 +549,8 @@ class NativeCorrectionTests(unittest.TestCase):
         evidence = tf.constant(rng.normal(size=[2,2,5,4]),tf.float32)
         effective = tf.constant(rng.uniform(-20,20,size=evidence.shape),tf.float32)
         phi = tf.constant(rng.normal(size=[5,2,3]),tf.float32)
-        cells = tf.constant([0,1,0,1,1]); positions = tf.constant([[0,2,-1],[1,3,4]])
+        cells = tf.constant([0,1,0,1,1])
+        positions = tf.constant([[0,2,-1],[1,3,4]])
         mapping = [tf.tile(tf.reshape(tf.range(20),[1,5,4]),[2,1,1]),
                    tf.ones([2,5,4]), tf.ones([2,2,5],tf.bool)]
         incoming = tf.constant(rng.normal(size=evidence.shape),tf.float32)
@@ -534,9 +558,11 @@ class NativeCorrectionTests(unittest.TestCase):
         blend = [tf.constant(rng.normal(size=shape)*.3, tf.float32) for shape in ((8, 8), (8,), (8,), ())]
         def arguments(values, enabled):
             scores = kernel.score(values[0], values[1:4], phi, tf.cast(cells, tf.int64), enabled)
-            return (*values[:5],phi,tf.cast(cells,tf.int64),tf.cast(positions,tf.int64),kernel.symbols,kernel.energy_indices,kernel.labels,
+            return (*values[:5],phi,tf.cast(cells,tf.int64),tf.cast(positions,tf.int64),
+                    kernel.symbols,kernel.energy_indices,kernel.labels,
                     enabled,tf.cast(mapping[0],tf.int64),*mapping[1:],*values[5:8],tf.ones([2,2]),*scores,*values[8:])
-        def call(values, enabled=tf.ones([2,2],tf.bool)):
+        all_enabled = tf.ones([2,2],tf.bool)
+        def call(values, enabled=all_enabled):
             return load().pilot_pair_correction(*arguments(values,enabled),llr_limit=20.)
         for calibration in (tf.zeros([7]),tf.constant(rng.normal(size=7),tf.float32)):
             for source in (evidence,tf.zeros_like(evidence),evidence*30):
@@ -549,9 +575,10 @@ class NativeCorrectionTests(unittest.TestCase):
                             kernel.symbols,np.asarray(kernel.labels),np.asarray(kernel.energy_indices),
                             *values[5:7],20.,values[7],values[8:])
                         loss = tf.reduce_sum(output*tf.cast(incoming,output.dtype))
-                    outputs.append(output); gradients.append(tape.gradient(loss,values))
+                    outputs.append(output)
+                    gradients.append(tape.gradient(loss,values))
                 np.testing.assert_allclose(*outputs,rtol=3e-4,atol=2e-5)
-                for actual, expected in zip(gradients[1],gradients[0]):
+                for actual, expected in zip(gradients[1],gradients[0], strict=True):
                     self.assertTrue(np.isfinite(actual).all())
                     np.testing.assert_allclose(actual,tf.convert_to_tensor(expected),rtol=3e-3,atol=8e-5)
                 if not np.any(source):
@@ -566,9 +593,12 @@ class NativeCorrectionTests(unittest.TestCase):
                                                             incoming,llr_limit=20.)
                 gate_gradient=tf.reduce_sum(repeated[8],[0,1])
                 unpacked=[tf.reshape(gate_gradient[:64],[8,8]),gate_gradient[64:72],gate_gradient[72:80],gate_gradient[80]]
-                for a,b in zip(gradients[1],[*repeated[:6],tf.reduce_sum(repeated[6],[0,1]),tf.reduce_sum(repeated[7]),*unpacked]):
+                for a,b in zip(gradients[1],
+                               [*repeated[:6],tf.reduce_sum(repeated[6],[0,1]),tf.reduce_sum(repeated[7]),*unpacked],
+                               strict=True):
                     np.testing.assert_array_equal(a,b)
-        modified = source.numpy(); modified[:,0,:,1] += 10.
+        modified = source.numpy()
+        modified[:,0,:,1] += 10.
         changed = call([y,factor,white,logdet,tf.constant(modified),effective,calibration,strength,*blend])
         np.testing.assert_array_equal(changed[:,0,:,1],outputs[1][:,0,:,1])
         with tf.GradientTape() as tape:
@@ -587,11 +617,11 @@ class NativeCorrectionTests(unittest.TestCase):
         expected = [concurrent(i*.1) for i in range(4)]
         with ThreadPoolExecutor(max_workers=4) as workers:
             actual = list(workers.map(concurrent,[i*.1 for i in range(4)]))
-        for a,b in zip(actual,expected):
+        for a,b in zip(actual,expected, strict=True):
             np.testing.assert_array_equal(a,b)
 
     def test_scrambled_padded_correction_and_gradients_with_asymmetric_requests(self):
-        from pilot_history_receiver.decoder_correction import DecoderCorrection
+        from neural_rx.receiver.decoder_correction import DecoderCorrection
         rng = np.random.RandomState(179)
         for q in (2, 6):
             kernel = DecoderCorrection(Mapper('qam',q),q)
@@ -599,7 +629,8 @@ class NativeCorrectionTests(unittest.TestCase):
             n, total = 3, 3*q+5
             y = tf.constant(rng.normal(size=[2,n,1])+1j*rng.normal(size=[2,n,1]),tf.complex64)
             factor = tf.ones([2,1,groups,1,1],tf.complex64)
-            white = tf.constant(.1*(rng.normal(size=[2,1,groups,1,6])+1j*rng.normal(size=[2,1,groups,1,6])),tf.complex64)
+            white = tf.constant(.1*(rng.normal(size=[2,1,groups,1,6])+1j*rng.normal(size=[2,1,groups,1,6])),
+                                tf.complex64)
             logdet = tf.zeros([2,1,groups])
             evidence = tf.constant(rng.normal(size=[2,2,1,total]),tf.float32)
             effective = tf.constant(rng.uniform(-20,20,size=evidence.shape),tf.float32)
@@ -619,7 +650,8 @@ class NativeCorrectionTests(unittest.TestCase):
                 with tf.GradientTape() as tape:
                     tape.watch(inputs)
                     if native:
-                        scores = kernel.score(y, (factor,white,logdet), phi, tf.zeros([n],tf.int64), tf.ones([2,1],tf.bool))
+                        scores = kernel.score(y, (factor,white,logdet), phi, tf.zeros([n],tf.int64),
+                                              tf.ones([2,1],tf.bool))
                         output = kernel.native.pilot_pair_correction(*inputs[:5],phi,tf.zeros([n],tf.int64),
                             tf.range(n,dtype=tf.int64)[None],kernel.symbols,kernel.energy_indices,kernel.labels,tf.ones([2,1],tf.bool),
                             tf.constant(indices,tf.int64),tf.constant(signs),wanted,*inputs[5:8],
@@ -633,9 +665,10 @@ class NativeCorrectionTests(unittest.TestCase):
                         output = tf.einsum('bunq,unqc->buc',symbol_delta*tf.cast(wanted[...,None],tf.float64),
                                            tf.cast(permutation,tf.float64))[:,:,None]
                     loss = tf.reduce_sum(output*tf.cast(incoming,output.dtype))
-                outputs.append(output); gradients.append(tape.gradient(loss,inputs))
+                outputs.append(output)
+                gradients.append(tape.gradient(loss,inputs))
             np.testing.assert_allclose(*outputs,rtol=2e-4,atol=8e-6)
-            for actual,expected in zip(gradients[1],gradients[0]):
+            for actual,expected in zip(gradients[1],gradients[0], strict=True):
                 np.testing.assert_allclose(actual,tf.convert_to_tensor(expected),rtol=3e-3,atol=3e-5)
             for u in range(2):
                 padding = np.setdiff1d(np.arange(total),indices[u].ravel())
@@ -650,7 +683,8 @@ class NativeCorrectionTests(unittest.TestCase):
                 with tf.GradientTape() as tape:
                     tape.watch(values)
                     information = evidence if fused else (evidence-effective)*active[..., None, None]
-                    scores = kernel.score(y, (factor,white,logdet), phi, tf.zeros([n],tf.int64), tf.ones([2,1],tf.bool))
+                    scores = kernel.score(y, (factor,white,logdet), phi, tf.zeros([n],tf.int64),
+                                          tf.ones([2,1],tf.bool))
                     output = kernel.native.pilot_pair_correction(y,factor,white,logdet,information,phi,
                         tf.zeros([n],tf.int64),tf.range(n,dtype=tf.int64)[None],kernel.symbols,kernel.energy_indices,
                         kernel.labels,tf.ones([2,1],tf.bool),tf.constant(indices,tf.int64),tf.constant(signs),
@@ -661,7 +695,7 @@ class NativeCorrectionTests(unittest.TestCase):
                 outputs.append(output)
                 gradients.append(tape.gradient(loss,values))
             np.testing.assert_allclose(*outputs, rtol=2e-6, atol=2e-6)
-            for actual, expected in zip(gradients[1], gradients[0]):
+            for actual, expected in zip(gradients[1], gradients[0], strict=True):
                 np.testing.assert_allclose(actual, expected, rtol=3e-4, atol=3e-5)
             self.assertGreater(abs(float(gradients[1][7])), 1e-6)
 

@@ -10,11 +10,11 @@ from unittest import mock
 
 import numpy as np
 
-from artifact_provenance import evaluation_source_records
-from temporal_benchmark_episodes import CachedScenarioBank
-from temporal_benchmark_frozen import make_manifest, protocol_and_plan
-from temporal_benchmark_reference import evaluate_frozen_references, frozen_result_cache, reference_binding
-from temporal_generalization_protocol import seal_payload
+from neural_rx.provenance.sources import evaluation_source_records
+from neural_rx.benchmark.episodes import CachedScenarioBank
+from neural_rx.benchmark.frozen import make_manifest, protocol_and_plan
+from neural_rx.benchmark.reference import evaluate_frozen_references, frozen_result_cache, reference_binding
+from neural_rx.benchmark.generalization_protocol import seal_payload
 from test_benchmark_fixtures import SyntheticScenarioBank, ZeroAdapter
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -26,15 +26,15 @@ class BenchmarkEntrypointTest(unittest.TestCase):
         environment.pop("PYTHONPATH", None)
         with tempfile.TemporaryDirectory() as temporary:
             cases = (
-                ("run_temporal_benchmark.py", ["--experiment-phase", "latency", "--experiment-prbs", "4",
+                ("neural_rx.cli.benchmark", ["--experiment-phase", "latency", "--experiment-prbs", "4",
                  "--output-dir", str(Path(temporary) / "unused")], "Full experiments require"),
-                ("smoke_temporal_benchmark_adapters.py", ["--prbs", "0", "--candidate-checkpoint",
+                ("neural_rx.benchmark.smoke", ["--prbs", "0", "--candidate-checkpoint",
                  str(ROOT / "models/learned_blend_joint_20261019/checkpoint_005000")], "Invalid smoke-test PRB count"),
             )
             for cwd in (ROOT, Path(temporary)):
                 for name, arguments, message in cases:
                     with self.subTest(cwd=cwd, command=name):
-                        result = subprocess.run([sys.executable, "-B", str(ROOT / "scripts" / name),
+                        result = subprocess.run([sys.executable, "-B", "-m", name,
                                                  "--gpu", "-1", *arguments], cwd=cwd, env=environment,
                                                 capture_output=True, text=True, timeout=45)
                         self.assertNotEqual(result.returncode, 0)
@@ -65,17 +65,17 @@ class ReferenceReuseTest(unittest.TestCase):
             destination.parent.mkdir(parents=True, exist_ok=True)
             shutil.copyfile(ROOT / name, destination)
         baseline = self.binding(clone)
-        for name in ("scripts/receiver_decoding.py", "scripts/temporal_benchmark_runtime.py",
-                     "scripts/temporal_benchmark_scoring.py", "utils/neural_rx.py"):
+        for name in ("src/neural_rx/decoding.py", "src/neural_rx/benchmark/runtime.py",
+                     "src/neural_rx/benchmark/scoring.py", "src/neural_rx/backbone/cgnn.py"):
             self.assertIn(name, baseline["sources"])
-        self.assertFalse(any("pilot_history_receiver" in name or name.endswith("temporal_benchmark_frozen.py")
+        self.assertFalse(any("src/neural_rx/receiver/" in name or name.endswith("benchmark/frozen.py")
                              for name in baseline["sources"]))
         compute = mock.Mock(return_value=({"errors": np.zeros(2, bool)}, {"checked": True}, 0.))
         cache = self.directory / "cache"
         frozen_result_cache(cache, baseline, compute)
         old_protocol = self.protocol["protocol_sha256"]
-        for name in ("scripts/pilot_history_receiver/model.py", "scripts/pilot_history_receiver/pilot_history.py",
-                     "scripts/pilot_history_receiver/benchmark_adapter.py"):
+        for name in ("src/neural_rx/receiver/model.py", "src/neural_rx/receiver/pilot_history.py",
+                     "src/neural_rx/receiver/benchmark_adapter.py"):
             path = clone / name
             path.write_text(path.read_text() + "\nSOURCE_CHANGE = True\n")
         self.protocol["runtime_sources"] = evaluation_source_records(clone)
@@ -86,7 +86,7 @@ class ReferenceReuseTest(unittest.TestCase):
         self.assertEqual(changed, baseline)
         frozen_result_cache(cache, changed, compute)
         self.assertEqual(compute.call_count, 1)
-        path = clone / "scripts/receiver_decoding.py"
+        path = clone / "src/neural_rx/decoding.py"
         path.write_text(path.read_text() + "\nSOURCE_CHANGE = True\n")
         changed = self.binding(clone)
         self.assertNotEqual(changed, baseline)
@@ -125,12 +125,13 @@ class ReferenceReuseTest(unittest.TestCase):
                                   self.protocol, self.identity)
         def build(**kwargs):
             return ZeroAdapter(kwargs["manifest"])
-        with mock.patch("temporal_benchmark_reference.ColdNeuralRxBenchmarkAdapter", side_effect=build) as constructor, \
-                mock.patch("temporal_benchmark_reference.reference_runtime", return_value=self.runtime):
+        with mock.patch("neural_rx.benchmark.reference.ColdNeuralRxBenchmarkAdapter",
+                        side_effect=build) as constructor, \
+                mock.patch("neural_rx.benchmark.reference.reference_runtime", return_value=self.runtime):
             registrations = {m: make_manifest(self.protocol, m) for m in self.methods}
             first = evaluate_frozen_references(self.directory / "cache", self.protocol, self.plan,
                                               bank, registrations, None)[0]
-            self.protocol["runtime_sources"]["scripts/pilot_history_receiver/model.py"] = "changed memory receiver"
+            self.protocol["runtime_sources"]["src/neural_rx/receiver/model.py"] = "changed memory receiver"
             self.protocol = seal_payload(self.protocol, field="protocol_sha256")
             registrations = {m: make_manifest(self.protocol, m) for m in self.methods}
             second = evaluate_frozen_references(self.directory / "cache", self.protocol, self.plan,

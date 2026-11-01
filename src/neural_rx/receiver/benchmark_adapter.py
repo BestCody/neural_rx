@@ -6,10 +6,10 @@ from typing import NamedTuple
 
 import numpy as np
 
-from temporal_benchmark_adapters import (
+from neural_rx.benchmark.adapters import (
     _ArtifactGuard, _checkpoint_path, _runtime_config, _support_path, _verify_method,
 )
-from temporal_benchmark_candidate import checked_decoder_tensors, decoder_output, stack_receiver_grids
+from neural_rx.benchmark.candidate import checked_decoder_tensors, decoder_output, stack_receiver_grids
 from .pilot_history import MemoryPolicy, PilotMemoryBuffer, validate_memory_metadata
 
 
@@ -28,8 +28,8 @@ class PilotHistoryBenchmarkAdapter(_ArtifactGuard):
         if int(manifest["inference"]["iterations"]) != 2:
             raise ValueError("Channel memory requires K=2")
         super().__init__(manifest, artifacts)
-        from receiver_decoding import OneLayerGridCodeMap, DecoderAssistedTB
-        from temporal_receiver_core import build_backbone, model_checksum, prepare_cgnn_inputs
+        from neural_rx.decoding import OneLayerGridCodeMap, DecoderAssistedTB
+        from neural_rx.backbone.core import build_backbone, model_checksum, prepare_cgnn_inputs
         from .pilot_layout import PilotLayout
         from .model import PilotHistoryReceiver, architecture_settings
 
@@ -152,7 +152,8 @@ class PilotHistoryBenchmarkAdapter(_ArtifactGuard):
                 head, count = self._buffer.empty_metadata()
             else:
                 ids = np.asarray(ue_ids)
-                if ids.ndim != 1 or not np.issubdtype(ids.dtype, np.integer) or np.any(ids < 0) or np.any(ids >= self.manager.capacity):
+                if (ids.ndim != 1 or not np.issubdtype(ids.dtype, np.integer) or np.any(ids < 0)
+                        or np.any(ids >= self.manager.capacity)):
                     raise ValueError("Reset requires valid physical UE IDs")
                 head = self._committed.head
                 keep = ~np.isin(np.arange(self.manager.capacity), ids)
@@ -177,13 +178,15 @@ class PilotHistoryBenchmarkAdapter(_ArtifactGuard):
                 raise ValueError("Scheduled user count differs from the receiver configuration")
             validate_memory_metadata(ids,active,self.manager.capacity)
             for point in inputs:
-                if np.shape(point["received_grid"]) != self._received_shape or np.shape(point["ls_channel"]) != self._channel_shape:
+                if (np.shape(point["received_grid"]) != self._received_shape
+                        or np.shape(point["ls_channel"]) != self._channel_shape):
                     raise ValueError("Received or channel grid differs from the receiver configuration")
             noise = np.asarray([p["noise_variance"] for p in inputs],np.float32)
             if noise.shape != (self._batch_size,) or not np.all(np.isfinite(noise)) or np.any(noise < 0):
                 raise ValueError("Noise variance must be finite, nonnegative, and scalar per sample")
             times = [p.get("time_index", self._step) for p in inputs]
-            if any(isinstance(t,(bool,np.bool_)) or not isinstance(t,(int,np.integer)) or not self._step <= t < np.iinfo(np.int32).max for t in times) or len(set(times))!=1:
+            if any(isinstance(t,(bool,np.bool_)) or not isinstance(t,(int,np.integer))
+                   or not self._step <= t < np.iinfo(np.int32).max for t in times) or len(set(times))!=1:
                 raise ValueError("Memory calls require matching monotonic TB indices; reset for a new timeline")
             step = int(times[0])
             control = np.concatenate([ids.astype(np.int64, copy=False),

@@ -272,8 +272,8 @@
       "episodes": 32,
       "num_tbs": 64,
       "scoring_start_tb": 17,
-      "seed": 86000000
+      "seed": 88000000
     }
   },
-  "protocol_sha256": "c72039f621ff43d3ef3a00598fd8be655f68d21bf6d2943f8265ddb613c5d324"
+  "protocol_sha256": "a2a5441f6067c493ee714f24cb427c7d9b71ff86c633ff20de2928715039bb61"
 }

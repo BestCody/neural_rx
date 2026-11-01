@@ -8,9 +8,9 @@ from unittest.mock import Mock, patch
 
 import numpy as np
 
-from temporal_benchmark_episodes import CachedScenarioBank
-from temporal_benchmark_protocol import load_benchmark_protocol
-from temporal_benchmark_runtime import episode_fingerprint
+from neural_rx.benchmark.episodes import CachedScenarioBank
+from neural_rx.benchmark.protocol import load_benchmark_protocol
+from neural_rx.benchmark.runtime import episode_fingerprint
 from test_benchmark_fixtures import SyntheticScenarioBank
 
 
@@ -18,7 +18,8 @@ class EpisodeCacheTest(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
-        self.protocol = load_benchmark_protocol(Path(__file__).resolve().parents[1] / "config/temporal_benchmark_v1.json")
+        self.protocol = load_benchmark_protocol(
+            Path(__file__).resolve().parents[1] / "config/temporal_benchmark_v1.json")
         self.job = {"condition": "test", "provider": "independent_tdl",
                     "provider_settings": {}, "episode_count": 2, "num_tbs": 2,
                     "snr_db": [1.0, 2.0], "seed_streams": {"channel": 100}}
@@ -28,7 +29,8 @@ class EpisodeCacheTest(unittest.TestCase):
     def test_shared_inputs_replay_without_generator_and_are_readonly(self):
         expected = SyntheticScenarioBank().generate(self.job, 0)
         first = self.bank.generate(self.job, 0)
-        replay = CachedScenarioBank(None, self.temp.name, self.protocol, {"source": "one"}, readonly=True).generate(self.job, 0)
+        replay = CachedScenarioBank(None, self.temp.name, self.protocol, {"source": "one"},
+                                    readonly=True).generate(self.job, 0)
         self.assertEqual(self.provider.generate.call_count, 1)
         np.testing.assert_array_equal(first.fingerprint, episode_fingerprint(expected))
         np.testing.assert_array_equal(replay.fingerprint, first.fingerprint)
@@ -71,21 +73,21 @@ class EpisodeCacheTest(unittest.TestCase):
         self.assertEqual(self.provider.generate.call_count, 2)
 
     def test_evaluator_loads_each_episode_once_and_uses_verified_fingerprints(self):
-        from temporal_benchmark_frozen import protocol_and_plan
-        from temporal_benchmark_runtime import evaluate_method_set
+        from neural_rx.benchmark.frozen import protocol_and_plan
+        from neural_rx.benchmark.runtime import evaluate_method_set
         from test_benchmark_fixtures import ZeroAdapter, synthetic_candidate_manifest
         protocol, plan = protocol_and_plan("smoke", 132, episodes=2)
         bank = CachedScenarioBank(SyntheticScenarioBank(), self.temp.name, protocol, {"source": "test"})
         methods = ("candidate_persistent", "candidate_reset")
         manifest = synthetic_candidate_manifest(protocol)
         adapters = {method: ZeroAdapter(manifest) for method in methods}
-        with patch("temporal_benchmark_runtime.validate_episode", side_effect=AssertionError("Repeated validation")), \
+        with patch("neural_rx.benchmark.runtime.validate_episode", side_effect=AssertionError("Repeated validation")), \
                 patch.object(bank, "generate", wraps=bank.generate) as generate:
             evaluate_method_set(protocol, plan, bank, adapters, methods)
         self.assertEqual(generate.call_count, sum(job["episode_count"] for job in plan["jobs"]))
 
     def test_fixed_dataset_replays_original_inputs_without_regeneration_or_source_rules(self):
-        from temporal_generalization_protocol import seal_payload
+        from neural_rx.benchmark.generalization_protocol import seal_payload
         old_identity = {"schema": "test", "radio": {"prbs": 132},
                         "sources": {"generator.py": "before"}}
         new_identity = dict(old_identity, sources={"different.py": "after"})
@@ -125,7 +127,7 @@ class EpisodeCacheTest(unittest.TestCase):
         np.testing.assert_array_equal(episode_fingerprint(episodes[0]), episode_fingerprint(episodes[1]))
 
     def test_space_check_stops_before_generating_the_whole_bank(self):
-        with patch("temporal_benchmark_episodes.shutil.disk_usage", side_effect=[
+        with patch("neural_rx.benchmark.episodes.shutil.disk_usage", side_effect=[
             Mock(free=100 * 1024**3), Mock(free=0),
         ]):
             with self.assertRaisesRegex(OSError, "larger volume"):

@@ -4,11 +4,11 @@ from __future__ import annotations
 
 import numpy as np
 
-from geometry_mumimo_data import GeometryAwareMUMIMOGenerator
-from temporal_benchmark_runtime import BenchmarkEpisode
-from temporal_generalization_protocol import ChannelProfileSpec
-from temporal_receiver_core import expand_noise, make_snr_batch
-from temporal_training_data import TemporalTrainingDataGenerator
+from neural_rx.data.geometry import GeometryAwareMUMIMOGenerator
+from neural_rx.benchmark.runtime import BenchmarkEpisode
+from neural_rx.benchmark.generalization_protocol import ChannelProfileSpec
+from neural_rx.backbone.core import expand_noise, make_snr_batch
+from neural_rx.data.temporal import TemporalTrainingDataGenerator
 
 
 class PowerControlledGeometryGenerator(GeometryAwareMUMIMOGenerator):
@@ -37,13 +37,13 @@ class PowerControlledGeometryGenerator(GeometryAwareMUMIMOGenerator):
 
 class TemporalBenchmarkScenarioBank:
 
-    def __init__(self, parameters, e2e_model, tf_module, rt_bank=None):
+    def __init__(self, parameters, e2e_model, tf_module, rt_banks=None):
         self.parameters = parameters
         self.e2e_model = e2e_model
         self.receiver = e2e_model._receiver
         self.tf = tf_module
         self.generators = {}
-        self.rt_bank = rt_bank
+        self.rt_banks = rt_banks or {}
 
     def _seed_streams(self, job: dict, episode_index: int) -> dict:
         return {
@@ -86,10 +86,11 @@ class TemporalBenchmarkScenarioBank:
         settings = job["provider_settings"]
         common = self._common_kwargs(job, episode_index)
         if provider == "ray_traced":
-            from rt_channel_data import RayTracedGenerator
-            if self.rt_bank is None or self.rt_bank.sha256 != settings["channel_bank_sha256"]:
+            from neural_rx.rt.data import RayTracedGenerator
+            bank = self.rt_banks.get(settings["channel_bank_sha256"])
+            if bank is None:
                 raise ValueError("The requested RT bank differs from the supplied paths")
-            return RayTracedGenerator(self.parameters, self.e2e_model, self.rt_bank,
+            return RayTracedGenerator(self.parameters, self.e2e_model, bank,
                                       dynamic_scheduling=False, scenario_training=False, **common)
         if provider == "independent_tdl":
             profile = self._tdl_profile(settings)

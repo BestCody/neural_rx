@@ -9,11 +9,11 @@ from types import SimpleNamespace
 import unittest
 from unittest import mock
 
-from pilot_history_receiver.training_options import requested_updates
-from run_memory_training import continued_registration, evaluation_updates
-from train_memory_receiver import main as train_main
-from train_neural_rx import training_paths
-from pilot_history_receiver.checkpoints import recover_history
+from neural_rx.receiver.training_options import requested_updates
+from neural_rx.cli.campaign import continued_registration, evaluation_updates
+from neural_rx.cli.train import main as train_main
+from neural_rx.cli.train_backbone import training_paths
+from neural_rx.receiver.checkpoints import recover_history
 
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -42,9 +42,9 @@ class TrainingControlsTest(unittest.TestCase):
         self.recipe = json.loads((ROOT/"config/memory_training.json").read_text())
 
     def test_launcher_registers_retained_anchors_and_development_bank(self):
-        import run_memory_training as launcher
-        from temporal_generalization_protocol import seal_payload
-        from temporal_benchmark_candidate import pretrained_checkpoint
+        import neural_rx.cli.campaign as launcher
+        from neural_rx.benchmark.generalization_protocol import seal_payload
+        from neural_rx.benchmark.candidate import pretrained_checkpoint
         benchmark = json.loads((ROOT/"config/temporal_benchmark_v1.json").read_text())
         with tempfile.TemporaryDirectory() as temporary:
             directory = Path(temporary)
@@ -57,7 +57,8 @@ class TrainingControlsTest(unittest.TestCase):
                 "--data-gpu", "none", "--replica-gpu", "none", "--anchors", str(anchors),
                 "--development-cache", str(directory), "--dry-run"]
             with mock.patch.object(sys, "argv", arguments), mock.patch("builtins.print") as printed, \
-                    mock.patch.object(launcher, "recover_latest", side_effect=AssertionError("Dry run must not mutate checkpoints")):
+                    mock.patch.object(launcher, "recover_latest",
+                                      side_effect=AssertionError("Dry run must not mutate checkpoints")):
                 launcher.main()
             record = json.loads(printed.call_args.args[0])
             self.assertEqual(record["checkpoints"], [1000])
@@ -90,7 +91,8 @@ class TrainingControlsTest(unittest.TestCase):
         self.assertEqual(hashlib.sha256(source.read_bytes()).hexdigest(), before)
 
     def test_training_log_recovers_only_updates_in_the_checkpoint(self):
-        row = lambda step: json.dumps(dict(update=step,width=12,episode_fingerprints=[str(step)])).encode()
+        def row(step):
+            return json.dumps(dict(update=step,width=12,episode_fingerprints=[str(step)])).encode()
         with tempfile.TemporaryDirectory() as temporary:
             path = Path(temporary)/"history.jsonl"
             first = row(1)+b"\n"
@@ -129,11 +131,12 @@ class TrainingControlsTest(unittest.TestCase):
             experimental=SimpleNamespace(enable_op_determinism=lambda:None)))
         with tempfile.TemporaryDirectory() as temporary, mock.patch.dict(os.environ), \
                 mock.patch.dict(sys.modules,{"tensorflow":tensorflow,
-                    "pilot_history_receiver.training":SimpleNamespace(MemoryTrainer=Trainer,atomic_json=write_json)}):
+                    "neural_rx.receiver.training":SimpleNamespace(MemoryTrainer=Trainer,atomic_json=write_json)}):
             source = publish_checkpoint(Path(temporary)/"source",6000)
             output = Path(temporary)/"continued"
             for resume in (source,output/"checkpoint_006000"):
-                with mock.patch.object(sys,"argv",["train","--output-dir",str(output),"--data-gpu","none","--replica-gpu","none",
+                with mock.patch.object(sys,"argv",["train","--output-dir",str(output),
+                                                   "--data-gpu","none","--replica-gpu","none",
                     "--steps","6000","--resume",str(resume)]):
                     train_main()
                 completion = json.loads((output/"completion.json").read_text())
@@ -151,7 +154,8 @@ class TrainingControlsTest(unittest.TestCase):
 
     def test_increasing_duration_preserves_the_run_identity(self):
         previous = dict(recipe=self.recipe, requested_updates=1701,
-                        checkpoints=evaluation_updates(self.recipe, 1701), architecture={"memory":"pilot_history_attention"})
+                        checkpoints=evaluation_updates(self.recipe, 1701),
+                        architecture={"memory":"pilot_history_attention"})
         current = dict(previous, requested_updates=8001,
                        checkpoints=evaluation_updates(self.recipe, 8001))
         merged = continued_registration(previous, current)
@@ -203,12 +207,14 @@ class TrainingControlsTest(unittest.TestCase):
                                     experimental=SimpleNamespace(enable_op_determinism=lambda:None)))
         training_module = SimpleNamespace(MemoryTrainer=Trainer,atomic_json=write_json)
         with tempfile.TemporaryDirectory() as temporary, mock.patch.dict(os.environ), \
-                mock.patch.dict(sys.modules,{"tensorflow":tensorflow,"pilot_history_receiver.training":training_module}), \
+                mock.patch.dict(sys.modules,{"tensorflow":tensorflow,
+                                             "neural_rx.receiver.training":training_module}), \
                 mock.patch("builtins.print"):
             output = Path(temporary)
             checkpoint = publish_checkpoint(output,5999)
             for stop in (6001, 6003):
-                with mock.patch.object(sys,"argv",["train","--output-dir",str(output),"--data-gpu","none","--replica-gpu","none",
+                with mock.patch.object(sys,"argv",["train","--output-dir",str(output),
+                                                   "--data-gpu","none","--replica-gpu","none",
                                                    "--steps",str(stop),"--resume",str(checkpoint)]):
                     train_main()
                 completion = json.loads((output/"completion.json").read_text())

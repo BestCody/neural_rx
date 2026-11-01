@@ -6,8 +6,8 @@ from pathlib import Path
 
 import numpy as np
 
-from artifact_io import canonical_json, file_sha256
-from temporal_generalization_protocol import verify_payload
+from neural_rx.provenance.artifacts import canonical_json, file_sha256
+from neural_rx.benchmark.generalization_protocol import verify_payload
 
 
 def rt_scenario_sha256(manifest):

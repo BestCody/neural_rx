@@ -8,7 +8,7 @@ import tempfile
 import unittest
 from unittest import mock
 
-from artifact_io import atomic_json, canonical_json, validate_checkpoint_files
+from neural_rx.provenance.artifacts import atomic_json, canonical_json, validate_checkpoint_files
 
 
 class ArtifactIOTest(unittest.TestCase):
@@ -27,7 +27,7 @@ class ArtifactIOTest(unittest.TestCase):
             path = Path(temporary) / "state.json"
             atomic_json(path, {"step": 1})
             original = path.read_bytes()
-            with mock.patch("artifact_io.os.replace", side_effect=OSError("interrupted")):
+            with mock.patch("neural_rx.provenance.artifacts.os.replace", side_effect=OSError("interrupted")):
                 with self.assertRaises(OSError):
                     atomic_json(path, {"step": 2})
             self.assertEqual(path.read_bytes(), original)
@@ -63,7 +63,7 @@ class ArtifactIOTest(unittest.TestCase):
                 validate_checkpoint_files(directory, {"weights": expected})
 
     def test_artifact_and_export_helpers_do_not_initialize_tensorflow(self):
-        code = "import artifact_io, temporal_benchmark_frozen, sys; assert 'tensorflow' not in sys.modules"
+        code = "import neural_rx.provenance.artifacts, neural_rx.benchmark.frozen, sys; assert 'tensorflow' not in sys.modules"
         subprocess.run([sys.executable, "-c", code], check=True, capture_output=True, timeout=15,
                        env=dict(os.environ, PYTHONPATH=str(Path(__file__).resolve().parent)))
 

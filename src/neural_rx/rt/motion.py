@@ -20,7 +20,7 @@ class Motion:
         if self.route_mode == 'loop' and points[0] != points[-1]:
             points.append(points[0])
         lengths = [0.0]
-        for previous, current in zip(points, points[1:]):
+        for previous, current in zip(points, points[1:], strict=False):
             lengths.append(lengths[-1] + math.dist(previous, current))
         return (tuple(points), lengths, lengths[-1])
 
@@ -42,9 +42,10 @@ class Motion:
                     segment = lengths[index + 1] - lengths[index]
                     ratio = 0.0 if segment <= 0.0 else (travelled - lengths[index]) / segment
                     ratio = min(1.0, max(0.0, ratio))
-                    return tuple((a + (b - a) * ratio for a, b in zip(points[index], points[index + 1])))
+                    return tuple((a + (b - a) * ratio for a, b in zip(points[index], points[index + 1], strict=True)))
             return points[-1]
-        position = tuple((origin + elapsed_seconds * speed for origin, speed in zip(self.start, self.velocity)))
+        position = tuple((origin + elapsed_seconds * speed
+                          for origin, speed in zip(self.start, self.velocity, strict=True)))
         if self.x_bounds is None or self.velocity[0] == 0.0:
             return position
         low, high = self.x_bounds
@@ -62,7 +63,8 @@ class Motion:
                     segment = lengths[index + 1] - lengths[index]
                     if segment <= 0.0:
                         return (0.0, 0.0, 0.0)
-                    return tuple(((b - a) / segment * self.speed_mps * direction for a, b in zip(points[index], points[index + 1])))
+                    return tuple(((b - a) / segment * self.speed_mps * direction
+                                  for a, b in zip(points[index], points[index + 1], strict=True)))
             return (0.0, 0.0, 0.0)
         if self.x_bounds is None or self.velocity[0] == 0.0:
             return self.velocity

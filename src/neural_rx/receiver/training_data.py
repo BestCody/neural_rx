@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from artifact_provenance import TRAINING_SEED_NAMESPACE
+from neural_rx.provenance.sources import TRAINING_SEED_NAMESPACE
 
 import hashlib
 import json
@@ -9,9 +9,9 @@ import numpy as np
 import sionna as sn
 import tensorflow as tf
 
-from geometry_mumimo_data import GeometryAwareMUMIMOGenerator
-from temporal_training_data import TemporalTrainingDataGenerator
-from temporal_generalization_protocol import ChannelProfileSpec
+from neural_rx.data.geometry import GeometryAwareMUMIMOGenerator
+from neural_rx.data.temporal import TemporalTrainingDataGenerator
+from neural_rx.benchmark.generalization_protocol import ChannelProfileSpec
 from .training_render import TrainingRenderer
 from .training_options import DEFAULT_RENDER_BATCH_TBS
 
@@ -139,7 +139,8 @@ class TrainingEpisodes:
         return self.render(self.plan(update, example, width))
 
     def plan(self, update, example, width):
-        seed = lambda domain: domain_seed(self.seed, update, example, domain)
+        def seed(domain):
+            return domain_seed(self.seed, update, example, domain)
         rng = np.random.RandomState(seed("draw"))
         recipe = self.recipe
         cold = bool(rng.rand() < recipe["cold_fraction"])

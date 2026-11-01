@@ -1,5 +1,5 @@
 STATUS: Implemented and trained. Current commands and selected checkpoint are in
-README.txt. This document records the design rationale at implementation time;
+README.md. This document records the design rationale at implementation time;
 references to predecessor experiments are historical and those archives have
 been removed. Current campaign evidence is retained separately.
 
@@ -36,9 +36,11 @@ code was changed for this document; no new experiment was launched.
 1. Evidence and limits
 ======================
 
-Source: experiments/20261019_physical_prediction_substitution/
+Source: experiments/20261019_physical_prediction_substitution/ (archive removed)
 Selected checkpoint: models/calibrated_feedback_ldpc18_joint_20261018/
-                     checkpoint_005000/receiver.weights.h5
+                     checkpoint_005000/receiver.weights.h5 (removed; the
+                     current initializer models/learned_blend/ records it as
+                     its source in initialization.json)
 SHA256: 25dcfdd5f932ff40b1aa5c1c214b1f0743eda05a22c602ae4ce9093d2c811074
 
 Primary development result, 12,000 active user blocks, TB17-64:
@@ -862,17 +864,24 @@ features until the proposal sounds certain.
 Local evidence consulted
 =========================
 
-experiments/20261019_physical_prediction_substitution/results/development/report.txt
-experiments/20261019_physical_prediction_substitution/run.py
-experiments/20261018_ldpc18_joint_training_6000/results/latency_005000/results.json
-scripts/cnn_autoencoder/model.py
-scripts/cnn_autoencoder/decoder_correction.py
-scripts/cnn_autoencoder/native_ops/pair_correction.cu.cc
-scripts/cnn_autoencoder/native_ops/pair_scores.cc
-scripts/cnn_autoencoder/native_ops/pair_correction.cc
-scripts/cnn_autoencoder/native_ops/__init__.py
-scripts/cnn_autoencoder/training_execution.py
-scripts/cnn_autoencoder/training.py
+Historical record of the files read when this document was written. The
+experiment archives were later removed. scripts/cnn_autoencoder/ was renamed
+to scripts/pilot_history_receiver/ and config/cnn_memory_training.json to
+config/memory_training.json; paths below use the current names. The code as
+trained is preserved in
+experiments/20261019_learned_blend_joint_training_6000/source/.
+
+experiments/20261019_physical_prediction_substitution/results/development/report.txt (removed)
+experiments/20261019_physical_prediction_substitution/run.py (removed)
+experiments/20261018_ldpc18_joint_training_6000/results/latency_005000/results.json (removed)
+scripts/pilot_history_receiver/model.py
+scripts/pilot_history_receiver/decoder_correction.py
+scripts/pilot_history_receiver/native_ops/pair_correction.cu.cc
+scripts/pilot_history_receiver/native_ops/pair_scores.cc
+scripts/pilot_history_receiver/native_ops/pair_correction.cc
+scripts/pilot_history_receiver/native_ops/__init__.py
+scripts/pilot_history_receiver/training_execution.py
+scripts/pilot_history_receiver/training.py
 scripts/receiver_decoding.py
-config/cnn_memory_training.json
+config/memory_training.json
 Installed sionna/fec/ldpc/decoding.py: _vn_update and LDPCBPDecoder.call.

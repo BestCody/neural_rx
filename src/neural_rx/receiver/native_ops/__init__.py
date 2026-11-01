@@ -51,9 +51,10 @@ def _load():
             with tempfile.TemporaryDirectory(dir=cache) as temp:
                 temp = Path(temp)
                 copies = [temp/p.name for p in sources]
-                for path, content in zip(copies, source_bytes):
+                for path, content in zip(copies, source_bytes, strict=True):
                     path.write_bytes(content)
-                architectures = [f'-gencode=arch=compute_{major}{minor},code=sm_{major}{minor}' for major, minor in capabilities]
+                architectures = [f'-gencode=arch=compute_{major}{minor},code=sm_{major}{minor}'
+                                 for major, minor in capabilities]
                 gpu_sources = [p for p in copies if p.name.endswith('.cu.cc')]
                 commands = [[nvcc, '-std=c++17', '-O3', '--expt-relaxed-constexpr', '-x', 'cu', '-c', str(p),
                     '-o', str(p.with_suffix('.o')), '-Xcompiler', '-fPIC', '-DGOOGLE_CUDA=1', *flags, *architectures]
@@ -72,7 +73,8 @@ def _load():
     @tf.RegisterGradient('PilotPairCorrection')
     def gradient(op, incoming):
         result = module.pilot_pair_correction_grad(*op.inputs, incoming, single_user=op.get_attr('single_user'),
-                                                 llr_limit=op.get_attr('llr_limit'), apply_update=op.get_attr('apply_update'))
+                                                 llr_limit=op.get_attr('llr_limit'),
+                                                 apply_update=op.get_attr('apply_update'))
         evidence, base = result[4], result[5]
         if op.get_attr('apply_update'):
             evidence *= op.inputs[18][..., None, None]

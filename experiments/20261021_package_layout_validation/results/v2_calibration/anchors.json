@@ -1,0 +1,1284 @@
+{
+  "conditions": {
+    "historical_tdl_b100": {
+      "lower_snr_db": 1.0,
+      "anchor_snr_db": 2.0,
+      "upper_snr_db": 3.0,
+      "anchor_index": 4,
+      "target_bracketed": true,
+      "snr_at_target_db": 1.6675269334584875,
+      "interpolation": "logarithmic TBLER; linear when a bracket endpoint is zero",
+      "raw_tbler": [
+        1.0,
+        0.9609375,
+        0.7578125,
+        0.3359375,
+        0.0546875,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "isotonic_tbler": [
+        1.0,
+        0.9609375,
+        0.7578125,
+        0.3359375,
+        0.0546875,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "points": [
+        {
+          "snr_db": -2.0,
+          "errors": 128,
+          "blocks": 128
+        },
+        {
+          "snr_db": -1.0,
+          "errors": 123,
+          "blocks": 128
+        },
+        {
+          "snr_db": 0.0,
+          "errors": 97,
+          "blocks": 128
+        },
+        {
+          "snr_db": 1.0,
+          "errors": 43,
+          "blocks": 128
+        },
+        {
+          "snr_db": 2.0,
+          "errors": 7,
+          "blocks": 128
+        },
+        {
+          "snr_db": 3.0,
+          "errors": 0,
+          "blocks": 128
+        },
+        {
+          "snr_db": 4.0,
+          "errors": 0,
+          "blocks": 128
+        },
+        {
+          "snr_db": 5.0,
+          "errors": 0,
+          "blocks": 128
+        },
+        {
+          "snr_db": 6.0,
+          "errors": 0,
+          "blocks": 128
+        },
+        {
+          "snr_db": 7.0,
+          "errors": 0,
+          "blocks": 128
+        },
+        {
+          "snr_db": 8.0,
+          "errors": 0,
+          "blocks": 128
+        },
+        {
+          "snr_db": 9.0,
+          "errors": 0,
+          "blocks": 128
+        },
+        {
+          "snr_db": 10.0,
+          "errors": 0,
+          "blocks": 128
+        },
+        {
+          "snr_db": 11.0,
+          "errors": 0,
+          "blocks": 128
+        },
+        {
+          "snr_db": 12.0,
+          "errors": 0,
+          "blocks": 128
+        }
+      ]
+    },
+    "historical_tdl_c300": {
+      "lower_snr_db": 1.0,
+      "anchor_snr_db": 2.0,
+      "upper_snr_db": 3.0,
+      "anchor_index": 4,
+      "target_bracketed": true,
+      "snr_at_target_db": 1.8536170356315123,
+      "interpolation": "logarithmic TBLER; linear when a bracket endpoint is zero",
+      "raw_tbler": [
+        0.953125,
+        0.9296875,
+        0.734375,
+        0.421875,
+        0.078125,
+        0.0078125,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "isotonic_tbler": [
+        0.953125,
+        0.9296875,
+        0.734375,
+        0.421875,
+        0.078125,
+        0.0078125,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "points": [
+        {
+          "snr_db": -2.0,
+          "errors": 122,
+          "blocks": 128
+        },
+        {
+          "snr_db": -1.0,
+          "errors": 119,
+          "blocks": 128
+        },
+        {
+          "snr_db": 0.0,
+          "errors": 94,
+          "blocks": 128
+        },
+        {
+          "snr_db": 1.0,
+          "errors": 54,
+          "blocks": 128
+        },
+        {
+          "snr_db": 2.0,
+          "errors": 10,
+          "blocks": 128
+        },
+        {
+          "snr_db": 3.0,
+          "errors": 1,
+          "blocks": 128
+        },
+        {
+          "snr_db": 4.0,
+          "errors": 0,
+          "blocks": 128
+        },
+        {
+          "snr_db": 5.0,
+          "errors": 0,
+          "blocks": 128
+        },
+        {
+          "snr_db": 6.0,
+          "errors": 0,
+          "blocks": 128
+        },
+        {
+          "snr_db": 7.0,
+          "errors": 0,
+          "blocks": 128
+        },
+        {
+          "snr_db": 8.0,
+          "errors": 0,
+          "blocks": 128
+        },
+        {
+          "snr_db": 9.0,
+          "errors": 0,
+          "blocks": 128
+        },
+        {
+          "snr_db": 10.0,
+          "errors": 0,
+          "blocks": 128
+        },
+        {
+          "snr_db": 11.0,
+          "errors": 0,
+          "blocks": 128
+        },
+        {
+          "snr_db": 12.0,
+          "errors": 0,
+          "blocks": 128
+        }
+      ]
+    },
+    "natural_umi": {
+      "lower_snr_db": 4.0,
+      "anchor_snr_db": 5.0,
+      "upper_snr_db": 6.0,
+      "anchor_index": 7,
+      "target_bracketed": true,
+      "snr_at_target_db": 4.624826370937326,
+      "interpolation": "logarithmic TBLER; linear when a bracket endpoint is zero",
+      "raw_tbler": [
+        0.8125,
+        0.8125,
+        0.5703125,
+        0.4375,
+        0.375,
+        0.296875,
+        0.21875,
+        0.0625,
+        0.0625,
+        0.0625,
+        0.0625,
+        0.0625,
+        0.0625,
+        0.0625,
+        0.0625
+      ],
+      "isotonic_tbler": [
+        0.8125,
+        0.8125,
+        0.5703125,
+        0.4375,
+        0.375,
+        0.296875,
+        0.21875,
+        0.0625,
+        0.0625,
+        0.0625,
+        0.0625,
+        0.0625,
+        0.0625,
+        0.0625,
+        0.0625
+      ],
+      "points": [
+        {
+          "snr_db": -2.0,
+          "errors": 104,
+          "blocks": 128
+        },
+        {
+          "snr_db": -1.0,
+          "errors": 104,
+          "blocks": 128
+        },
+        {
+          "snr_db": 0.0,
+          "errors": 73,
+          "blocks": 128
+        },
+        {
+          "snr_db": 1.0,
+          "errors": 56,
+          "blocks": 128
+        },
+        {
+          "snr_db": 2.0,
+          "errors": 48,
+          "blocks": 128
+        },
+        {
+          "snr_db": 3.0,
+          "errors": 38,
+          "blocks": 128
+        },
+        {
+          "snr_db": 4.0,
+          "errors": 28,
+          "blocks": 128
+        },
+        {
+          "snr_db": 5.0,
+          "errors": 8,
+          "blocks": 128
+        },
+        {
+          "snr_db": 6.0,
+          "errors": 8,
+          "blocks": 128
+        },
+        {
+          "snr_db": 7.0,
+          "errors": 8,
+          "blocks": 128
+        },
+        {
+          "snr_db": 8.0,
+          "errors": 8,
+          "blocks": 128
+        },
+        {
+          "snr_db": 9.0,
+          "errors": 8,
+          "blocks": 128
+        },
+        {
+          "snr_db": 10.0,
+          "errors": 8,
+          "blocks": 128
+        },
+        {
+          "snr_db": 11.0,
+          "errors": 8,
+          "blocks": 128
+        },
+        {
+          "snr_db": 12.0,
+          "errors": 8,
+          "blocks": 128
+        }
+      ]
+    },
+    "natural_uma": {
+      "lower_snr_db": 3.0,
+      "anchor_snr_db": 4.0,
+      "upper_snr_db": 5.0,
+      "anchor_index": 6,
+      "target_bracketed": true,
+      "snr_at_target_db": 6.321928094887363,
+      "interpolation": "logarithmic TBLER; linear when a bracket endpoint is zero",
+      "raw_tbler": [
+        0.5625,
+        0.546875,
+        0.375,
+        0.375,
+        0.375,
+        0.1875,
+        0.125,
+        0.125,
+        0.125,
+        0.0625,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "isotonic_tbler": [
+        0.5625,
+        0.546875,
+        0.375,
+        0.375,
+        0.375,
+        0.1875,
+        0.125,
+        0.125,
+        0.125,
+        0.0625,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "points": [
+        {
+          "snr_db": -2.0,
+          "errors": 72,
+          "blocks": 128
+        },
+        {
+          "snr_db": -1.0,
+          "errors": 70,
+          "blocks": 128
+        },
+        {
+          "snr_db": 0.0,
+          "errors": 48,
+          "blocks": 128
+        },
+        {
+          "snr_db": 1.0,
+          "errors": 48,
+          "blocks": 128
+        },
+        {
+          "snr_db": 2.0,
+          "errors": 48,
+          "blocks": 128
+        },
+        {
+          "snr_db": 3.0,
+          "errors": 24,
+          "blocks": 128
+        },
+        {
+          "snr_db": 4.0,
+          "errors": 16,
+          "blocks": 128
+        },
+        {
+          "snr_db": 5.0,
+          "errors": 16,
+          "blocks": 128
+        },
+        {
+          "snr_db": 6.0,
+          "errors": 16,
+          "blocks": 128
+        },
+        {
+          "snr_db": 7.0,
+          "errors": 8,
+          "blocks": 128
+        },
+        {
+          "snr_db": 8.0,
+          "errors": 0,
+          "blocks": 128
+        },
+        {
+          "snr_db": 9.0,
+          "errors": 0,
+          "blocks": 128
+        },
+        {
+          "snr_db": 10.0,
+          "errors": 0,
+          "blocks": 128
+        },
+        {
+          "snr_db": 11.0,
+          "errors": 0,
+          "blocks": 128
+        },
+        {
+          "snr_db": 12.0,
+          "errors": 0,
+          "blocks": 128
+        }
+      ]
+    },
+    "controlled_topology_change": {
+      "lower_snr_db": 7.0,
+      "anchor_snr_db": 8.0,
+      "upper_snr_db": 9.0,
+      "anchor_index": 10,
+      "target_bracketed": true,
+      "snr_at_target_db": 8.47476984735695,
+      "interpolation": "logarithmic TBLER; linear when a bracket endpoint is zero",
+      "raw_tbler": [
+        0.6875,
+        0.625,
+        0.5625,
+        0.5078125,
+        0.5,
+        0.421875,
+        0.2421875,
+        0.203125,
+        0.1875,
+        0.140625,
+        0.125,
+        0.078125,
+        0.0625,
+        0.0625,
+        0.0625
+      ],
+      "isotonic_tbler": [
+        0.6875,
+        0.625,
+        0.5625,
+        0.5078125,
+        0.5,
+        0.421875,
+        0.2421875,
+        0.203125,
+        0.1875,
+        0.140625,
+        0.125,
+        0.078125,
+        0.0625,
+        0.0625,
+        0.0625
+      ],
+      "points": [
+        {
+          "snr_db": -2.0,
+          "errors": 88,
+          "blocks": 128
+        },
+        {
+          "snr_db": -1.0,
+          "errors": 80,
+          "blocks": 128
+        },
+        {
+          "snr_db": 0.0,
+          "errors": 72,
+          "blocks": 128
+        },
+        {
+          "snr_db": 1.0,
+          "errors": 65,
+          "blocks": 128
+        },
+        {
+          "snr_db": 2.0,
+          "errors": 64,
+          "blocks": 128
+        },
+        {
+          "snr_db": 3.0,
+          "errors": 54,
+          "blocks": 128
+        },
+        {
+          "snr_db": 4.0,
+          "errors": 31,
+          "blocks": 128
+        },
+        {
+          "snr_db": 5.0,
+          "errors": 26,
+          "blocks": 128
+        },
+        {
+          "snr_db": 6.0,
+          "errors": 24,
+          "blocks": 128
+        },
+        {
+          "snr_db": 7.0,
+          "errors": 18,
+          "blocks": 128
+        },
+        {
+          "snr_db": 8.0,
+          "errors": 16,
+          "blocks": 128
+        },
+        {
+          "snr_db": 9.0,
+          "errors": 10,
+          "blocks": 128
+        },
+        {
+          "snr_db": 10.0,
+          "errors": 8,
+          "blocks": 128
+        },
+        {
+          "snr_db": 11.0,
+          "errors": 8,
+          "blocks": 128
+        },
+        {
+          "snr_db": 12.0,
+          "errors": 8,
+          "blocks": 128
+        }
+      ]
+    },
+    "schedule_gap_reentry": {
+      "lower_snr_db": 2.0,
+      "anchor_snr_db": 3.0,
+      "upper_snr_db": 4.0,
+      "anchor_index": 5,
+      "target_bracketed": true,
+      "snr_at_target_db": 2.5632524147723545,
+      "interpolation": "logarithmic TBLER; linear when a bracket endpoint is zero",
+      "raw_tbler": [
+        0.6403508771929824,
+        0.5087719298245614,
+        0.41228070175438597,
+        0.32456140350877194,
+        0.15789473684210525,
+        0.07017543859649122,
+        0.05263157894736842,
+        0.03508771929824561,
+        0.017543859649122806,
+        0.008771929824561403,
+        0.008771929824561403,
+        0.008771929824561403,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "isotonic_tbler": [
+        0.6403508771929824,
+        0.5087719298245614,
+        0.41228070175438597,
+        0.32456140350877194,
+        0.15789473684210525,
+        0.07017543859649122,
+        0.05263157894736842,
+        0.03508771929824561,
+        0.017543859649122806,
+        0.008771929824561403,
+        0.008771929824561403,
+        0.008771929824561403,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "points": [
+        {
+          "snr_db": -2.0,
+          "errors": 73,
+          "blocks": 114
+        },
+        {
+          "snr_db": -1.0,
+          "errors": 58,
+          "blocks": 114
+        },
+        {
+          "snr_db": 0.0,
+          "errors": 47,
+          "blocks": 114
+        },
+        {
+          "snr_db": 1.0,
+          "errors": 37,
+          "blocks": 114
+        },
+        {
+          "snr_db": 2.0,
+          "errors": 18,
+          "blocks": 114
+        },
+        {
+          "snr_db": 3.0,
+          "errors": 8,
+          "blocks": 114
+        },
+        {
+          "snr_db": 4.0,
+          "errors": 6,
+          "blocks": 114
+        },
+        {
+          "snr_db": 5.0,
+          "errors": 4,
+          "blocks": 114
+        },
+        {
+          "snr_db": 6.0,
+          "errors": 2,
+          "blocks": 114
+        },
+        {
+          "snr_db": 7.0,
+          "errors": 1,
+          "blocks": 114
+        },
+        {
+          "snr_db": 8.0,
+          "errors": 1,
+          "blocks": 114
+        },
+        {
+          "snr_db": 9.0,
+          "errors": 1,
+          "blocks": 114
+        },
+        {
+          "snr_db": 10.0,
+          "errors": 0,
+          "blocks": 114
+        },
+        {
+          "snr_db": 11.0,
+          "errors": 0,
+          "blocks": 114
+        },
+        {
+          "snr_db": 12.0,
+          "errors": 0,
+          "blocks": 114
+        }
+      ]
+    },
+    "close_los": {
+      "lower_snr_db": 8.0,
+      "anchor_snr_db": 9.0,
+      "upper_snr_db": 10.0,
+      "anchor_index": 11,
+      "target_bracketed": true,
+      "snr_at_target_db": 9.031933958696426,
+      "interpolation": "logarithmic TBLER; linear when a bracket endpoint is zero",
+      "raw_tbler": [
+        0.8046875,
+        0.625,
+        0.5625,
+        0.5390625,
+        0.359375,
+        0.3125,
+        0.265625,
+        0.1875,
+        0.125,
+        0.125,
+        0.125,
+        0.1015625,
+        0.0625,
+        0.0625,
+        0.0546875
+      ],
+      "isotonic_tbler": [
+        0.8046875,
+        0.625,
+        0.5625,
+        0.5390625,
+        0.359375,
+        0.3125,
+        0.265625,
+        0.1875,
+        0.125,
+        0.125,
+        0.125,
+        0.1015625,
+        0.0625,
+        0.0625,
+        0.0546875
+      ],
+      "points": [
+        {
+          "snr_db": -2.0,
+          "errors": 103,
+          "blocks": 128
+        },
+        {
+          "snr_db": -1.0,
+          "errors": 80,
+          "blocks": 128
+        },
+        {
+          "snr_db": 0.0,
+          "errors": 72,
+          "blocks": 128
+        },
+        {
+          "snr_db": 1.0,
+          "errors": 69,
+          "blocks": 128
+        },
+        {
+          "snr_db": 2.0,
+          "errors": 46,
+          "blocks": 128
+        },
+        {
+          "snr_db": 3.0,
+          "errors": 40,
+          "blocks": 128
+        },
+        {
+          "snr_db": 4.0,
+          "errors": 34,
+          "blocks": 128
+        },
+        {
+          "snr_db": 5.0,
+          "errors": 24,
+          "blocks": 128
+        },
+        {
+          "snr_db": 6.0,
+          "errors": 16,
+          "blocks": 128
+        },
+        {
+          "snr_db": 7.0,
+          "errors": 16,
+          "blocks": 128
+        },
+        {
+          "snr_db": 8.0,
+          "errors": 16,
+          "blocks": 128
+        },
+        {
+          "snr_db": 9.0,
+          "errors": 13,
+          "blocks": 128
+        },
+        {
+          "snr_db": 10.0,
+          "errors": 8,
+          "blocks": 128
+        },
+        {
+          "snr_db": 11.0,
+          "errors": 8,
+          "blocks": 128
+        },
+        {
+          "snr_db": 12.0,
+          "errors": 7,
+          "blocks": 128
+        }
+      ]
+    },
+    "near_far": {
+      "lower_snr_db": 16.0,
+      "anchor_snr_db": 17.0,
+      "upper_snr_db": 18.0,
+      "anchor_index": 19,
+      "target_bracketed": true,
+      "snr_at_target_db": 16.692269777922277,
+      "interpolation": "logarithmic TBLER; linear when a bracket endpoint is zero",
+      "raw_tbler": [
+        1.0,
+        0.9921875,
+        0.9296875,
+        0.8125,
+        0.8125,
+        0.7734375,
+        0.6640625,
+        0.609375,
+        0.5625,
+        0.5625,
+        0.46875,
+        0.4375,
+        0.4375,
+        0.4375,
+        0.4296875,
+        0.359375,
+        0.3125,
+        0.15625,
+        0.140625,
+        0.0859375,
+        0.0546875,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "isotonic_tbler": [
+        1.0,
+        0.9921875,
+        0.9296875,
+        0.8125,
+        0.8125,
+        0.7734375,
+        0.6640625,
+        0.609375,
+        0.5625,
+        0.5625,
+        0.46875,
+        0.4375,
+        0.4375,
+        0.4375,
+        0.4296875,
+        0.359375,
+        0.3125,
+        0.15625,
+        0.140625,
+        0.0859375,
+        0.0546875,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "points": [
+        {
+          "snr_db": -2.0,
+          "errors": 128,
+          "blocks": 128
+        },
+        {
+          "snr_db": -1.0,
+          "errors": 127,
+          "blocks": 128
+        },
+        {
+          "snr_db": 0.0,
+          "errors": 119,
+          "blocks": 128
+        },
+        {
+          "snr_db": 1.0,
+          "errors": 104,
+          "blocks": 128
+        },
+        {
+          "snr_db": 2.0,
+          "errors": 104,
+          "blocks": 128
+        },
+        {
+          "snr_db": 3.0,
+          "errors": 99,
+          "blocks": 128
+        },
+        {
+          "snr_db": 4.0,
+          "errors": 85,
+          "blocks": 128
+        },
+        {
+          "snr_db": 5.0,
+          "errors": 78,
+          "blocks": 128
+        },
+        {
+          "snr_db": 6.0,
+          "errors": 72,
+          "blocks": 128
+        },
+        {
+          "snr_db": 7.0,
+          "errors": 72,
+          "blocks": 128
+        },
+        {
+          "snr_db": 8.0,
+          "errors": 60,
+          "blocks": 128
+        },
+        {
+          "snr_db": 9.0,
+          "errors": 56,
+          "blocks": 128
+        },
+        {
+          "snr_db": 10.0,
+          "errors": 56,
+          "blocks": 128
+        },
+        {
+          "snr_db": 11.0,
+          "errors": 56,
+          "blocks": 128
+        },
+        {
+          "snr_db": 12.0,
+          "errors": 55,
+          "blocks": 128
+        },
+        {
+          "snr_db": 13.0,
+          "errors": 46,
+          "blocks": 128
+        },
+        {
+          "snr_db": 14.0,
+          "errors": 40,
+          "blocks": 128
+        },
+        {
+          "snr_db": 15.0,
+          "errors": 20,
+          "blocks": 128
+        },
+        {
+          "snr_db": 16.0,
+          "errors": 18,
+          "blocks": 128
+        },
+        {
+          "snr_db": 17.0,
+          "errors": 11,
+          "blocks": 128
+        },
+        {
+          "snr_db": 18.0,
+          "errors": 7,
+          "blocks": 128
+        },
+        {
+          "snr_db": 19.0,
+          "errors": 0,
+          "blocks": 128
+        },
+        {
+          "snr_db": 20.0,
+          "errors": 0,
+          "blocks": 128
+        },
+        {
+          "snr_db": 21.0,
+          "errors": 0,
+          "blocks": 128
+        },
+        {
+          "snr_db": 22.0,
+          "errors": 0,
+          "blocks": 128
+        },
+        {
+          "snr_db": 23.0,
+          "errors": 0,
+          "blocks": 128
+        },
+        {
+          "snr_db": 24.0,
+          "errors": 0,
+          "blocks": 128
+        },
+        {
+          "snr_db": 25.0,
+          "errors": 0,
+          "blocks": 128
+        },
+        {
+          "snr_db": 26.0,
+          "errors": 0,
+          "blocks": 128
+        }
+      ]
+    },
+    "ray_traced_munich": {
+      "lower_snr_db": 2.0,
+      "anchor_snr_db": 3.0,
+      "upper_snr_db": 4.0,
+      "anchor_index": 5,
+      "target_bracketed": true,
+      "snr_at_target_db": 2.722335475829786,
+      "interpolation": "logarithmic TBLER; linear when a bracket endpoint is zero",
+      "raw_tbler": [
+        0.8046875,
+        0.625,
+        0.4375,
+        0.3203125,
+        0.25,
+        0.0703125,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "isotonic_tbler": [
+        0.8046875,
+        0.625,
+        0.4375,
+        0.3203125,
+        0.25,
+        0.0703125,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "points": [
+        {
+          "snr_db": -2.0,
+          "errors": 103,
+          "blocks": 128
+        },
+        {
+          "snr_db": -1.0,
+          "errors": 80,
+          "blocks": 128
+        },
+        {
+          "snr_db": 0.0,
+          "errors": 56,
+          "blocks": 128
+        },
+        {
+          "snr_db": 1.0,
+          "errors": 41,
+          "blocks": 128
+        },
+        {
+          "snr_db": 2.0,
+          "errors": 32,
+          "blocks": 128
+        },
+        {
+          "snr_db": 3.0,
+          "errors": 9,
+          "blocks": 128
+        },
+        {
+          "snr_db": 4.0,
+          "errors": 0,
+          "blocks": 128
+        },
+        {
+          "snr_db": 5.0,
+          "errors": 0,
+          "blocks": 128
+        },
+        {
+          "snr_db": 6.0,
+          "errors": 0,
+          "blocks": 128
+        },
+        {
+          "snr_db": 7.0,
+          "errors": 0,
+          "blocks": 128
+        },
+        {
+          "snr_db": 8.0,
+          "errors": 0,
+          "blocks": 128
+        },
+        {
+          "snr_db": 9.0,
+          "errors": 0,
+          "blocks": 128
+        },
+        {
+          "snr_db": 10.0,
+          "errors": 0,
+          "blocks": 128
+        },
+        {
+          "snr_db": 11.0,
+          "errors": 0,
+          "blocks": 128
+        },
+        {
+          "snr_db": 12.0,
+          "errors": 0,
+          "blocks": 128
+        }
+      ]
+    }
+  },
+  "tbler_definition": "failed_active_user_blocks / evaluated_active_user_blocks",
+  "prbs": 132,
+  "source_identity": {
+    "packages": {
+      "numpy": "1.26.4",
+      "sionna": "0.18.0",
+      "tensorflow": "2.15.1"
+    },
+    "radio": {
+      "advancing_slot_pilots": true,
+      "bits_per_symbol": 4,
+      "maximum_active_ues": 2,
+      "mcs_index": 14,
+      "n_size_bwp": 132,
+      "noise_axis": "ebno_db",
+      "receive_antennas": 4
+    },
+    "schema": "temporal_benchmark_episode_v2",
+    "sources": {
+      "config/nrx_large.cfg": "9cd550576d8fd7fb643164a1a4f078c91929cb62977e7aaffef0ecf8c15c36e6",
+      "src/neural_rx/backbone/__init__.py": "6531b635e0744fc258c93aab5073ef4411c54715977ffadaab092b43a25ea786",
+      "src/neural_rx/backbone/cgnn.py": "423c0e004b60e805cbeabb89a525231417faa1e6a6a27fb7c84098119e489b44",
+      "src/neural_rx/backbone/channel_models.py": "24e439b900a580fba391cdaa64001568206aab8b14d95ff9c018714201af089a",
+      "src/neural_rx/backbone/core.py": "1108681c0c775aef3f0570fbd70f9c1738885d0a18346e6873268ea1f4fba88f",
+      "src/neural_rx/backbone/e2e_model.py": "86c66837e3cf17d5aaacae5ba2cf427dec03a0b86ed6080fa70814a19da9f618",
+      "src/neural_rx/backbone/parameters.py": "209720d521074feb7a8d9f75dffdf3c26d326bc76d880314cd3ad373d87b8583",
+      "src/neural_rx/backbone/training.py": "b12da25bffd0450e7e10cbe8c45202adaa6453218e3c73f139fbfd3319bfa4c4",
+      "src/neural_rx/benchmark/generalization_protocol.py": "e996d51034af3e7d898d3fdbd57fd71bdbc2ad513652b03f2b6d30019ba0d2c8",
+      "src/neural_rx/benchmark/scenarios.py": "6c31d258b24d56f379c359d6a4cdc930436133299eeaa2446dd9e5c33af81bab",
+      "src/neural_rx/data/geometry.py": "9deba52aa7cd82e33b3da1e93aafd5411699da7882f9a3139e60dc44daeac0b0",
+      "src/neural_rx/data/temporal.py": "fd4426469b9c8b408d7939729be85b56654bb2e8f0e173ba554bb122f1dc42d8"
+    },
+    "ray_traced": {
+      "banks": {
+        "598636d11b2a5b1c38983f2c6bef68f4e3824619f78273006f6fb8f036173e6b": {
+          "scenario_sha256": "88b5974e960bcd18ab60f52c2dcdb5b0ec2e923bdd23d7dfc87ed9280cfc5790",
+          "seed": 20261015,
+          "split": "calibration"
+        }
+      },
+      "sources": {
+        "src/neural_rx/rt/bank.py": "25bb26ab9ec835242be7126991a7582a771ff5c52661dce1f5d69aab7840db5b",
+        "src/neural_rx/rt/data.py": "9ea68cec6b0833b7dbd2723bce78b760eb717a55026d698adbb7e076389eaf45"
+      }
+    }
+  },
+  "teacher_sha256": "0e6aa52dc89725bc982710c4a14a2c617295118d7153da1d512e276d62a06592",
+  "runtime_sources": {
+    "config/nrx_large.cfg": "9cd550576d8fd7fb643164a1a4f078c91929cb62977e7aaffef0ecf8c15c36e6",
+    "config/temporal_benchmark_v1.json": "fa97f436cb90aea64b08cea953e822ec4b2337cf97407fc56d379613dfc1be1f",
+    "config/temporal_benchmark_v2.json": "134c51f2a47d9959b99865e6ad42ce2260a85e9d898b66a64a27840c8ec799b4",
+    "src/neural_rx/__init__.py": "18a57e4df792f7137d15dd368008a3985a6d9dccbd824ecabaea4b5c920bc34e",
+    "src/neural_rx/backbone/__init__.py": "6531b635e0744fc258c93aab5073ef4411c54715977ffadaab092b43a25ea786",
+    "src/neural_rx/backbone/cgnn.py": "423c0e004b60e805cbeabb89a525231417faa1e6a6a27fb7c84098119e489b44",
+    "src/neural_rx/backbone/channel_models.py": "24e439b900a580fba391cdaa64001568206aab8b14d95ff9c018714201af089a",
+    "src/neural_rx/backbone/core.py": "1108681c0c775aef3f0570fbd70f9c1738885d0a18346e6873268ea1f4fba88f",
+    "src/neural_rx/backbone/e2e_model.py": "86c66837e3cf17d5aaacae5ba2cf427dec03a0b86ed6080fa70814a19da9f618",
+    "src/neural_rx/backbone/parameters.py": "209720d521074feb7a8d9f75dffdf3c26d326bc76d880314cd3ad373d87b8583",
+    "src/neural_rx/backbone/training.py": "b12da25bffd0450e7e10cbe8c45202adaa6453218e3c73f139fbfd3319bfa4c4",
+    "src/neural_rx/benchmark/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "src/neural_rx/benchmark/adapters.py": "861ed4541e03f6af62041b80ab970675474396d62cdb4b32b1363346f0994407",
+    "src/neural_rx/benchmark/arrays.py": "3c8f4bd207b57de4479a632c7ef4cf2144c022816b39cb0b60c47ef4f6aa8423",
+    "src/neural_rx/benchmark/candidate.py": "63dee092fb43341450ef28d3e87a365979bed1e16f068b91afda03988a8be6bc",
+    "src/neural_rx/benchmark/episodes.py": "27aa12dae03278911920907a6983192cbd8e5f2f547f6f75f2bc6a7fa6df5073",
+    "src/neural_rx/benchmark/frozen.py": "a146a1327ade143dd4c49073a60f9fbb398920c9723f63306efb77a04d865b14",
+    "src/neural_rx/benchmark/generalization_protocol.py": "e996d51034af3e7d898d3fdbd57fd71bdbc2ad513652b03f2b6d30019ba0d2c8",
+    "src/neural_rx/benchmark/plan.py": "2286833f2dd9dce571445822c6ccc16d69f5c02f7d8ac9344c445e1ad14acef8",
+    "src/neural_rx/benchmark/protocol.py": "edecedafaf37acd67ad053fa9325753da83247c9651252b36d55db64e7cfcbe2",
+    "src/neural_rx/benchmark/reference.py": "12a7947b8f769dcf4d6bd9a17aa44a51351dc58bdcf52c1f7478f2f0dd402d0b",
+    "src/neural_rx/benchmark/runtime.py": "05c43a65b0d47b58621c0cc7c4ab9110aa28d190114d6741aea5f24afa71373c",
+    "src/neural_rx/benchmark/scenarios.py": "6c31d258b24d56f379c359d6a4cdc930436133299eeaa2446dd9e5c33af81bab",
+    "src/neural_rx/benchmark/scoring.py": "578685d737e728191260c4d5b57e27139b04c40d9136d5e468a1fc49ebec848f",
+    "src/neural_rx/data/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "src/neural_rx/data/geometry.py": "9deba52aa7cd82e33b3da1e93aafd5411699da7882f9a3139e60dc44daeac0b0",
+    "src/neural_rx/data/temporal.py": "fd4426469b9c8b408d7939729be85b56654bb2e8f0e173ba554bb122f1dc42d8",
+    "src/neural_rx/decoding.py": "99f1f5cd769aa0901549b0f55599479e86e19c5ac2d2d168fe7231386e90ba5a",
+    "src/neural_rx/paths.py": "717efa8f292aba1c88eee32a43169c3709db6a325f6082fff50c33cef545f505",
+    "src/neural_rx/provenance/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "src/neural_rx/provenance/artifacts.py": "7178aa3914388538a337f98901aa4908dea3c9a63a55e472498b0bbf5ebab16a",
+    "src/neural_rx/provenance/sources.py": "c5c25a44116b0c0e8c75275336f2158a9a611ea1a2ca1c7dc30d1c662d08dee9",
+    "src/neural_rx/receiver/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "src/neural_rx/receiver/benchmark_adapter.py": "314fec025b54b45c037ecaa49b4bd9373b49f28509912a5ff58ce4a973ef2519",
+    "src/neural_rx/receiver/channel_filter.py": "32ac89911c4446277adbedf399702d5693485c958a9c398431341f25e7f56828",
+    "src/neural_rx/receiver/decoder_correction.py": "4ffadfc740e8c3b8507b626ba5d03e75a9a7d46e0da11e112bdd0f53829d5be1",
+    "src/neural_rx/receiver/model.py": "14c9623530eb3e2244929b3b0ca9afbe64a562c2ac49217efdab4a0ef2686dfa",
+    "src/neural_rx/receiver/native_ops/__init__.py": "fac0b9bf5e06c129727f553c630c9307ec8faf5434d4ebd96d0ce105e8b1c620",
+    "src/neural_rx/receiver/native_ops/channel_uncertainty.cc": "302b25a2c8b1e54e3e3c44f485d3409345c4b61c515586f0dd5e43b5fb5f99c4",
+    "src/neural_rx/receiver/native_ops/channel_uncertainty.cu.cc": "a7fb38aa00be09859b388050984f91d84f9ec95f49d0e3c989d2db759c850aa2",
+    "src/neural_rx/receiver/native_ops/memory_append.cc": "f913a200a257b4d082b29c37e93bc8d0c49d542700747277677a350dbf8e3814",
+    "src/neural_rx/receiver/native_ops/memory_append.cu.cc": "54f8a62aedc01d4697f686b1d39f1efcda854de5964343d138c4dbcc99a1571b",
+    "src/neural_rx/receiver/native_ops/pair_correction.cc": "012f2dda05e713c74c4daf7363f5cc826f131cb6f59440e3d107823f118398d9",
+    "src/neural_rx/receiver/native_ops/pair_correction.cu.cc": "25dbc778935721e5f6532729a5d0a4d7ac2b0f682cf2eaa536f0ec5082606048",
+    "src/neural_rx/receiver/native_ops/pair_prepare.cc": "5873f7bc7805005562743839664852dc121740197b2372c3c9a46955adf3b959",
+    "src/neural_rx/receiver/native_ops/pair_prepare.cu.cc": "6c335f9eff4d579b0558ec100d05092526e82825d9adce1b647e752318a389ae",
+    "src/neural_rx/receiver/native_ops/pair_scores.cc": "8f2307ddfb2b1b78e3a3378539962c5b0b09074b3aa2076f10fb15fa6fc6bc1b",
+    "src/neural_rx/receiver/pilot_history.py": "b53034944c96f1f685983b21c8de1d627100a5fb72705a62622f6b41fca76b44",
+    "src/neural_rx/receiver/pilot_layout.py": "a2887d5b31680ad7d07c5ff13d3c8cc3369ac115b36fd60279b21af95cc29e78",
+    "src/neural_rx/rt/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "src/neural_rx/rt/bank.py": "25bb26ab9ec835242be7126991a7582a771ff5c52661dce1f5d69aab7840db5b",
+    "src/neural_rx/rt/data.py": "9ea68cec6b0833b7dbd2723bce78b760eb717a55026d698adbb7e076389eaf45"
+  },
+  "manifest_sha256": "04f5e48b84c8c88a74a6bf6f2b813b8b22809c8f222b85fd450f344fba96b9e7"
+}

@@ -1,0 +1,989 @@
+{
+  "phase": "development",
+  "rates": {
+    "candidate_persistent": [
+      [
+        0.08365885416666667
+      ],
+      [
+        0.09733072916666667
+      ],
+      [
+        0.1708984375
+      ],
+      [
+        0.16634114583333334
+      ],
+      [
+        0.03515625
+      ],
+      [
+        0.2614942528735632
+      ],
+      [
+        0.09440104166666667
+      ],
+      [
+        0.055338541666666664
+      ]
+    ],
+    "frozen_cold_k8": [
+      [
+        0.14485677083333334
+      ],
+      [
+        0.17154947916666666
+      ],
+      [
+        0.1787109375
+      ],
+      [
+        0.15852864583333334
+      ],
+      [
+        0.0302734375
+      ],
+      [
+        0.2550287356321839
+      ],
+      [
+        0.1083984375
+      ],
+      [
+        0.0595703125
+      ]
+    ]
+  },
+  "tbler_definition": "failed_active_user_blocks / evaluated_active_user_blocks",
+  "preflight": {
+    "candidate_artifacts_unchanged": true,
+    "candidate_deterministic_replay": true,
+    "candidate_finite_outputs": true,
+    "no_future_inputs": true,
+    "persistent_and_reset_paired": true,
+    "receiver_inputs_observable": true,
+    "reset_state_is_empty": true,
+    "frozen_reference_artifacts_unchanged": true,
+    "frozen_reference_deterministic_replay": true,
+    "frozen_reference_finite_outputs": true,
+    "frozen_references_paired": true
+  },
+  "manifests": {
+    "candidate": {
+      "manifest": "temporal_benchmark_frozen_v2",
+      "schema_version": 2,
+      "role": "candidate",
+      "radio": {
+        "receive_antennas": 4,
+        "maximum_active_ues": 2,
+        "bits_per_symbol": 4,
+        "mcs_index": 14,
+        "n_size_bwp": 132,
+        "noise_axis": "ebno_db",
+        "advancing_slot_pilots": true
+      },
+      "training": {
+        "additional_updates": 4000,
+        "binding": {
+          "recipe": {
+            "protocol": "cnn_memory_training",
+            "schema_version": 5,
+            "radio_config": "nrx_large.cfg",
+            "learning_rate": 0.0001,
+            "minimum_learning_rate": 1e-06,
+            "plateau_patience": 2,
+            "plateau_factor": 0.5,
+            "coded_loss_weight": 1.0,
+            "payload_loss_weight": 1.0,
+            "reset_weight": 0.5,
+            "learning_rate_warmup": 32,
+            "gradient_clip_norm": 1.0,
+            "effective_examples": 8,
+            "episode_tbs": [
+              8,
+              16,
+              32,
+              64
+            ],
+            "episode_probabilities": [
+              0.25,
+              0.35,
+              0.25,
+              0.15
+            ],
+            "cold_tbs": 4,
+            "cold_fraction": 0.125,
+            "paired_history_fraction": 0.25,
+            "paired_suffix_tbs": 4,
+            "channel_families": [
+              "tdl",
+              "umi",
+              "uma"
+            ],
+            "channel_probabilities": [
+              0.3333333333333333,
+              0.3333333333333333,
+              0.3333333333333333
+            ],
+            "doppler_strata_hz": [
+              [
+                0.0,
+                50.0
+              ],
+              [
+                50.0,
+                175.0
+              ],
+              [
+                175.0,
+                400.0
+              ]
+            ],
+            "tdl_profiles": [
+              "A",
+              "B",
+              "C"
+            ],
+            "delay_spread_s": [
+              3e-08,
+              5e-07
+            ],
+            "schedule_gap_tbs": [
+              1,
+              4,
+              7,
+              8,
+              9,
+              12
+            ],
+            "schedule_reorder_probability": 0.25,
+            "power_imbalance_probability": 0.5,
+            "power_gap_db": [
+              0.0,
+              15.0
+            ],
+            "noise_schedule": {
+              "core_range_db": [
+                0.0,
+                6.0
+              ],
+              "range_db": [
+                -2.0,
+                10.0
+              ],
+              "core_probability": 0.75,
+              "change_probability": 0.5,
+              "max_change_db": 6.0
+            },
+            "prbs": [
+              12,
+              48,
+              132
+            ],
+            "prb_probabilities": [
+              0.5,
+              0.25,
+              0.25
+            ],
+            "checkpoint_every": 64,
+            "development_interval": 1000,
+            "memory_capacity": 4,
+            "expiry_tbs": 8,
+            "seed": 2026101901,
+            "latency_scope": "prepared_full_grid_ls_to_decoded_payload",
+            "initializer_checkpoint": "models/learned_blend/initial_receiver.weights.h5",
+            "initializer_sha256": "2139a18e2dd16662a915716b590740760275e2b57c8a0e50ff655c581a8fc501",
+            "channel_loss_weight": 0.1,
+            "schedule_probability": 0.3,
+            "channel_change_probability": 0.2,
+            "schedule_switch_probability_range": [
+              0.0,
+              0.5
+            ],
+            "schedule_gap_probability_range": [
+              0.02,
+              0.15
+            ],
+            "weak_link_noise_probability": 0.5,
+            "initializer_parent_updates": 17000
+          },
+          "recipe_sha256": "22b1434841085210e030c4508ec01824b6af95ffce2e59cad60fe193c20f3913",
+          "architecture": {
+            "cgnn_rounds": 2,
+            "state_features": 56,
+            "memory": "pilot_filter_learned_blend",
+            "blend_features": "corrected_endpoints_residual_fit_v1",
+            "blend_hidden": 8,
+            "history_tbs": 7,
+            "filter_hidden": 16,
+            "error_hidden": 16,
+            "neighbor_radius": 1,
+            "ldpc_iterations": 18,
+            "ldpc_first_iterations": 8
+          },
+          "seed": 2026101901,
+          "execution": {
+            "version": "pilot_filter_learned_blend_joint_v1",
+            "detector_batch_tbs": 8,
+            "descriptor_chunk_tbs": 32,
+            "tf32_enabled": true
+          },
+          "sources": {
+            "config/nrx_large.cfg": "9cd550576d8fd7fb643164a1a4f078c91929cb62977e7aaffef0ecf8c15c36e6",
+            "scripts/artifact_io.py": "7178aa3914388538a337f98901aa4908dea3c9a63a55e472498b0bbf5ebab16a",
+            "scripts/artifact_provenance.py": "08dab0577c7d1eeb0596e1d5835f454471ca6574e4e3db10df9e3bd32861037e",
+            "scripts/cnn_autoencoder/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "scripts/cnn_autoencoder/channel_memory.py": "206d6cc25f7535a8a35ee578e46391533c691e6ce886750cd50d90bb5609053b",
+            "scripts/cnn_autoencoder/checkpoints.py": "6a5d91da6cb9e84d0c215065e59841912a46d909ef3b6eed7a1f2fb864aba078",
+            "scripts/cnn_autoencoder/decoder_correction.py": "f87722f8a900c4ed455c52bc7d2f01ab53f251beae349cf8245d630a4bda5d7a",
+            "scripts/cnn_autoencoder/memory.py": "04defd825319c52224ba333f13fdd413d486f265f9c1beb5512786f9633bfa5f",
+            "scripts/cnn_autoencoder/model.py": "46541a29fbf2c616e5a546ec4e26a3a5b0f015a0617e7c2bffe940b7bfcf8bca",
+            "scripts/cnn_autoencoder/native_ops/__init__.py": "c4afc3aff9afd30ff7bc209045ed1931359f535182a377d98a4c65637207404b",
+            "scripts/cnn_autoencoder/native_ops/channel_uncertainty.cc": "302b25a2c8b1e54e3e3c44f485d3409345c4b61c515586f0dd5e43b5fb5f99c4",
+            "scripts/cnn_autoencoder/native_ops/channel_uncertainty.cu.cc": "a7fb38aa00be09859b388050984f91d84f9ec95f49d0e3c989d2db759c850aa2",
+            "scripts/cnn_autoencoder/native_ops/memory_append.cc": "f913a200a257b4d082b29c37e93bc8d0c49d542700747277677a350dbf8e3814",
+            "scripts/cnn_autoencoder/native_ops/memory_append.cu.cc": "54f8a62aedc01d4697f686b1d39f1efcda854de5964343d138c4dbcc99a1571b",
+            "scripts/cnn_autoencoder/native_ops/pair_correction.cc": "012f2dda05e713c74c4daf7363f5cc826f131cb6f59440e3d107823f118398d9",
+            "scripts/cnn_autoencoder/native_ops/pair_correction.cu.cc": "2c0f5254a4df650522a8096ec0956ac78e04d3c903cec6263b30c5f898c83912",
+            "scripts/cnn_autoencoder/native_ops/pair_prepare.cc": "24463d3ae70827295e76f0b58d3cc6e15ad25a926afa730837026bf4e8a9ac1c",
+            "scripts/cnn_autoencoder/native_ops/pair_prepare.cu.cc": "d25d84cdb637b9a57a121e8030ad4179a7b6249002ab8f8a826ae442c5939b81",
+            "scripts/cnn_autoencoder/native_ops/pair_scores.cc": "8f2307ddfb2b1b78e3a3378539962c5b0b09074b3aa2076f10fb15fa6fc6bc1b",
+            "scripts/cnn_autoencoder/pilot_layout.py": "e24f1fd3cf72e8510da9b5cf3fe2bf92ac1582aebd08170c0510408fcffbf4f9",
+            "scripts/cnn_autoencoder/training.py": "1cfa89f83b0817236b85ed50808704f8f65fcf322087913beb701a5a19d07a0c",
+            "scripts/cnn_autoencoder/training_data.py": "a6f1968f746c258eac41f4cbd7132ceae462f4f4fb1281aabc8d833eb45cfcad",
+            "scripts/cnn_autoencoder/training_execution.py": "3c92def10b3c76c80f2d9703ae70c52e42313243be19e2542dab92f3e07cf71f",
+            "scripts/cnn_autoencoder/training_options.py": "3a5af1f1f044efe8c0e0761c9a2ed2e58dbb61c16345a9918af661d89425013b",
+            "scripts/cnn_autoencoder/training_parallel.py": "28b677a06dd7501da443191b380b3480fc54526429b353df9b3a4069862d3de0",
+            "scripts/cnn_autoencoder/training_prefetch.py": "3a9008f8ef9f1251051ddaf13c364d89f5876a327764ee4a50bf6e6272883602",
+            "scripts/cnn_autoencoder/training_render.py": "44d18cbd27bed0383f1c1517b927aed9d1e19d683dd9bee22729a666f599f755",
+            "scripts/cnn_autoencoder/training_transport.py": "0441550b68d74459c15b16aa1515491a5c4eb9baac83fe4fd9fd615dc464a3d9",
+            "scripts/geometry_mumimo_data.py": "764b6940ef2c8bcb1525cbb341bc3add4ee0410873bb7263e37d52e07d0878a7",
+            "scripts/receiver_decoding.py": "baec63199b1b34434287c3f39fac8888ae1480c5498285d0f81df1eb57eb7b6e",
+            "scripts/temporal_benchmark_scoring.py": "cb346d7e59a38686b1de92afef597f2f4c322f35dd0f13b3b6688c189ff201ca",
+            "scripts/temporal_generalization_protocol.py": "0fa25713ea54e2497de7c45b86fa0c75d597d1a511c59f69cd7073c76d651cb5",
+            "scripts/temporal_receiver_core.py": "e435b483159822d8a3cca25eb7093697db5cb5b65e96648fefe03c7358380e01",
+            "scripts/temporal_training_data.py": "14796931025e1ade60534422178ed95582b6c1658b7a57c238aeb296e7039ab0",
+            "scripts/train_cnn_autoencoder.py": "9203f70437f4a60102100f6d5f77dbfa8b707e2754ace7e352a36fe99e4ba188",
+            "utils/__init__.py": "3de504ecd4e7eeddb7e7e5e8418a4359af7eac48229b46650235204745f7b1fa",
+            "utils/channel_models.py": "4352cef58f873573622503c7d84d8dba77795f23dea0a2d5834d433e5423203d",
+            "utils/e2e_model.py": "bbfcbeceadd8d744e3c06e07a50d8522a4a0b2d81787b884ed4f060e5839907c",
+            "utils/neural_rx.py": "0f9760faa0cb13fa79b3081162e8c6f23e2b2dd31226af3d26c5e9b18a2e4f74",
+            "utils/parameters.py": "896e8cf0918e94270a399de6eca4ea4cdb845edd3e8ff03b3193dfc19e230e40",
+            "utils/utils.py": "5fb8f1e95fa5b021aaf46c1869d799bee72cbb4167fd05efb9b4443197937a22"
+          }
+        }
+      },
+      "inference": {
+        "iterations": 2,
+        "persistent_memory": true
+      },
+      "benchmark_protocol_sha256": "5d112ee286a17fe7dc4f6c1ef16795555f588e3bc4b7be90b3c4ff86cfe2e223",
+      "checkpoints": [
+        {
+          "name": "receiver.weights.h5",
+          "sha256": "b692511cd1c2f5c6aa2852bde095214907841e45946d08f6d2dbe3cd069b3e41",
+          "bytes": 1976040,
+          "training_seed": 2026101901
+        }
+      ],
+      "support_artifacts": [
+        {
+          "name": "nrx_large.cfg",
+          "sha256": "9cd550576d8fd7fb643164a1a4f078c91929cb62977e7aaffef0ecf8c15c36e6",
+          "bytes": 2374
+        },
+        {
+          "name": "cnn_autoencoder_finalist.json",
+          "sha256": "bf5678a7904c15e3983058f3452663d92904e5479527eba17ce7c380e83defa1",
+          "bytes": 455
+        },
+        {
+          "name": "manifest.json",
+          "sha256": "a2d5fe3f6cf7a4aba7c3f266d25ca8ad54f30d045164895969fdc1d96a50eb10",
+          "bytes": 8910
+        }
+      ],
+      "manifest_sha256": "96f07f8b620c0f27594df712da1ccfffda166cb8fde295d2aa627e50a97bf4e6"
+    },
+    "frozen_cold_k8": {
+      "manifest": "temporal_benchmark_frozen_v2",
+      "schema_version": 2,
+      "role": "frozen_cold_k8",
+      "radio": {
+        "receive_antennas": 4,
+        "maximum_active_ues": 2,
+        "bits_per_symbol": 4,
+        "mcs_index": 14,
+        "n_size_bwp": 132,
+        "noise_axis": "ebno_db",
+        "advancing_slot_pilots": true
+      },
+      "training": {
+        "additional_updates": 0,
+        "provenance": "shipped_neural_rx"
+      },
+      "inference": {
+        "iterations": 8,
+        "persistent_memory": false
+      },
+      "benchmark_protocol_sha256": "5d112ee286a17fe7dc4f6c1ef16795555f588e3bc4b7be90b3c4ff86cfe2e223",
+      "checkpoints": [
+        {
+          "name": "nrx_large_weights",
+          "sha256": "0e6aa52dc89725bc982710c4a14a2c617295118d7153da1d512e276d62a06592",
+          "bytes": 1754101,
+          "training_seed": 0
+        }
+      ],
+      "support_artifacts": [
+        {
+          "name": "nrx_large.cfg",
+          "sha256": "9cd550576d8fd7fb643164a1a4f078c91929cb62977e7aaffef0ecf8c15c36e6",
+          "bytes": 2374
+        }
+      ],
+      "manifest_sha256": "19f474cf5a0be68e0817e2a43734edc8697450efb61e94796b91358564b9fe6c"
+    }
+  },
+  "protocol_sha256": "5d112ee286a17fe7dc4f6c1ef16795555f588e3bc4b7be90b3c4ff86cfe2e223",
+  "episode_identity": {
+    "packages": {
+      "numpy": "1.26.4",
+      "sionna": "0.18.0",
+      "tensorflow": "2.15.1"
+    },
+    "radio": {
+      "advancing_slot_pilots": true,
+      "bits_per_symbol": 4,
+      "maximum_active_ues": 2,
+      "mcs_index": 14,
+      "n_size_bwp": 132,
+      "noise_axis": "ebno_db",
+      "receive_antennas": 4
+    },
+    "schema": "temporal_benchmark_episode_v2",
+    "sources": {
+      "config/nrx_large.cfg": "9cd550576d8fd7fb643164a1a4f078c91929cb62977e7aaffef0ecf8c15c36e6",
+      "scripts/geometry_mumimo_data.py": "764b6940ef2c8bcb1525cbb341bc3add4ee0410873bb7263e37d52e07d0878a7",
+      "scripts/temporal_benchmark_scenarios.py": "1737b4c57f62aaa4bb33909bce93aa42a94c8bc0d3d0793081cc91345e249f28",
+      "scripts/temporal_generalization_protocol.py": "0fa25713ea54e2497de7c45b86fa0c75d597d1a511c59f69cd7073c76d651cb5",
+      "scripts/temporal_receiver_core.py": "e435b483159822d8a3cca25eb7093697db5cb5b65e96648fefe03c7358380e01",
+      "scripts/temporal_training_data.py": "14796931025e1ade60534422178ed95582b6c1658b7a57c238aeb296e7039ab0",
+      "utils/__init__.py": "3de504ecd4e7eeddb7e7e5e8418a4359af7eac48229b46650235204745f7b1fa",
+      "utils/channel_models.py": "4352cef58f873573622503c7d84d8dba77795f23dea0a2d5834d433e5423203d",
+      "utils/e2e_model.py": "bbfcbeceadd8d744e3c06e07a50d8522a4a0b2d81787b884ed4f060e5839907c",
+      "utils/neural_rx.py": "0f9760faa0cb13fa79b3081162e8c6f23e2b2dd31226af3d26c5e9b18a2e4f74",
+      "utils/parameters.py": "896e8cf0918e94270a399de6eca4ea4cdb845edd3e8ff03b3193dfc19e230e40",
+      "utils/utils.py": "5fb8f1e95fa5b021aaf46c1869d799bee72cbb4167fd05efb9b4443197937a22"
+    }
+  },
+  "checkpoint": "models/learned_blend_joint_20261019/checkpoint_004000",
+  "receiver": "pilot-history-memory",
+  "scoring_start_tb": 17,
+  "crc_diagnostics": {
+    "candidate_persistent": {
+      "undetected_payload_errors": 0,
+      "crc_failures_with_correct_payload": 0
+    },
+    "frozen_cold_k8": {
+      "undetected_payload_errors": 0,
+      "crc_failures_with_correct_payload": 0
+    }
+  },
+  "bank_sha256": "240ae31c725b6013cdc709973f4c07118173fa5dce9b3e7992c14815a2579d80",
+  "summary": {
+    "candidate_persistent": {
+      "core_tbler": 0.156,
+      "core_errors": 1872,
+      "core_blocks": 12000,
+      "per_condition_tbler": {
+        "historical_tdl_b100": 0.08365885416666667,
+        "historical_tdl_c300": 0.09733072916666667,
+        "natural_umi": 0.1708984375,
+        "natural_uma": 0.16634114583333334,
+        "controlled_topology_change": 0.03515625,
+        "schedule_gap_reentry": 0.2614942528735632,
+        "close_los": 0.09440104166666667,
+        "near_far": 0.055338541666666664
+      }
+    },
+    "frozen_cold_k8": {
+      "core_tbler": 0.15325,
+      "core_errors": 1839,
+      "core_blocks": 12000,
+      "per_condition_tbler": {
+        "historical_tdl_b100": 0.14485677083333334,
+        "historical_tdl_c300": 0.17154947916666666,
+        "natural_umi": 0.1787109375,
+        "natural_uma": 0.15852864583333334,
+        "controlled_topology_change": 0.0302734375,
+        "schedule_gap_reentry": 0.2550287356321839,
+        "close_los": 0.1083984375,
+        "near_far": 0.0595703125
+      }
+    }
+  },
+  "comparisons": {
+    "frozen_cold_k8": {
+      "left": "candidate_persistent",
+      "right": "frozen_cold_k8",
+      "difference": 0.00275,
+      "difference_percentage_points": 0.27499999999999997,
+      "bootstrap_valid_samples": 10000,
+      "ci95": [
+        -0.005019812663070192,
+        0.009622164803973387
+      ],
+      "condition_differences": {
+        "natural_umi": -0.0078125,
+        "natural_uma": 0.0078125,
+        "controlled_topology_change": 0.0048828125,
+        "schedule_gap_reentry": 0.00646551724137931
+      },
+      "worst_condition_difference": 0.0078125,
+      "worst_condition_ci95": [
+        0.00390625,
+        0.026692708333333332
+      ]
+    }
+  },
+  "windows": {
+    "warmup": {
+      "candidate_persistent": [
+        [
+          0.09375
+        ],
+        [
+          0.12109375
+        ],
+        [
+          0.1796875
+        ],
+        [
+          0.1484375
+        ],
+        [
+          0.056640625
+        ],
+        [
+          0.2525879917184265
+        ],
+        [
+          0.09765625
+        ],
+        [
+          0.056640625
+        ]
+      ],
+      "frozen_cold_k8": [
+        [
+          0.15625
+        ],
+        [
+          0.23046875
+        ],
+        [
+          0.17578125
+        ],
+        [
+          0.142578125
+        ],
+        [
+          0.0546875
+        ],
+        [
+          0.2443064182194617
+        ],
+        [
+          0.107421875
+        ],
+        [
+          0.05078125
+        ]
+      ]
+    },
+    "mature": {
+      "candidate_persistent": [
+        [
+          0.0986328125
+        ],
+        [
+          0.0888671875
+        ],
+        [
+          0.1484375
+        ],
+        [
+          0.166015625
+        ],
+        [
+          0.06640625
+        ],
+        [
+          0.2754555198285102
+        ],
+        [
+          0.095703125
+        ],
+        [
+          0.0615234375
+        ]
+      ],
+      "frozen_cold_k8": [
+        [
+          0.162109375
+        ],
+        [
+          0.1640625
+        ],
+        [
+          0.16015625
+        ],
+        [
+          0.154296875
+        ],
+        [
+          0.0595703125
+        ],
+        [
+          0.2679528403001072
+        ],
+        [
+          0.115234375
+        ],
+        [
+          0.0673828125
+        ]
+      ]
+    },
+    "late": {
+      "candidate_persistent": [
+        [
+          0.0703125
+        ],
+        [
+          0.080078125
+        ],
+        [
+          0.193359375
+        ],
+        [
+          0.1630859375
+        ],
+        [
+          0.015625
+        ],
+        [
+          0.27070063694267515
+        ],
+        [
+          0.09375
+        ],
+        [
+          0.0537109375
+        ]
+      ],
+      "frozen_cold_k8": [
+        [
+          0.1279296875
+        ],
+        [
+          0.1533203125
+        ],
+        [
+          0.1953125
+        ],
+        [
+          0.162109375
+        ],
+        [
+          0.015625
+        ],
+        [
+          0.2664543524416136
+        ],
+        [
+          0.10546875
+        ],
+        [
+          0.0595703125
+        ]
+      ]
+    },
+    "pre_change": {
+      "candidate_persistent": [
+        [
+          0.083984375
+        ],
+        [
+          0.076171875
+        ],
+        [
+          0.146484375
+        ],
+        [
+          0.162109375
+        ],
+        [
+          0.068359375
+        ],
+        [
+          0.279317697228145
+        ],
+        [
+          0.09765625
+        ],
+        [
+          0.064453125
+        ]
+      ],
+      "frozen_cold_k8": [
+        [
+          0.142578125
+        ],
+        [
+          0.12890625
+        ],
+        [
+          0.158203125
+        ],
+        [
+          0.15625
+        ],
+        [
+          0.05859375
+        ],
+        [
+          0.27505330490405117
+        ],
+        [
+          0.109375
+        ],
+        [
+          0.07421875
+        ]
+      ]
+    },
+    "immediate_post_change": {
+      "candidate_persistent": [
+        [
+          0.068359375
+        ],
+        [
+          0.130859375
+        ],
+        [
+          0.166015625
+        ],
+        [
+          0.171875
+        ],
+        [
+          0.025390625
+        ],
+        [
+          0.27213822894168466
+        ],
+        [
+          0.09375
+        ],
+        [
+          0.0546875
+        ]
+      ],
+      "frozen_cold_k8": [
+        [
+          0.134765625
+        ],
+        [
+          0.220703125
+        ],
+        [
+          0.17578125
+        ],
+        [
+          0.158203125
+        ],
+        [
+          0.015625
+        ],
+        [
+          0.2613390928725702
+        ],
+        [
+          0.1015625
+        ],
+        [
+          0.0546875
+        ]
+      ]
+    },
+    "late_post_change": {
+      "candidate_persistent": [
+        [
+          0.07421875
+        ],
+        [
+          0.046875
+        ],
+        [
+          0.2109375
+        ],
+        [
+          0.15234375
+        ],
+        [
+          0.015625
+        ],
+        [
+          0.2775423728813559
+        ],
+        [
+          0.09375
+        ],
+        [
+          0.056640625
+        ]
+      ],
+      "frozen_cold_k8": [
+        [
+          0.1328125
+        ],
+        [
+          0.130859375
+        ],
+        [
+          0.203125
+        ],
+        [
+          0.15234375
+        ],
+        [
+          0.015625
+        ],
+        [
+          0.2690677966101695
+        ],
+        [
+          0.10546875
+        ],
+        [
+          0.060546875
+        ]
+      ]
+    },
+    "tb1": {
+      "candidate_persistent": [
+        [
+          0.109375
+        ],
+        [
+          0.21875
+        ],
+        [
+          0.1875
+        ],
+        [
+          0.15625
+        ],
+        [
+          0.09375
+        ],
+        [
+          0.296875
+        ],
+        [
+          0.125
+        ],
+        [
+          0.078125
+        ]
+      ],
+      "frozen_cold_k8": [
+        [
+          0.09375
+        ],
+        [
+          0.234375
+        ],
+        [
+          0.171875
+        ],
+        [
+          0.140625
+        ],
+        [
+          0.0625
+        ],
+        [
+          0.265625
+        ],
+        [
+          0.109375
+        ],
+        [
+          0.046875
+        ]
+      ]
+    },
+    "whole_episode": {
+      "candidate_persistent": [
+        [
+          0.086669921875
+        ],
+        [
+          0.1015625
+        ],
+        [
+          0.171630859375
+        ],
+        [
+          0.161376953125
+        ],
+        [
+          0.041015625
+        ],
+        [
+          0.25892138449154817
+        ],
+        [
+          0.0947265625
+        ],
+        [
+          0.055908203125
+        ]
+      ],
+      "frozen_cold_k8": [
+        [
+          0.1484375
+        ],
+        [
+          0.181396484375
+        ],
+        [
+          0.177490234375
+        ],
+        [
+          0.154296875
+        ],
+        [
+          0.037109375
+        ],
+        [
+          0.2519452642876308
+        ],
+        [
+          0.109130859375
+        ],
+        [
+          0.057861328125
+        ]
+      ]
+    }
+  },
+  "late_drift": {
+    "definition": "late minus mature persistent-vs-frozen_cold_k8 TBLER gap",
+    "difference": -0.00048828125,
+    "difference_percentage_points": -0.048828125,
+    "bootstrap_valid_samples": 10000,
+    "ci95": [
+      -0.01220703125,
+      0.01171875
+    ]
+  },
+  "adaptation": {
+    "definition": "candidate minus frozen_cold_k8 TBLER",
+    "per_tb_gap": [
+      0.03125,
+      0.0,
+      0.0,
+      -0.015625,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.03125,
+      0.015625,
+      0.015625,
+      0.015625,
+      0.015625,
+      0.0,
+      0.015625,
+      0.0,
+      0.0,
+      0.0625,
+      0.0,
+      0.015625,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.015625,
+      0.015625,
+      0.0,
+      0.0,
+      0.015625,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    "immediate_mean_gap": 0.009765625,
+    "late_mean_gap": 0.0,
+    "post_change_excess_area": 0.125,
+    "schedule_reentry": {
+      "definition": "candidate minus frozen_cold_k8 TBLER after UE re-entry",
+      "event_count": 552,
+      "samples_per_lag": [
+        552,
+        435,
+        380,
+        327
+      ],
+      "per_lag_gap": [
+        0.021739130434782608,
+        0.011494252873563218,
+        0.005263157894736842,
+        0.009174311926605505
+      ],
+      "excess_area": 0.047670853129688176
+    }
+  },
+  "cold_k8_accuracy_target_met": false,
+  "memory_benefit_demonstrated": null,
+  "accuracy_criteria_met": null,
+  "eligibility_scope": "development evidence at one training seed; final accuracy requires improvement over frozen Cold K8 and the same weights reset; trained-weight latency remains required",
+  "raw_sha256": "084495b28defceb1afdee36c7ecf27ec8a524cb68ba621d7909f3f0759f26a29",
+  "result_sha256": "8fb04840d9e2e03b5832882cf51005bb69480bf32bd8f510bb20185d780abf13"
+}

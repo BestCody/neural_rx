@@ -1,0 +1,259 @@
+# SPDX-FileCopyrightText: Copyright (c) 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: LicenseRef-NvidiaProprietary
+#
+# NVIDIA CORPORATION, its affiliates and licensors retain all intellectual
+# property and proprietary rights in and to this material, related
+# documentation and any modifications thereto. Any use, reproduction,
+# disclosure or distribution of this material and related documentation
+# without an express license agreement from NVIDIA CORPORATION or
+# its affiliates is strictly prohibited.
+
+
+import numpy as np
+import configparser
+import tensorflow as tf
+from pathlib import Path
+from sionna.nr import PUSCHConfig, PUSCHDMRSConfig, TBConfig, CarrierConfig, PUSCHTransmitter, PUSCHPilotPattern
+from sionna.channel.tr38901 import PanelArray, UMi, TDL, UMa
+from sionna.mimo import StreamManagement
+from sionna.channel import OFDMChannel
+from .channel_models import DoubleTDLChannel
+
+class Parameters:
+    def __init__(self, config_name, training=False,
+                 verbose=False, num_tx_eval=None,
+                 n_size_bwp_override=None):
+
+        assert isinstance(verbose, bool), "verbose must be bool."
+        assert isinstance(training, bool), "training must be bool."
+        assert isinstance(config_name, str), "config_name must be str."
+
+        fn = Path(__file__).resolve().parent.parent / "config" / Path(config_name).name
+        if fn.exists():
+            config = configparser.RawConfigParser()
+            config.read(str(fn))
+        else:
+            raise FileNotFoundError("Unknown config file.")
+
+        self.config_str = ""
+        for section in config.sections():
+            s = f"\n---- {section} ----- "
+            self.config_str += s + "<br />"
+            if verbose:
+                print(s)
+            for option in config.options(section):
+                setattr(self, f"{option}", eval(config.get(section,option)))
+                s = f"{option}: {eval(config.get(section,option))}"
+                self.config_str += s + "<br />"
+                if verbose:
+                    print(s)
+
+        if not training:
+            self.channel_type = self.channel_type_eval
+            self.n_size_bwp = self.n_size_bwp_eval
+            self.max_ut_velocity = self.max_ut_velocity_eval
+            self.min_ut_velocity = self.min_ut_velocity_eval
+            self.channel_norm = self.channel_norm_eval
+
+        if n_size_bwp_override is not None:
+            if int(n_size_bwp_override) <= 0:
+                raise ValueError("n_size_bwp_override must be positive")
+            self.n_size_bwp = int(n_size_bwp_override)
+
+        carrier_config = CarrierConfig(
+                n_cell_id=self.n_cell_id,
+                cyclic_prefix=self.cyclic_prefix,
+                subcarrier_spacing=int(self.subcarrier_spacing/1e3),
+                n_size_grid=self.n_size_bwp,
+                n_start_grid=self.n_start_grid,
+                slot_number=self.slot_number,
+                frame_number=self.frame_number)
+
+        pusch_dmrs_config=PUSCHDMRSConfig(
+                config_type=self.dmrs_config_type,
+                type_a_position=self.dmrs_type_a_position,
+                additional_position=self.dmrs_additional_position,
+                length=self.dmrs_length,
+                dmrs_port_set=self.dmrs_port_sets[0],
+                n_scid=self.n_scid,
+            num_cdm_groups_without_data=self.num_cdm_groups_without_data)
+
+        mcs_list = self.mcs_index
+        self.pusch_configs = []
+        for mcs_list_idx in range(len(mcs_list)):
+            self.pusch_configs.append([])
+            mcs_index = mcs_list[mcs_list_idx]
+            tb_config = TBConfig(
+                    mcs_index=mcs_index,
+                    mcs_table=self.mcs_table,
+                    channel_type="PUSCH")
+
+            pc = PUSCHConfig(
+                    carrier_config=carrier_config,
+                    pusch_dmrs_config=pusch_dmrs_config,
+                    tb_config=tb_config,
+                    num_antenna_ports = self.num_antenna_ports,
+                    precoding = self.precoding,
+                    symbol_allocation = self.symbol_allocation,
+                    tpmi = self.tpmi,
+                    mapping_type=self.dmrs_mapping_type,)
+
+            for idx,_ in enumerate(self.dmrs_port_sets):
+                p = pc.clone()
+                p.dmrs.dmrs_port_set = self.dmrs_port_sets[idx]
+                p.n_id = self.n_ids[idx]
+                p.dmrs.n_id = self.dmrs_nid[idx]
+                p.n_rnti = self.n_rntis[idx]
+                self.pusch_configs[mcs_list_idx].append(p)
+
+
+        if not training:
+            if num_tx_eval is None:
+                num_tx_eval = len(self.dmrs_port_sets)
+            self.max_num_tx = num_tx_eval
+            self.min_num_tx = num_tx_eval
+
+        for mcs_list_idx in range(len(mcs_list)):
+            self.pusch_configs[mcs_list_idx] = self.pusch_configs[mcs_list_idx][:self.max_num_tx]
+        print(f"Evaluating the first {self.max_num_tx} port sets.")
+
+
+        self.pilots = []
+        for slot_num in range(carrier_config.num_slots_per_frame):
+            for pcs in self.pusch_configs:
+                for pc in pcs:
+                    pc.carrier.slot_number = slot_num
+            pilot_pattern = PUSCHPilotPattern(self.pusch_configs[0])
+            self.pilots.append(pilot_pattern.pilots)
+        self.pilots = tf.stack(self.pilots, axis=0)
+        self.pilots = tf.constant(self.pilots)
+        for pcs in self.pusch_configs:
+            for pc in pcs:
+                pc.carrier.slot_number = self.slot_number
+
+        self.transmitters = []
+        for mcs_list_idx in range(len(mcs_list)):
+            self.transmitters.append(
+                PUSCHTransmitter(
+                            self.pusch_configs[mcs_list_idx],
+                            return_bits=False,
+                            output_domain="freq",
+                            verbose=self.verbose))
+
+            if self.custom_constellation:
+                print("Activating trainable custom constellations.")
+                self.transmitters[mcs_list_idx]._mapper.constellation.trainable = True
+            self.transmitters[mcs_list_idx]._mapper.constellation.center = True
+
+        if self.mask_pilots and self.initial_chest in ("ls", "nn"):
+            print("Warning: initial_chest will fail with masked pilots.")
+
+        self.sm = StreamManagement(np.ones([1, self.max_num_tx], int), 1)
+
+
+        if self.channel_type in ("DoubleTDLlow","DoubleTDLmedium",
+                                 "DoubleTDLhigh") and self.max_num_tx==1:
+                print("Warning: SelectedDoubleTDL model only defined for 2 "\
+                      "users. Selecting TDL-B100 instead.")
+                self.channel_type = "TDL-B100"
+
+        if self.channel_type in ("UMi", "UMa"):
+            if self.num_rx_antennas==1:
+                print("Using vertical polarization for single antenna setup.")
+                num_cols_per_panel = 1
+                num_rows_per_panel = 1
+                polarization = "single"
+                polarization_type = 'V'
+            else:
+                num_cols_per_panel = self.num_rx_antennas//2
+                num_rows_per_panel = 1
+                polarization = "dual"
+                polarization_type = 'cross'
+
+            bs_array = PanelArray(num_rows_per_panel = num_rows_per_panel,
+                                  num_cols_per_panel = num_cols_per_panel,
+                                  polarization = polarization,
+                                  polarization_type  = polarization_type,
+                                  antenna_pattern = '38.901',
+                                  carrier_frequency = self.carrier_frequency)
+
+            ut_array = PanelArray(num_rows_per_panel = 1,
+                                  num_cols_per_panel = pc.num_antenna_ports,
+                                  polarization = 'single',
+                                  polarization_type = 'V',
+                                  antenna_pattern = 'omni',
+                                  carrier_frequency = self.carrier_frequency)
+
+            if self.channel_type == "UMi":
+                self.channel_model = UMi(
+                                carrier_frequency=self.carrier_frequency,
+                                o2i_model = 'low',
+                                bs_array = bs_array,
+                                ut_array = ut_array,
+                                direction = 'uplink',
+                                enable_pathloss = False,
+                                enable_shadow_fading = False)
+            else:
+                self.channel_model = UMa(
+                                carrier_frequency=self.carrier_frequency,
+                                o2i_model = 'low',
+                                bs_array = bs_array,
+                                ut_array = ut_array,
+                                direction = 'uplink',
+                                enable_pathloss = False,
+                                enable_shadow_fading = False)
+
+            self.channel = OFDMChannel(
+                    channel_model=self.channel_model,
+                    resource_grid=self.transmitters[0]._resource_grid,
+                    add_awgn=True,
+                    normalize_channel=self.channel_norm,
+                    return_channel=True)
+
+        elif self.channel_type == "TDL-B100":
+            tdl = TDL(model="B100",
+                      delay_spread=100e-9,
+                      carrier_frequency=self.carrier_frequency,
+                      min_speed=self.min_ut_velocity,
+                      max_speed=self.max_ut_velocity,
+                      num_tx_ant=pc.num_antenna_ports,
+                      num_rx_ant=self.num_rx_antennas)
+            self.channel = OFDMChannel(tdl,
+                                       self.transmitters[0].resource_grid,
+                                       add_awgn=True,
+                                       normalize_channel=self.channel_norm,
+                                       return_channel=True)
+        elif self.channel_type == "TDL-C300":
+            tdl = TDL(model="C300",
+                      delay_spread=300e-9,
+                      carrier_frequency=self.carrier_frequency,
+                      min_speed=self.min_ut_velocity,
+                      max_speed=self.max_ut_velocity,
+                      num_tx_ant=pc.num_antenna_ports,
+                      num_rx_ant=self.num_rx_antennas)
+            self.channel = OFDMChannel(tdl,
+                                       self.transmitters[0].resource_grid,
+                                       add_awgn=True,
+                                       normalize_channel=self.channel_norm,
+                                       return_channel=True)
+        elif self.channel_type == "DoubleTDLlow":
+            self.channel = DoubleTDLChannel(self.carrier_frequency,
+                                    self.transmitters[0].resource_grid,
+                                    correlation="low",
+                                    num_tx_ant=pc.num_antenna_ports,
+                                    norm_channel=self.channel_norm)
+        elif self.channel_type == "DoubleTDLmedium":
+            self.channel= DoubleTDLChannel(self.carrier_frequency,
+                                    self.transmitters[0].resource_grid,
+                                    correlation="medium",
+                                    num_tx_ant=pc.num_antenna_ports,
+                                    norm_channel=self.channel_norm)
+        elif self.channel_type == "DoubleTDLhigh":
+            self.channel = DoubleTDLChannel(self.carrier_frequency,
+                                    self.transmitters[0].resource_grid,
+                                    correlation="high",
+                                    num_tx_ant=pc.num_antenna_ports,
+                                    norm_channel=self.channel_norm)
+
+        else:
+            raise ValueError("Unknown Channel type.")

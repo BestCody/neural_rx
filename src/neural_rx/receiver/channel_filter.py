@@ -85,7 +85,8 @@ class ChannelMemory(tf.keras.layers.Layer):
         innovation = tf.where(allowed[..., None], hj-h0[..., None, :], 0.)
         disagreement = tf.reduce_mean(power(innovation), -1)
         age_ms = tf.cast(ages, tf.float32)*layout.tb_seconds*1000.
-        coordinates = tf.concat([tf.broadcast_to(tf.math.log1p(age_ms)[..., None, None, None], tf.shape(delta[..., :1])),
+        coordinates = tf.concat([tf.broadcast_to(tf.math.log1p(age_ms)[..., None, None, None],
+                                                 tf.shape(delta[..., :1])),
                                  delta[..., :1]-age_ms[..., None, None, None], delta[..., 1:]], -1)
         coordinates = flatten(coordinates)
         features = tf.stack([tf.math.real(correlation), tf.math.imag(correlation),
@@ -98,7 +99,8 @@ class ChannelMemory(tf.keras.layers.Layer):
         scores = self.filter(tf.concat([features, coordinates, geometry], -1))
         logits = tf.where(allowed, scores[..., 0], -1e9)
         weights = tf.nn.softmax(tf.concat([logits, tf.zeros_like(logits[..., :1])], -1), -1)[..., :-1]
-        beta = tf.cast(weights[..., None], tf.complex64)*tf.complex(tf.tanh(scores[..., 1::2]), tf.tanh(scores[..., 2::2]))
+        beta = tf.cast(weights[..., None], tf.complex64)*tf.complex(tf.tanh(scores[..., 1::2]),
+                                                                    tf.tanh(scores[..., 2::2]))
         coefficients = tf.einsum('bucjk,bucjr->bucrk', beta, innovation)
         coefficients += h0[..., None]*tf.constant([1., 0., 0.], tf.complex64)
         context = FilterContext(coefficients, beta, weights, innovation, h0, q0, qj, p0, reference, floor, active)
@@ -113,7 +115,8 @@ class ChannelMemory(tf.keras.layers.Layer):
         factor = tf.cast(layout.r_layout, tf.complex64)
         nominal = q0*tf.reduce_sum(power(tf.einsum('ucik,buck->buci', factor, d0)), -1)
         nominal += tf.reduce_sum(qj*tf.reduce_sum(power(tf.einsum('ucik,bucjk->bucji', factor, beta)), -1), -1)
-        observed = tf.einsum('bucj,bucjr,bucjs->bucrs', tf.cast(weights, tf.complex64), innovation, tf.math.conj(innovation))
+        observed = tf.einsum('bucj,bucjr,bucjs->bucrs', tf.cast(weights, tf.complex64), innovation,
+                             tf.math.conj(innovation))
         antennas = h0.shape[-1]
         observed += tf.cast((nominal+floor)[..., None, None], tf.complex64)*tf.eye(antennas, dtype=tf.complex64)
         diagonal = tf.math.real(tf.linalg.diag_part(observed))
@@ -125,7 +128,8 @@ class ChannelMemory(tf.keras.layers.Layer):
         off_energy = tf.maximum(total_energy-tf.reduce_sum(tf.square(diagonal_normalized), -1), 0.)
         off_fraction = off_energy/tf.maximum(total_energy, EPS*EPS)
         shape = tf.shape(power(h0))
-        broadcast = lambda value: tf.broadcast_to(value[..., None], shape)
+        def broadcast(value):
+            return tf.broadcast_to(value[..., None], shape)
         slope = tf.reduce_sum(power(coefficients[..., 1:]), -1)
         effective = tf.math.divide_no_nan(tf.square(tf.reduce_sum(weights, -1)), tf.reduce_sum(tf.square(weights), -1))
         features = tf.stack([broadcast(p0/reference), broadcast(nominal/reference),
@@ -142,7 +146,8 @@ class ChannelMemory(tf.keras.layers.Layer):
         variance = positive[..., 0]*nominal[..., None]+positive[..., 1]*reference[..., None]+floor[..., None]
         rho = tf.sigmoid(tf.reduce_mean(calibration[..., 2], -1))
         identity = tf.eye(antennas, dtype=tf.complex64)
-        matrix = tf.cast(rho[..., None, None], tf.complex64)*correlation_matrix+tf.cast((1.-rho)[..., None, None], tf.complex64)*identity
+        matrix = (tf.cast(rho[..., None, None], tf.complex64)*correlation_matrix
+                  +tf.cast((1.-rho)[..., None, None], tf.complex64)*identity)
         scale = tf.sqrt(variance)
         covariance = matrix*tf.cast(scale[..., :, None]*scale[..., None, :], tf.complex64)
         return tf.where(active[..., None, None, None], covariance, 0.)

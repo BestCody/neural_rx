@@ -11,8 +11,8 @@ from sionna.channel import (
 from sionna.channel.tr38901 import TDL
 from sionna.utils import BinarySource, ebnodb2no, expand_to_rank
 
-from utils.channel_models import ue_correlation_matrix, gnb_correlation_matrix
-from temporal_generalization_protocol import ChannelProfileSpec
+from neural_rx.backbone.channel_models import ue_correlation_matrix, gnb_correlation_matrix
+from neural_rx.benchmark.generalization_protocol import ChannelProfileSpec
 
 
 NUM_TX = 2

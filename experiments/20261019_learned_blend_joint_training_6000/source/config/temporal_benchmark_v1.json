@@ -1,0 +1,283 @@
+{
+  "schema_version": 1,
+  "protocol": "pretrained_nrx_benchmark",
+  "radio": {
+    "receive_antennas": 4,
+    "maximum_active_ues": 2,
+    "bits_per_symbol": 4,
+    "mcs_index": 14,
+    "n_size_bwp": 132,
+    "noise_axis": "ebno_db",
+    "advancing_slot_pilots": true
+  },
+  "conditions": {
+    "historical_tdl_b100": {
+      "provider": "independent_tdl",
+      "receiver_inputs": [],
+      "profile": "B100",
+      "doppler_hz": [
+        0.0,
+        400.0
+      ]
+    },
+    "historical_tdl_c300": {
+      "provider": "independent_tdl",
+      "receiver_inputs": [],
+      "profile": "C300",
+      "doppler_hz": [
+        0.0,
+        100.0
+      ]
+    },
+    "natural_umi": {
+      "provider": "shared_geometry",
+      "receiver_inputs": [],
+      "scenario": "umi",
+      "force_los": null,
+      "angular_separation_deg": [
+        0.0,
+        180.0
+      ],
+      "doppler_strata_hz": [
+        [
+          0.0,
+          50.0
+        ],
+        [
+          50.0,
+          175.0
+        ],
+        [
+          175.0,
+          400.0
+        ]
+      ]
+    },
+    "natural_uma": {
+      "provider": "shared_geometry",
+      "receiver_inputs": [],
+      "scenario": "uma",
+      "force_los": null,
+      "angular_separation_deg": [
+        0.0,
+        180.0
+      ],
+      "doppler_strata_hz": [
+        [
+          0.0,
+          50.0
+        ],
+        [
+          50.0,
+          175.0
+        ],
+        [
+          175.0,
+          400.0
+        ]
+      ]
+    },
+    "controlled_topology_change": {
+      "provider": "shared_geometry_change",
+      "receiver_inputs": [],
+      "scenario": "umi",
+      "change_fraction": 0.5,
+      "force_los": null
+    },
+    "schedule_gap_reentry": {
+      "provider": "shared_geometry_schedule",
+      "receiver_inputs": [],
+      "scenario": "umi",
+      "gap_start_probability": 0.05,
+      "maximum_gap_tbs": 4,
+      "ue_pool_size": 4,
+      "schedule_switch_probability": 0.25,
+      "schedule_reorder_probability": 0.25
+    },
+    "close_los": {
+      "provider": "shared_geometry",
+      "receiver_inputs": [],
+      "scenario": "umi",
+      "force_los": true,
+      "angular_separation_deg": [
+        0.0,
+        5.0
+      ],
+      "doppler_strata_hz": [
+        [
+          0.0,
+          400.0
+        ]
+      ]
+    },
+    "near_far": {
+      "provider": "shared_geometry_power",
+      "receiver_inputs": [],
+      "scenario": "umi",
+      "force_los": null,
+      "received_power_gap_db": [
+        6.0,
+        12.0
+      ],
+      "power_control": "controlled_residual_gap"
+    }
+  },
+  "condition_order": [
+    "historical_tdl_b100",
+    "historical_tdl_c300",
+    "natural_umi",
+    "natural_uma",
+    "controlled_topology_change",
+    "schedule_gap_reentry",
+    "close_los",
+    "near_far"
+  ],
+  "core_conditions": [
+    "natural_umi",
+    "natural_uma",
+    "controlled_topology_change",
+    "schedule_gap_reentry"
+  ],
+  "stationary_conditions": [
+    "natural_umi",
+    "natural_uma"
+  ],
+  "report_conditions": [
+    "historical_tdl_b100",
+    "historical_tdl_c300"
+  ],
+  "stress_conditions": [
+    "close_los",
+    "near_far"
+  ],
+  "seed_domains": {
+    "channel": 0,
+    "payload": 100000,
+    "noise": 200000,
+    "schedule": 300000
+  },
+  "windows": {
+    "warmup": [
+      1,
+      8
+    ],
+    "mature": [
+      17,
+      32
+    ],
+    "late": [
+      49,
+      64
+    ],
+    "pre_change": [
+      25,
+      32
+    ],
+    "immediate_post_change": [
+      33,
+      40
+    ],
+    "late_post_change": [
+      57,
+      64
+    ]
+  },
+  "statistics": {
+    "bootstrap_samples": 10000,
+    "primary_snr_point": "anchor",
+    "tbler_definition": "failed_active_user_blocks / evaluated_active_user_blocks",
+    "bootstrap_seed": 64000123
+  },
+  "execution": {
+    "observable_receiver_inputs": [
+      "active",
+      "ls_channel",
+      "noise_variance",
+      "received_grid",
+      "slot_number",
+      "ue_ids"
+    ],
+    "candidate_methods": [
+      "candidate_persistent",
+      "candidate_reset"
+    ],
+    "accuracy_episode_batch_size": 4,
+    "latency": {
+      "condition": "natural_umi",
+      "snr_point": "anchor",
+      "warmup_samples": 16,
+      "sample_count": 128,
+      "batch_size": 1
+    }
+  },
+  "development_conditions": [
+    "historical_tdl_b100",
+    "historical_tdl_c300",
+    "natural_umi",
+    "natural_uma",
+    "controlled_topology_change",
+    "schedule_gap_reentry",
+    "close_los",
+    "near_far"
+  ],
+  "evaluation_phases": {
+    "smoke": {
+      "episodes": 2,
+      "num_tbs": 8,
+      "scoring_start_tb": 1,
+      "seed": 51000000,
+      "snr_db": [
+        3.0
+      ]
+    },
+    "latency": {
+      "episodes": 3,
+      "num_tbs": 64,
+      "scoring_start_tb": 17,
+      "seed": 52000000,
+      "snr_db": [
+        3.0
+      ]
+    },
+    "calibration": {
+      "episodes": 8,
+      "num_tbs": 16,
+      "scoring_start_tb": 9,
+      "seed": 63000000,
+      "snr_db": [
+        -2.0,
+        -1.0,
+        0.0,
+        1.0,
+        2.0,
+        3.0,
+        4.0,
+        5.0,
+        6.0,
+        7.0,
+        8.0,
+        9.0,
+        10.0,
+        11.0,
+        12.0
+      ],
+      "snr_bounds_db": [
+        -10.0,
+        30.0
+      ]
+    },
+    "development": {
+      "episodes": 32,
+      "num_tbs": 64,
+      "scoring_start_tb": 17,
+      "seed": 84000000
+    },
+    "confirmation": {
+      "episodes": 32,
+      "num_tbs": 64,
+      "scoring_start_tb": 17,
+      "seed": 88000000
+    }
+  },
+  "protocol_sha256": "5b264b2304eaa5cf9f9e6a1e873c586e059d8ad5ba336c07fff33419b2c2a388"
+}

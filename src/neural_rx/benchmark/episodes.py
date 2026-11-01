@@ -11,19 +11,19 @@ import tempfile
 
 import numpy as np
 
-from temporal_benchmark_runtime import BenchmarkEpisode, validate_episode
-from artifact_io import canonical_json, file_sha256
-from temporal_generalization_protocol import verify_payload
+from neural_rx.benchmark.runtime import BenchmarkEpisode, validate_episode
+from neural_rx.provenance.artifacts import canonical_json, file_sha256
+from neural_rx.benchmark.generalization_protocol import verify_payload
+from neural_rx.paths import PACKAGE, ROOT
 
 
 def scenario_identity(config_path, protocol):
-    root = Path(__file__).resolve().parents[1]
-    paths = [root / "scripts" / name for name in (
-        "temporal_benchmark_scenarios.py", "temporal_training_data.py",
-        "geometry_mumimo_data.py", "temporal_receiver_core.py",
-        "temporal_generalization_protocol.py",
+    root = ROOT
+    paths = [PACKAGE / name for name in (
+        "benchmark/scenarios.py", "data/temporal.py", "data/geometry.py",
+        "backbone/core.py", "benchmark/generalization_protocol.py",
     )]
-    paths += sorted((root / "utils").glob("*.py"))
+    paths += sorted((PACKAGE / "backbone").glob("*.py"))
     paths += [Path(config_path)]
     identity = {
         "schema": "temporal_benchmark_episode_v2",
@@ -33,15 +33,39 @@ def scenario_identity(config_path, protocol):
         "packages": {name: importlib.metadata.version(name)
                      for name in ("numpy", "tensorflow", "sionna")},
     }
-    if "rt_channel_bank" in protocol:
-        from rt_channel_bank import rt_scenario_sha256
-        manifest = protocol["rt_channel_bank"]
-        identity["rt_channel_bank_sha256"] = manifest["bank_sha256"]
-        identity["rt_channel_seed"] = manifest["config"]["seed"]
-        identity["rt_scenario_sha256"] = rt_scenario_sha256(manifest)
-        identity["sources"].update({f"scripts/{name}": file_sha256(root/"scripts"/name)
-                                    for name in ("rt_channel_bank.py", "rt_channel_data.py")})
     return identity
+
+
+def ray_traced_identity(banks):
+    from neural_rx.rt.bank import rt_scenario_sha256
+    return {
+        "sources": {str((PACKAGE/name).relative_to(ROOT)): file_sha256(PACKAGE/name)
+                    for name in ("rt/bank.py", "rt/data.py")},
+        "banks": {bank.sha256: {"seed": bank.config["seed"], "split": bank.config["split"],
+                                "scenario_sha256": rt_scenario_sha256(bank.manifest)}
+                  for bank in banks},
+    }
+
+
+class RoutedScenarioBank:
+    """Keep ray-traced episodes in their own cache beside the statistical bank."""
+
+    def __init__(self, statistical, ray_traced):
+        self.statistical, self.ray_traced = statistical, ray_traced
+        self.identity = dict(statistical.identity, ray_traced=ray_traced.identity["ray_traced"])
+
+    def _bank(self, job):
+        return self.ray_traced if job["provider"] == "ray_traced" else self.statistical
+
+    def ensure_capacity(self, jobs):
+        for bank in (self.statistical, self.ray_traced):
+            bank.ensure_capacity([job for job in jobs if self._bank(job) is bank])
+
+    def generate(self, job, episode_index):
+        return self._bank(job).generate(job, episode_index)
+
+    def content_hashes(self, jobs):
+        return [value for job in jobs for value in self._bank(job).content_hashes([job])]
 
 
 class CachedScenarioBank:
@@ -56,7 +80,7 @@ class CachedScenarioBank:
             saved = json.loads(dataset.read_text())
             verify_payload(saved)
             if any(saved["identity"].get(key) != self.identity.get(key) for key in
-                   ("schema", "radio", "rt_channel_bank_sha256", "rt_scenario_sha256")):
+                   ("schema", "radio", "ray_traced")):
                 raise ValueError("Saved dataset format or radio configuration differs")
             self.identity = saved["identity"]
             self.readonly = True

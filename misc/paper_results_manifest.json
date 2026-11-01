@@ -1,0 +1,14 @@
+{
+  "script_sha256": "b5c57df47d62a3f59b71a42ad03b43ba360eaa8ed365fc716075fb3fa1abfddc",
+  "inputs_result_sha256": {
+    "confirmation": "1d16ed9e2c656ffc23e3260226b10d775f643b52c2e2f857e2bbe4ee96af11f8",
+    "latency": "3c982f3bc38f8f49464d02538fee9e91356bfdaed3b005c2314d3c084f9b2460",
+    "development_001000": "39f74fc338e40b08997de7f03c58ec4abbd3f49e5294ac7915cda633c97dc4bf",
+    "development_002000": "43522db886f57689919159cd877723d8b65fcffa20e869559d8c45261a39d84d",
+    "development_003000": "66fc6472954bd1bc9d7edee7abec351725f04fa5d51c3ddfde21b5af9681ee6d",
+    "development_004000": "8fb04840d9e2e03b5832882cf51005bb69480bf32bd8f510bb20185d780abf13",
+    "development_005000": "0de6ae7c6480b90c5b5165daa7d4065459b7669a0a3f340c452361cb0e8f56dd",
+    "development_006000": "7b20c4f8de392ff2886723c90bc3e409399ccbcbe6598ac81d0da86bdf25fb80"
+  },
+  "selected_checkpoint_update": 5000
+}

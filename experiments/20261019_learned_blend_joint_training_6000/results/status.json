@@ -1,0 +1,6 @@
+{
+  "status": "complete",
+  "completed_updates": 6000,
+  "requested_updates": 6000,
+  "best_checkpoint": "/home/h3lou/neural_rx/models/learned_blend_joint_20261019/checkpoint_005000"
+}

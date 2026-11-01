@@ -4,8 +4,8 @@ from typing import NamedTuple
 
 import tensorflow as tf
 
-from pilot_history_receiver.pilot_history import PilotHistory
-from temporal_receiver_core import prepare_cgnn_inputs
+from neural_rx.receiver.pilot_history import PilotHistory
+from neural_rx.backbone.core import prepare_cgnn_inputs
 
 
 class ReferenceState(NamedTuple):
@@ -42,11 +42,11 @@ class ReferenceMemoryManager:
                   selected[:, 1], tf.ones([tf.shape(selected)[0]], tf.bool)]
         return ReferenceState(*(tf.tensor_scatter_nd_update(table, address,
             tf.concat([new[:, None], previous[:, :-1]], 1))
-            for table, new, previous in zip(state, values, old)))
+            for table, new, previous in zip(state, values, old, strict=True)))
 
 
 def make_decode_step(receiver, model, memory_manager, decoder):
-    from receiver_decoding import OneLayerGridCodeMap
+    from neural_rx.decoding import OneLayerGridCodeMap
     mapping = OneLayerGridCodeMap(receiver._neural_rx, receiver._tb_encoders[0].num_tx,
                                  model.base._num_bits_per_symbol[0])
     @tf.function(reduce_retracing=True)

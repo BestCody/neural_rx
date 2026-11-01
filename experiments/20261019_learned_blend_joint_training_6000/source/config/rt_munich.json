@@ -1,0 +1,47 @@
+{
+  "name": "rt_munich",
+  "split": "confirmation",
+  "seed": 20261014,
+  "episodes": 32,
+  "scene": "munich",
+  "reference": {
+    "paper": "https://arxiv.org/abs/2409.02912",
+    "repository": "https://github.com/NVlabs/neural_rx",
+    "commit": "b22b9ceccb7a7eb953314ae9ada5e847f6028324",
+    "notebook": "notebooks/site_specific_neural_receivers.ipynb"
+  },
+  "carrier_frequency_hz": 2140000000.0,
+  "trajectory_samples": 10000,
+  "max_attempts_per_episode": 100,
+  "max_duration_s": 0.04,
+  "normalize_delays": true,
+  "num_paths": 48,
+  "power_normalization": "per_ue_episode",
+  "rx_array": {"num_rows": 2, "num_cols": 1, "vertical_spacing": 0.5, "horizontal_spacing": 0.5, "pattern": "iso", "polarization": "cross"},
+  "tx_array": {"num_rows": 1, "num_cols": 2, "vertical_spacing": 0.5, "horizontal_spacing": 0.5, "pattern": "iso", "polarization": "V"},
+  "base_station": {"name": "gnb0", "start_m": [-210.0, 50.0, 106.0], "orientation_rad": [0.0, 0.0, 0.0]},
+  "users": [
+    {
+      "name": "ue0",
+      "start_m": [520.0, 65.0, 1.5],
+      "speed_mps": 3.5,
+      "route_m": [[520.0, 65.0, 1.5], [125.0, 175.0, 1.5], [90.0, 30.0, 1.5], [85.0, 0.0, 1.5], [30.0, -115.0, 1.5], [110.0, -175.0, 1.5], [200.0, -210.0, 1.5], [245.0, -220.0, 1.5], [400.0, -285.0, 1.5]]
+    },
+    {
+      "name": "ue1",
+      "start_m": [53.0, 310.0, 1.5],
+      "speed_mps": 3.0,
+      "route_m": [[53.0, 310.0, 1.5], [-72.0, -91.0, 1.5], [-380.0, 40.0, 1.5], [-485.0, 50.0, 1.5], [-650.0, 95.0, 1.5]]
+    }
+  ],
+  "solver": {
+    "max_depth": 6,
+    "samples_per_src": 10000000,
+    "synthetic_array": true,
+    "los": true,
+    "specular_reflection": true,
+    "diffuse_reflection": false,
+    "refraction": false,
+    "diffraction": true
+  }
+}

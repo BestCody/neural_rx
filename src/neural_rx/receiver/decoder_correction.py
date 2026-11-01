@@ -41,7 +41,8 @@ class DecoderCorrection:
         for value in energies:
             match = next((i for i, level in enumerate(levels) if np.isclose(value, level, rtol=4*EPS, atol=0.)), None)
             if match is None:
-                match = len(levels); levels.append(float(value))
+                match = len(levels)
+                levels.append(float(value))
             indices.append(match)
         self.energies = np.asarray(levels, np.float32)
         self.energy_levels = tf.constant(self.energies)
@@ -82,7 +83,8 @@ class DecoderCorrection:
             def gradient(gfactor, gwhite, glogdet):
                 grhs = tf.linalg.triangular_solve(factor, gwhite, adjoint=True)
                 gfactor -= tf.linalg.band_part(tf.linalg.matmul(grhs, white, adjoint_b=True), -1, 0)
-                gfactor += tf.linalg.diag(tf.cast(2*glogdet[..., None]/tf.math.real(tf.linalg.diag_part(factor)), tf.complex64))
+                gfactor += tf.linalg.diag(tf.cast(2*glogdet[..., None]/tf.math.real(tf.linalg.diag_part(factor)),
+                                                  tf.complex64))
                 identity = tf.eye(tf.shape(factor)[-1], batch_shape=tf.shape(factor)[:-2], dtype=factor.dtype)
                 inverse = tf.linalg.triangular_solve(factor, identity)
                 middle = tf.linalg.matmul(factor, gfactor, adjoint_a=True)
@@ -146,7 +148,8 @@ class DecoderCorrection:
             partners = tf.gather(selected, cells, axis=1)
             theta = tf.gather(theta, cells, axis=1)
             covariance = tf.gather(covariance, cells, axis=1)
-            h = tf.reduce_sum(theta*tf.cast(phi[None, ..., None, :], tf.complex64), -1)*tf.cast(np.sqrt(self.symbol_energy), tf.complex64)
+            h = (tf.reduce_sum(theta*tf.cast(phi[None, ..., None, :], tf.complex64), -1)
+                 *tf.cast(np.sqrt(self.symbol_energy), tf.complex64))
             logits = tf.transpose(tf.reshape(llr, [batch, users, n, self.bits]), [0, 2, 1, 3])
             probability = tf.nn.softmax(tf.einsum('bnuq,mq->bnum', logits, tf.cast(self.labels, tf.float32)), -1)
             mean = tf.reduce_sum(tf.cast(probability, tf.complex64)*self.symbols, -1)
@@ -156,7 +159,8 @@ class DecoderCorrection:
             for u in range(users):
                 for v in range(u, users):
                     left = (partners[..., u] == (-1 if u == v else v)) & tf.cast(active[:, u, None], tf.bool)
-                    right = tf.zeros_like(left) if u == v else (partners[..., v] == u) & tf.cast(active[:, v, None], tf.bool)
+                    right = (tf.zeros_like(left) if u == v
+                             else (partners[..., v] == u) & tf.cast(active[:, v, None], tf.bool))
                     enabled = left | right
                     pair_phi = tf.stack([phi[:, u], tf.zeros_like(phi[:, u]) if u == v else phi[:, v]], 1)
                     def process():
@@ -165,10 +169,14 @@ class DecoderCorrection:
                             mask *= 1.-tf.one_hot(v, users)
                         background_h = h*tf.cast(mask[..., None], tf.complex64)
                         residual = y-tf.reduce_sum(background_h*mean[..., None], 2)
-                        background = tf.einsum('bnur,bnus,bnu->bnrs', background_h, tf.math.conj(background_h), tf.cast(variance, tf.complex64))
-                        background += tf.reduce_sum(covariance*tf.cast((self.symbol_energy*mask*energy)[..., None, None], tf.complex64), 2)
-                        pair_theta = tf.stack([theta[:, :, u], tf.zeros_like(theta[:, :, u]) if u == v else theta[:, :, v]], 2)
-                        pair_cov = tf.stack([covariance[:, :, u], tf.zeros_like(covariance[:, :, u]) if u == v else covariance[:, :, v]], 2)
+                        background = tf.einsum('bnur,bnus,bnu->bnrs', background_h, tf.math.conj(background_h),
+                                               tf.cast(variance, tf.complex64))
+                        background += tf.reduce_sum(
+                            covariance*tf.cast((self.symbol_energy*mask*energy)[..., None, None], tf.complex64), 2)
+                        pair_theta = tf.stack([theta[:, :, u],
+                                               tf.zeros_like(theta[:, :, u]) if u == v else theta[:, :, v]], 2)
+                        pair_cov = tf.stack([covariance[:, :, u],
+                                             tf.zeros_like(covariance[:, :, u]) if u == v else covariance[:, :, v]], 2)
                         prepared = self.prepare(pair_theta, pair_cov, noise, background)
                         scores = self.score(residual, prepared, pair_phi, pair_cells, enabled, u == v)
                         return residual, prepared, scores
@@ -215,7 +223,8 @@ class DecoderCorrection:
                     return delta[:, :users]
                 return (delta[:, 0, None]*tf.one_hot(u, users)[None, :, None, None]+
                         delta[:, 1, None]*tf.one_hot(v, users)[None, :, None, None])
-            contribution = correct() if users <= 2 else tf.cond(tf.reduce_any(enabled), correct, lambda: tf.zeros_like(result))
+            contribution = (correct() if users <= 2
+                            else tf.cond(tf.reduce_any(enabled), correct, lambda: tf.zeros_like(result)))
             result = contribution if users <= 2 else result+contribution
         if fused:
             return result

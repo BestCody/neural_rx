@@ -45,7 +45,7 @@ def _channel_packet(queue, update, index, cancelled, timeout=600.):
             return packet
         except Empty:
             if time.monotonic() >= deadline:
-                raise TimeoutError(f"Channel producer timed out at update {update}, example {index}")
+                raise TimeoutError(f"Channel producer timed out at update {update}, example {index}") from None
     return None
 
 
@@ -53,7 +53,7 @@ def _produce_channels(recipe, seed, first, stop, gpu, queue, errors, cancelled,
                       shard=(0, 1), memory_mib=None):
     try:
         tf = _configure(gpu, seed, memory_mib)
-        from utils.parameters import Parameters
+        from neural_rx.backbone.parameters import Parameters
         from .training_data import TrainingEpisodes, update_width
         contexts = {w: (Parameters(recipe["radio_config"], training=True, n_size_bwp_override=w), None)
                     for w in sorted(set(recipe["prbs"]))}
@@ -83,7 +83,7 @@ def _produce(recipe, seed, first, stop, gpu, queue, errors, cancelled, channel_q
              render_batch_tbs=DEFAULT_RENDER_BATCH_TBS):
     try:
         tf = _configure(gpu, seed, memory_mib)
-        from temporal_receiver_core import build_backbone
+        from neural_rx.backbone.core import build_backbone
         from .training_data import TrainingEpisodes
         contexts = {w: build_backbone(recipe["radio_config"], 2, True, n_size_bwp_override=w)
                     for w in sorted(set(recipe["prbs"]))}
@@ -217,9 +217,11 @@ class EpisodePrefetch:
                 except Empty:
                     self._status()
                     if not self.process.is_alive():
-                        raise RuntimeError(f"Training data producer exited before update {update}, example {index}")
+                        raise RuntimeError(f"Training data producer exited before update {update}, "
+                                           f"example {index}") from None
                     if time.monotonic() >= deadline:
-                        raise TimeoutError(f"Training data producer timed out at update {update}, example {index}")
+                        raise TimeoutError(f"Training data producer timed out at update {update}, "
+                                           f"example {index}") from None
             if (actual, example) != (update, index):
                 raise ValueError("Training data producer delivered an out-of-order example")
             metadata = packet["metadata"]

@@ -8,8 +8,8 @@ import sionna as sn
 from sionna.channel import cir_to_ofdm_channel, gen_single_sector_topology
 from sionna.channel.tr38901 import PanelArray, UMa, UMi
 
-from temporal_generalization_protocol import ChannelProfileSpec
-from temporal_training_data import TemporalTrainingDataGenerator
+from neural_rx.benchmark.generalization_protocol import ChannelProfileSpec
+from neural_rx.data.temporal import TemporalTrainingDataGenerator
 
 
 def azimuth_geometry(ut_loc, bs_loc):
@@ -166,7 +166,7 @@ class GeometryAwareMUMIMOGenerator(TemporalTrainingDataGenerator):
                 & (separation <= self.max_azimuth_separation_deg)
             )
             take = valid[:batch_size - count]
-            for output, value in zip(selected, arrays):
+            for output, value in zip(selected, arrays, strict=True):
                 if len(take):
                     output.append(value[take])
             count += len(take)
@@ -176,7 +176,7 @@ class GeometryAwareMUMIMOGenerator(TemporalTrainingDataGenerator):
             raise RuntimeError("requested geometry interval was not sampled")
         return tuple(
             tf.convert_to_tensor(np.concatenate(parts, axis=0), dtype=dtype)
-            for parts, dtype in zip(selected, dtypes)
+            for parts, dtype in zip(selected, dtypes, strict=True)
         )
 
     def _set_joint_topology(self, channel, topology):

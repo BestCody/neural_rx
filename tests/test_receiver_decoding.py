@@ -6,7 +6,7 @@ import tensorflow as tf
 from sionna.nr import TBDecoder, TBEncoder
 from sionna.fec.ldpc.decoding import LDPC5GDecoder
 
-from receiver_decoding import OneLayerGridCodeMap, SoftTBInformationDecoder, DecoderAssistedTB
+from neural_rx.decoding import OneLayerGridCodeMap, SoftTBInformationDecoder, DecoderAssistedTB
 
 
 class ReceiverDecodingTest(unittest.TestCase):
@@ -55,7 +55,8 @@ class ReceiverDecodingTest(unittest.TestCase):
                     maximum = split.first.llr_limit
                     expected = split.first.from_code_blocks(posterior)-tf.clip_by_value(value, -maximum, maximum)
                     tf.debugging.assert_equal(after_first, posterior)
-                    return split.first.from_code_blocks(evidence), split.finish(inputs, state), ordinary(value), expected
+                    return (split.first.from_code_blocks(evidence), split.finish(inputs, state), ordinary(value),
+                            expected)
                 evidence, continued, reference, expected = execute(llr)
                 np.testing.assert_allclose(continued.logits, reference.logits, rtol=2e-6, atol=2e-6)
                 np.testing.assert_array_equal(continued.hard_bits, reference.hard_bits)
@@ -65,7 +66,8 @@ class ReceiverDecodingTest(unittest.TestCase):
                 np.testing.assert_allclose(evidence, expected, atol=2e-6)
                 effective, _, state, _ = split.evidence(llr)
                 effective_tb = split.first.from_code_blocks(effective)
-                np.testing.assert_array_equal(effective_tb, tf.clip_by_value(llr,-split.first.llr_limit,split.first.llr_limit))
+                np.testing.assert_array_equal(effective_tb,
+                                              tf.clip_by_value(llr,-split.first.llr_limit,split.first.llr_limit))
                 perturbation = -1.5*effective_tb
                 adjusted = split.first.to_code_blocks(effective_tb+perturbation)
                 recovered = tb_decoder._descrambler(llr)

@@ -1,0 +1,40 @@
+2026-10-21 03:31:17.628368: E external/local_xla/xla/stream_executor/cuda/cuda_dnn.cc:9261] Unable to register cuDNN factory: Attempting to register factory for plugin cuDNN when one has already been registered
+2026-10-21 03:31:17.628407: E external/local_xla/xla/stream_executor/cuda/cuda_fft.cc:607] Unable to register cuFFT factory: Attempting to register factory for plugin cuFFT when one has already been registered
+2026-10-21 03:31:17.629425: E external/local_xla/xla/stream_executor/cuda/cuda_blas.cc:1515] Unable to register cuBLAS factory: Attempting to register factory for plugin cuBLAS when one has already been registered
+WARNING: All log messages before absl::InitializeLog() is called are written to STDERR
+I0000 00:00:1792553775.998096 2386191 device_compiler.h:186] Compiled cluster using XLA!  This line is logged at most once for the lifetime of the process.
+WARNING:tensorflow:Model's `__init__()` arguments contain non-serializable objects. Please implement a `get_config()` method in the subclassed Model for proper saving and loading. Defaulting to empty config.
+WARNING:tensorflow:Model's `__init__()` arguments contain non-serializable objects. Please implement a `get_config()` method in the subclassed Model for proper saving and loading. Defaulting to empty config.
+WARNING:tensorflow:Model's `__init__()` arguments contain non-serializable objects. Please implement a `get_config()` method in the subclassed Model for proper saving and loading. Defaulting to empty config.
+WARNING:tensorflow:Model's `__init__()` arguments contain non-serializable objects. Please implement a `get_config()` method in the subclassed Model for proper saving and loading. Defaulting to empty config.
+WARNING:tensorflow:Model's `__init__()` arguments contain non-serializable objects. Please implement a `get_config()` method in the subclassed Model for proper saving and loading. Defaulting to empty config.
+WARNING:tensorflow:Model's `__init__()` arguments contain non-serializable objects. Please implement a `get_config()` method in the subclassed Model for proper saving and loading. Defaulting to empty config.
+WARNING:tensorflow:Model's `__init__()` arguments contain non-serializable objects. Please implement a `get_config()` method in the subclassed Model for proper saving and loading. Defaulting to empty config.
+WARNING:tensorflow:Model's `__init__()` arguments contain non-serializable objects. Please implement a `get_config()` method in the subclassed Model for proper saving and loading. Defaulting to empty config.
+WARNING:tensorflow:5 out of the last 1029 calls to <function PilotHistoryBenchmarkAdapter._build_execution.<locals>.execute at 0x7f1464233d90> triggered tf.function retracing. Tracing is expensive and the excessive number of tracings could be due to (1) creating @tf.function repeatedly in a loop, (2) passing tensors with different shapes, (3) passing Python objects instead of tensors. For (1), please define your @tf.function outside of the loop. For (2), @tf.function has reduce_retracing=True option that can avoid unnecessary retracing. For (3), please refer to https://www.tensorflow.org/guide/function#controlling_retracing and https://www.tensorflow.org/api_docs/python/tf/function for  more details.
+WARNING:tensorflow:5 out of the last 1029 calls to <function PilotHistoryBenchmarkAdapter._build_execution.<locals>.execute at 0x7f14d45bc8b0> triggered tf.function retracing. Tracing is expensive and the excessive number of tracings could be due to (1) creating @tf.function repeatedly in a loop, (2) passing tensors with different shapes, (3) passing Python objects instead of tensors. For (1), please define your @tf.function outside of the loop. For (2), @tf.function has reduce_retracing=True option that can avoid unnecessary retracing. For (3), please refer to https://www.tensorflow.org/guide/function#controlling_retracing and https://www.tensorflow.org/api_docs/python/tf/function for  more details.
+Evaluating the first 2 port sets.
+Loading DoubleTDL with low correlation.
+Evaluating the first 2 port sets.
+Loading DoubleTDL with low correlation.
+Evaluating the first 2 port sets.
+Loading DoubleTDL with low correlation.
+Evaluating the first 2 port sets.
+Loading DoubleTDL with low correlation.
+{"rates": {"candidate_persistent": [[0.095703125], [0.11490885416666667], [0.109375], [0.13151041666666666], [0.06901041666666667], [0.24217042971595049], [0.125], [0.0693359375]], "candidate_reset": [[0.12825520833333334], [0.13118489583333334], [0.1318359375], [0.14778645833333334], [0.07845052083333333], [0.25491624180626365], [0.125], [0.12760416666666666]], "frozen_cold_k8": [[0.158203125], [0.20638020833333334], [0.130859375], [0.13932291666666666], [0.062174479166666664], [0.24217042971595049], [0.125], [0.0703125]]}, "preflight": {"candidate_artifacts_unchanged": true, "candidate_deterministic_replay": true, "candidate_finite_outputs": true, "no_future_inputs": true, "persistent_and_reset_paired": true, "receiver_inputs_observable": true, "reset_state_is_empty": true, "frozen_reference_artifacts_unchanged": true, "frozen_reference_deterministic_replay": true, "frozen_reference_finite_outputs": true, "frozen_references_paired": true}}
+2026-10-21 06:21:12.239839: E external/local_xla/xla/stream_executor/cuda/cuda_dnn.cc:9261] Unable to register cuDNN factory: Attempting to register factory for plugin cuDNN when one has already been registered
+2026-10-21 06:21:12.239869: E external/local_xla/xla/stream_executor/cuda/cuda_fft.cc:607] Unable to register cuFFT factory: Attempting to register factory for plugin cuFFT when one has already been registered
+2026-10-21 06:21:12.240882: E external/local_xla/xla/stream_executor/cuda/cuda_blas.cc:1515] Unable to register cuBLAS factory: Attempting to register factory for plugin cuBLAS when one has already been registered
+WARNING: All log messages before absl::InitializeLog() is called are written to STDERR
+I0000 00:00:1792563731.307729 2490208 device_compiler.h:186] Compiled cluster using XLA!  This line is logged at most once for the lifetime of the process.
+WARNING:tensorflow:Model's `__init__()` arguments contain non-serializable objects. Please implement a `get_config()` method in the subclassed Model for proper saving and loading. Defaulting to empty config.
+WARNING:tensorflow:Model's `__init__()` arguments contain non-serializable objects. Please implement a `get_config()` method in the subclassed Model for proper saving and loading. Defaulting to empty config.
+WARNING:tensorflow:Model's `__init__()` arguments contain non-serializable objects. Please implement a `get_config()` method in the subclassed Model for proper saving and loading. Defaulting to empty config.
+WARNING:tensorflow:Model's `__init__()` arguments contain non-serializable objects. Please implement a `get_config()` method in the subclassed Model for proper saving and loading. Defaulting to empty config.
+Evaluating the first 2 port sets.
+Loading DoubleTDL with low correlation.
+Evaluating the first 2 port sets.
+Loading DoubleTDL with low correlation.
+Evaluating the first 2 port sets.
+Loading DoubleTDL with low correlation.
+{"candidate_persistent": {"p50_ms": 41.1582940723747, "p95_ms": 42.08730347454548, "crc_diagnostics": {"undetected_payload_errors": 0, "crc_failures_with_correct_payload": 0}}, "frozen_cold_k3": {"p50_ms": 43.08011196553707, "p95_ms": 44.08467229222879, "crc_diagnostics": {"undetected_payload_errors": 0, "crc_failures_with_correct_payload": 0}}}

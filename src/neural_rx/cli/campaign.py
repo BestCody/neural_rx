@@ -7,15 +7,15 @@ from pathlib import Path
 import subprocess
 import sys
 
-from pilot_history_receiver.training_options import add_execution_arguments, add_preparation_arguments, requested_updates, resolve_preparation
-from pilot_history_receiver.checkpoints import recover_latest
-from artifact_io import atomic_json, file_sha256
-from artifact_provenance import normalize_training_recipe
-from temporal_benchmark_frozen import verified_result
-from temporal_benchmark_protocol import load_benchmark_protocol
+from neural_rx.receiver.training_options import (add_execution_arguments, add_preparation_arguments,
+                                                      requested_updates, resolve_preparation)
+from neural_rx.receiver.checkpoints import recover_latest
+from neural_rx.provenance.artifacts import atomic_json, file_sha256
+from neural_rx.provenance.sources import normalize_training_recipe
+from neural_rx.benchmark.frozen import verified_result
+from neural_rx.benchmark.protocol import load_benchmark_protocol
 
-ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(ROOT))
+from neural_rx.paths import ROOT
 
 
 def read(path):
@@ -81,7 +81,7 @@ def main():
     output = args.output_dir.expanduser().resolve()
     models = (args.model_dir or ROOT/"models"/output.name).expanduser().resolve()
     benchmark = load_benchmark_protocol(ROOT/"config/temporal_benchmark_v1.json")
-    from temporal_generalization_protocol import verify_payload
+    from neural_rx.benchmark.generalization_protocol import verify_payload
     development_cache = None
     if args.development_cache is not None:
         dataset = read(args.development_cache/"dataset.json")
@@ -91,10 +91,11 @@ def main():
         development_cache = dict(path=str(args.development_cache.resolve()), manifest_sha256=dataset["manifest_sha256"])
     retained_anchors = None
     if args.anchors is not None:
-        from temporal_benchmark_candidate import pretrained_checkpoint
+        from neural_rx.benchmark.candidate import pretrained_checkpoint
         anchors = read(args.anchors)
         verify_payload(anchors, field="manifest_sha256")
-        if anchors["teacher_sha256"] != file_sha256(pretrained_checkpoint()) or anchors["prbs"] != benchmark["radio"]["n_size_bwp"]:
+        if (anchors["teacher_sha256"] != file_sha256(pretrained_checkpoint())
+                or anchors["prbs"] != benchmark["radio"]["n_size_bwp"]):
             raise ValueError("Retained calibration reference differs")
         retained_anchors = dict(path=str(args.anchors.resolve()), sha256=file_sha256(args.anchors))
     registration = dict(protocol="channel_memory_joint_training_run_v1", recipe=recipe,
@@ -111,8 +112,10 @@ def main():
                        channel_workers=args.channel_workers, prefetch_memory_mib=args.prefetch_memory_mib),
         requested_updates=total_updates, checkpoints=evaluation_updates(recipe, total_updates),
         reference_policy="frozen_k8_accuracy; frozen_k3_latency; reset_ablation_at_confirmation_only",
-        evaluation_policy="one learner; development TBLER controls learning rate and selection, never duration; automatic independent confirmation",
-        selection="lowest pooled persistent TBLER over the declared primary conditions on the fixed development bank; retain earlier checkpoint on ties")
+        evaluation_policy="one learner; development TBLER controls learning rate and selection, never duration; "
+                          "automatic independent confirmation",
+        selection="lowest pooled persistent TBLER over the declared primary conditions "
+                  "on the fixed development bank; retain earlier checkpoint on ties")
     if (output/"registration.json").exists():
         previous = read(output/"registration.json")
         registration = continued_registration(previous, registration)
@@ -139,7 +142,8 @@ def main():
                 subprocess.run(command, cwd=ROOT, stdout=stream, stderr=subprocess.STDOUT, check=True)
 
         anchors = args.anchors.resolve() if args.anchors is not None else output/"calibration"/"anchors.json"
-        reference_cache = args.reference_cache.resolve() if args.reference_cache is not None else output/"reference_cache"
+        reference_cache = (args.reference_cache.resolve() if args.reference_cache is not None
+                           else output/"reference_cache")
 
         def evaluate(phase, checkpoint, directory):
             if retained_anchors is not None and file_sha256(anchors) != retained_anchors["sha256"]:
@@ -150,11 +154,13 @@ def main():
                 if dataset["manifest_sha256"] != development_cache["manifest_sha256"]:
                     raise ValueError("Retained development bank changed during training")
             if not (directory/"results.json").exists():
-                command = [ROOT/"scripts/run_temporal_benchmark.py",
+                command = ["-m", "neural_rx.cli.benchmark",
                     "--experiment-phase", phase, "--experiment-checkpoint", checkpoint,
                     "--experiment-prbs", benchmark["radio"]["n_size_bwp"],
-                    "--gpu", args.evaluation_gpu, "--episode-cache",
-                    (args.development_cache if phase == "development" and args.development_cache is not None else args.episode_cache).resolve(),
+                    "--gpu", args.evaluation_gpu, "--benchmark-protocol", ROOT/"config/temporal_benchmark_v1.json",
+                    "--episode-cache",
+                    (args.development_cache if phase == "development" and args.development_cache is not None
+                     else args.episode_cache).resolve(),
                     "--reference-cache", reference_cache, "--output-dir", directory]
                 if phase == "development" and args.development_cache is not None:
                     command += ["--episode-cache-readonly"]
@@ -191,7 +197,7 @@ def main():
             for step in registration["checkpoints"]:
                 if step < restored:
                     development(models/f"checkpoint_{step:06d}")
-            from train_memory_receiver import run_training
+            from neural_rx.cli.train import run_training
             training_args = argparse.Namespace(**vars(args))
             training_args.output_dir = models
             training_args.seed = None

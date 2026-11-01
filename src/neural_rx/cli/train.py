@@ -6,24 +6,23 @@ import fcntl
 import json
 import os
 from pathlib import Path
-import sys
 
-from pilot_history_receiver.training_options import (add_execution_arguments, add_preparation_arguments,
+from neural_rx.receiver.training_options import (add_execution_arguments, add_preparation_arguments,
     configure_gpu, requested_updates, resolve_preparation)
-from pilot_history_receiver.checkpoints import recover_history, recover_latest
-from artifact_io import atomic_json
+from neural_rx.receiver.checkpoints import recover_history, recover_latest
+from neural_rx.provenance.artifacts import atomic_json
 
-HERE = Path(__file__).resolve().parent
-ROOT = HERE.parent
-sys.path.insert(0, str(ROOT))
+from neural_rx.paths import ROOT
 
 
 def parser():
-    p = argparse.ArgumentParser(description="Train K2 and channel memory; run_memory_training.py adds periodic development evaluation")
+    p = argparse.ArgumentParser(description="Train K2 and channel memory; "
+                                            "run_memory_training.py adds periodic development evaluation")
     p.add_argument("--recipe", type=Path, default=ROOT/"config/memory_training.json")
     p.add_argument("--gpu", type=int, default=0)
     p.add_argument("--seed", type=int)
-    p.add_argument("--steps", type=int, required=True, help="Total updates, including restored updates; no training-length ceiling")
+    p.add_argument("--steps", type=int, required=True,
+                   help="Total updates, including restored updates; no training-length ceiling")
     p.add_argument("--output-dir", type=Path, required=True,
                    help="Checkpoint and continuation directory under models/")
     p.add_argument("--resume", type=Path)
@@ -42,7 +41,7 @@ def run_training(args, *, evaluation_points=(), evaluate=None):
         raise ValueError("Development updates require an evaluator")
     resolve_preparation(args, recipe["effective_examples"])
     configure_gpu(args.gpu)
-    from pilot_history_receiver.training import MemoryTrainer
+    from neural_rx.receiver.training import MemoryTrainer
     output = args.output_dir.expanduser().resolve()
     output.mkdir(parents=True, exist_ok=True)
     with (output/"run.lock").open("a+") as lock:
@@ -64,7 +63,8 @@ def run_training(args, *, evaluation_points=(), evaluate=None):
         run = {"binding": trainer.binding(), "schedule": trainer.schedule_state(),
                     "pid": os.getpid(), "evaluation_updates": points,
                     "requested_stop": stop, "status": "running", "data_gpu": args.data_gpu,
-                    "prefetch_examples": (args.prefetch_examples or recipe["effective_examples"]) if args.data_gpu is not None else 0,
+                    "prefetch_examples": ((args.prefetch_examples or recipe["effective_examples"])
+                                          if args.data_gpu is not None else 0),
                     "channel_workers": args.channel_workers, "prefetch_memory_mib": args.prefetch_memory_mib,
                     "render_batch_tbs": args.render_batch_tbs,
                     "replica_gpu": args.replica_gpu, "replica_memory_mib": args.replica_memory_mib,
@@ -73,7 +73,7 @@ def run_training(args, *, evaluation_points=(), evaluate=None):
         for name in ("completion.json", "failure.json"):
             (output/name).unlink(missing_ok=True)
         try:
-            from pilot_history_receiver.training_prefetch import EpisodePrefetch
+            from neural_rx.receiver.training_prefetch import EpisodePrefetch
 
             def observe():
                 step = int(trainer.step.numpy())
@@ -97,7 +97,7 @@ def run_training(args, *, evaluation_points=(), evaluate=None):
                         continue
                     with ExitStack() as workers:
                         if args.replica_gpu is not None:
-                            from pilot_history_receiver.training_parallel import GradientReplica
+                            from neural_rx.receiver.training_parallel import GradientReplica
                             trainer.replica = workers.enter_context(GradientReplica(
                                 trainer, args.replica_gpu, args.replica_memory_mib))
                         producer = (nullcontext(None) if args.data_gpu is None else

@@ -148,7 +148,7 @@ def paired_summary(
     points, condition_samples, point, samples = _bootstrap_counts(
         differences, core, draws, rng
     )
-    condition_points = dict(zip(protocol["core_conditions"], map(float, points)))
+    condition_points = dict(zip(protocol["core_conditions"], map(float, points), strict=True))
     worst_samples = np.max(condition_samples, axis=1)
     return {
         "left": left,
@@ -229,7 +229,8 @@ def late_drift_summary(
         differences, stationary, draws, rng
     )
     return {
-        "definition": "late TBLER minus mature TBLER" if reference is None else f"late minus mature persistent-vs-{reference} TBLER gap",
+        "definition": ("late TBLER minus mature TBLER" if reference is None
+                       else f"late minus mature persistent-vs-{reference} TBLER gap"),
         "difference": point,
         "difference_percentage_points": 100.0 * point,
         "bootstrap_valid_samples": len(samples),

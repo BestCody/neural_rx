@@ -6,19 +6,19 @@ from pathlib import Path
 
 import numpy as np
 
-from temporal_benchmark_candidate import artifact_record, pretrained_checkpoint, validate_manifest
-from temporal_benchmark_frozen import make_manifest, protocol_and_plan
-from temporal_benchmark_runtime import evaluate_method_set, _measure_latency
-from temporal_benchmark_scoring import crc_diagnostics
-from temporal_benchmark_frozen import rates
-from temporal_generalization_protocol import seal_payload
+from neural_rx.benchmark.candidate import artifact_record, pretrained_checkpoint, validate_manifest
+from neural_rx.benchmark.frozen import make_manifest, protocol_and_plan
+from neural_rx.benchmark.runtime import evaluate_method_set, _measure_latency
+from neural_rx.benchmark.scoring import crc_diagnostics
+from neural_rx.benchmark.frozen import rates
+from neural_rx.benchmark.generalization_protocol import seal_payload
 from test_benchmark_fixtures import SyntheticScenarioBank, ZeroAdapter, synthetic_candidate_manifest
-from temporal_benchmark_protocol import load_benchmark_protocol, validate_benchmark_protocol
+from neural_rx.benchmark.protocol import load_benchmark_protocol, validate_benchmark_protocol
 
 
 class PretrainedBenchmarkTest(unittest.TestCase):
     def test_checkpoint_selection_requires_one_artifact_and_matching_candidate_seed(self):
-        from temporal_benchmark_adapters import _checkpoint_path
+        from neural_rx.benchmark.adapters import _checkpoint_path
         record = {"sha256": "weights", "training_seed": 5}
         artifacts = {"weights": Path("models/pretrained/test")}
         manifest = {"role": "candidate", "checkpoints": [record]}
@@ -37,8 +37,10 @@ class PretrainedBenchmarkTest(unittest.TestCase):
         protocol = seal_payload(protocol, field="protocol_sha256")
         validate_benchmark_protocol(protocol)
         anchors = {name: {"anchor_snr_db": 3.} for name in protocol["conditions"]}
-        with mock.patch("temporal_benchmark_frozen.load_benchmark_protocol", side_effect=lambda _: copy.deepcopy(protocol)):
-            for phase, expected in (("development", 7), ("confirmation", 7), ("calibration", 7), ("smoke", 1), ("latency", 1)):
+        with mock.patch("neural_rx.benchmark.frozen.load_benchmark_protocol",
+                        side_effect=lambda _: copy.deepcopy(protocol)):
+            for phase, expected in (("development", 7), ("confirmation", 7), ("calibration", 7),
+                                    ("smoke", 1), ("latency", 1)):
                 actual, _ = protocol_and_plan(phase, 132, episodes=1, anchors=anchors)
                 self.assertEqual(actual["execution"]["accuracy_episode_batch_size"], expected)
 
@@ -60,7 +62,7 @@ class PretrainedBenchmarkTest(unittest.TestCase):
 
     def test_shared_adapter_conversion_preserves_batch_order_values_and_types(self):
         import tensorflow as tf
-        from temporal_benchmark_candidate import decoder_output, stack_receiver_grids
+        from neural_rx.benchmark.candidate import decoder_output, stack_receiver_grids
         inputs = [{"received_grid": np.full((1, 2, 3), index + 1j, np.complex64),
                    "ls_channel": np.full((2, 3), index, np.float64)} for index in (7, 2)]
         y, channel = stack_receiver_grids(inputs, tf)
@@ -69,7 +71,7 @@ class PretrainedBenchmarkTest(unittest.TestCase):
         self.assertEqual(channel.dtype, tf.float32)
         expected = np.array([[.25, -1.], [3., 2.]], np.float64)
         from types import SimpleNamespace
-        from temporal_benchmark_candidate import checked_decoder_tensors
+        from neural_rx.benchmark.candidate import checked_decoder_tensors
         hard, crc = tf.constant(expected > 0), tf.constant([True, False])
         unread = mock.Mock()
         unread.numpy.side_effect = AssertionError("Normal scoring must not copy logits")
@@ -101,7 +103,7 @@ class PretrainedBenchmarkTest(unittest.TestCase):
         bits, crc = CRCDecoder(encoder)(coded)
         hard, status = bits.numpy().astype(bool),crc.numpy().reshape(2).astype(bool)
         np.testing.assert_array_equal(status,[True,False])
-        from smoke_temporal_benchmark_adapters import _crc_diagnostics
+        from neural_rx.benchmark.smoke import _crc_diagnostics
         self.assertEqual(_crc_diagnostics(dict(hard_bits=hard,crc_status=status),
             np.zeros_like(hard),np.ones(2,bool)),
             dict(undetected_payload_errors=1,crc_failures_with_correct_payload=1))
@@ -129,7 +131,7 @@ class PretrainedBenchmarkTest(unittest.TestCase):
         protocol = copy.deepcopy(self.protocol)
         protocol['execution']['latency'].update(warmup_samples=1,sample_count=3)
         episode = provider.generate(self.plan['jobs'][0],0)
-        with mock.patch('temporal_benchmark_runtime._latency_inputs',return_value=([episode],0)):
+        with mock.patch('neural_rx.benchmark.runtime._latency_inputs',return_value=([episode],0)):
             timings = _measure_latency(protocol,self.plan,provider,adapters,methods)
         for method in methods:
             self.assertEqual(timings[f'latency_ms_{method}'].shape,(3,))

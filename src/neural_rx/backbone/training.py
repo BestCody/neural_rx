@@ -108,7 +108,7 @@ def training_loop(model, label, filename, training_logdir, training_seed,
                     loss = loss_data
 
             grads = tape.gradient(loss, model.trainable_weights)
-            optimizer.apply_gradients(zip(grads, model.trainable_weights))
+            optimizer.apply_gradients(zip(grads, model.trainable_weights, strict=True))
         return loss_data, loss_chest, loss
 
     def _training_step(global_iter, num_iterations, batch_size,
@@ -123,9 +123,9 @@ def training_loop(model, label, filename, training_logdir, training_seed,
                                                        apply_multiloss,
                                                        train_tx)
             global_iter += 100
-            tf.summary.scalar(f"Loss", loss_data, step=global_iter)
-            tf.summary.scalar(f"Loss Ch. Est.", loss_chest, step=global_iter)
-            tf.summary.scalar(f"Total Loss", loss, step=global_iter)
+            tf.summary.scalar("Loss", loss_data, step=global_iter)
+            tf.summary.scalar("Loss Ch. Est.", loss_chest, step=global_iter)
+            tf.summary.scalar("Total Loss", loss, step=global_iter)
 
         return global_iter, loss, loss_data, loss_chest
 
@@ -180,9 +180,9 @@ def training_loop(model, label, filename, training_logdir, training_seed,
                     loss_data_mcs = eval_model_xla(batch_size, _snr_db,
                                                    max_num_tx, mcs_arr_idx)
                     tf.summary.scalar(
-                                f"Eval loss / mcs_arr_idx=" + str(mcs_arr_idx),
+                                "Eval loss / mcs_arr_idx=" + str(mcs_arr_idx),
                                 loss_data_mcs, step=global_iter)
-                tf.summary.scalar(f"Loss", loss_data, step=global_iter)
-                tf.summary.scalar(f"Loss Ch. Est.", loss_chest,
+                tf.summary.scalar("Loss", loss_data, step=global_iter)
+                tf.summary.scalar("Loss Ch. Est.", loss_chest,
                                   step=global_iter)
-                tf.summary.scalar(f"Total Loss", loss, step=global_iter)
+                tf.summary.scalar("Total Loss", loss, step=global_iter)

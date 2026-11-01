@@ -1,0 +1,400 @@
+{
+  "schema_version": 1,
+  "protocol": "pretrained_nrx_experiment_v1",
+  "radio": {
+    "receive_antennas": 4,
+    "maximum_active_ues": 2,
+    "bits_per_symbol": 4,
+    "mcs_index": 14,
+    "n_size_bwp": 132,
+    "noise_axis": "ebno_db",
+    "advancing_slot_pilots": true
+  },
+  "conditions": {
+    "historical_tdl_b100": {
+      "provider": "independent_tdl",
+      "receiver_inputs": [],
+      "profile": "B100",
+      "doppler_hz": [
+        0.0,
+        400.0
+      ]
+    },
+    "historical_tdl_c300": {
+      "provider": "independent_tdl",
+      "receiver_inputs": [],
+      "profile": "C300",
+      "doppler_hz": [
+        0.0,
+        100.0
+      ]
+    },
+    "natural_umi": {
+      "provider": "shared_geometry",
+      "receiver_inputs": [],
+      "scenario": "umi",
+      "force_los": null,
+      "angular_separation_deg": [
+        0.0,
+        180.0
+      ],
+      "doppler_strata_hz": [
+        [
+          0.0,
+          50.0
+        ],
+        [
+          50.0,
+          175.0
+        ],
+        [
+          175.0,
+          400.0
+        ]
+      ]
+    },
+    "natural_uma": {
+      "provider": "shared_geometry",
+      "receiver_inputs": [],
+      "scenario": "uma",
+      "force_los": null,
+      "angular_separation_deg": [
+        0.0,
+        180.0
+      ],
+      "doppler_strata_hz": [
+        [
+          0.0,
+          50.0
+        ],
+        [
+          50.0,
+          175.0
+        ],
+        [
+          175.0,
+          400.0
+        ]
+      ]
+    },
+    "controlled_topology_change": {
+      "provider": "shared_geometry_change",
+      "receiver_inputs": [],
+      "scenario": "umi",
+      "change_fraction": 0.5,
+      "force_los": null
+    },
+    "schedule_gap_reentry": {
+      "provider": "shared_geometry_schedule",
+      "receiver_inputs": [],
+      "scenario": "umi",
+      "gap_start_probability": 0.05,
+      "maximum_gap_tbs": 4,
+      "ue_pool_size": 4,
+      "schedule_switch_probability": 0.25,
+      "schedule_reorder_probability": 0.25
+    },
+    "close_los": {
+      "provider": "shared_geometry",
+      "receiver_inputs": [],
+      "scenario": "umi",
+      "force_los": true,
+      "angular_separation_deg": [
+        0.0,
+        5.0
+      ],
+      "doppler_strata_hz": [
+        [
+          0.0,
+          400.0
+        ]
+      ]
+    },
+    "near_far": {
+      "provider": "shared_geometry_power",
+      "receiver_inputs": [],
+      "scenario": "umi",
+      "force_los": null,
+      "received_power_gap_db": [
+        6.0,
+        12.0
+      ],
+      "power_control": "controlled_residual_gap"
+    }
+  },
+  "condition_order": [
+    "historical_tdl_b100",
+    "historical_tdl_c300",
+    "natural_umi",
+    "natural_uma",
+    "controlled_topology_change",
+    "schedule_gap_reentry",
+    "close_los",
+    "near_far"
+  ],
+  "core_conditions": [
+    "natural_umi",
+    "natural_uma",
+    "controlled_topology_change",
+    "schedule_gap_reentry"
+  ],
+  "stationary_conditions": [
+    "natural_umi",
+    "natural_uma"
+  ],
+  "report_conditions": [
+    "historical_tdl_b100",
+    "historical_tdl_c300"
+  ],
+  "stress_conditions": [
+    "close_los",
+    "near_far"
+  ],
+  "seed_domains": {
+    "channel": 0,
+    "payload": 100000,
+    "noise": 200000,
+    "schedule": 300000
+  },
+  "windows": {
+    "warmup": [
+      1,
+      8
+    ],
+    "mature": [
+      17,
+      32
+    ],
+    "late": [
+      49,
+      64
+    ],
+    "pre_change": [
+      25,
+      32
+    ],
+    "immediate_post_change": [
+      33,
+      40
+    ],
+    "late_post_change": [
+      57,
+      64
+    ]
+  },
+  "statistics": {
+    "bootstrap_samples": 10000,
+    "primary_snr_point": "anchor",
+    "tbler_definition": "failed_active_user_blocks / evaluated_active_user_blocks",
+    "bootstrap_seed": 64000123
+  },
+  "execution": {
+    "observable_receiver_inputs": [
+      "active",
+      "ls_channel",
+      "noise_variance",
+      "received_grid",
+      "slot_number",
+      "ue_ids"
+    ],
+    "candidate_methods": [
+      "candidate_persistent",
+      "candidate_reset"
+    ],
+    "accuracy_episode_batch_size": 4,
+    "latency": {
+      "condition": "natural_umi",
+      "snr_point": "anchor",
+      "warmup_samples": 16,
+      "sample_count": 128,
+      "batch_size": 1
+    },
+    "accuracy_reference_methods": [
+      "frozen_cold_k8"
+    ],
+    "latency_only_reference_methods": [
+      "frozen_cold_k3"
+    ],
+    "persistent_methods": [
+      "candidate_persistent"
+    ]
+  },
+  "development_conditions": [
+    "historical_tdl_b100",
+    "historical_tdl_c300",
+    "natural_umi",
+    "natural_uma",
+    "controlled_topology_change",
+    "schedule_gap_reentry",
+    "close_los",
+    "near_far"
+  ],
+  "evaluation_phases": {
+    "smoke": {
+      "episodes": 2,
+      "num_tbs": 8,
+      "scoring_start_tb": 1,
+      "seed": 51000000,
+      "snr_db": [
+        3.0
+      ]
+    },
+    "latency": {
+      "episodes": 3,
+      "num_tbs": 64,
+      "scoring_start_tb": 17,
+      "seed": 52000000,
+      "snr_db": [
+        3.0
+      ]
+    },
+    "calibration": {
+      "episodes": 8,
+      "num_tbs": 16,
+      "scoring_start_tb": 9,
+      "seed": 63000000,
+      "snr_db": [
+        -2.0,
+        -1.0,
+        0.0,
+        1.0,
+        2.0,
+        3.0,
+        4.0,
+        5.0,
+        6.0,
+        7.0,
+        8.0,
+        9.0,
+        10.0,
+        11.0,
+        12.0
+      ],
+      "snr_bounds_db": [
+        -10.0,
+        30.0
+      ]
+    },
+    "development": {
+      "episodes": 32,
+      "num_tbs": 64,
+      "scoring_start_tb": 17,
+      "seed": 84000000
+    },
+    "confirmation": {
+      "episodes": 32,
+      "num_tbs": 64,
+      "scoring_start_tb": 17,
+      "seed": 88000000
+    }
+  },
+  "methods": [
+    "candidate_persistent",
+    "candidate_reset",
+    "frozen_cold_k8",
+    "frozen_cold_k3"
+  ],
+  "training": {
+    "reference_policy": "frozen_no_additional_training",
+    "selection_data": "development_only"
+  },
+  "stages": {
+    "development": {
+      "num_tbs": 64,
+      "episodes_per_condition": 32,
+      "condition_names": [
+        "historical_tdl_b100",
+        "historical_tdl_c300",
+        "natural_umi",
+        "natural_uma",
+        "controlled_topology_change",
+        "schedule_gap_reentry",
+        "close_los",
+        "near_far"
+      ],
+      "scoring_window": [
+        17,
+        64
+      ],
+      "snr_points": [
+        "anchor"
+      ]
+    }
+  },
+  "calibration": {
+    "baseline": "frozen_cold_k8",
+    "additional_training_updates": 0,
+    "target_tbler": 0.1,
+    "source_manifest_sha256": "43fd7fdca72f8b64fed6b50217df367f9575a3cc4219909a7b528006bc80d34b"
+  },
+  "experiment": {
+    "phase": "confirmation",
+    "scoring_start_tb": 17,
+    "latency_definition": {
+      "scope": "prepared_full_grid_ls_to_decoded_payload",
+      "timer": "host_wall_clock_with_completion_synchronization",
+      "primary_statistic": "p95",
+      "includes": [
+        "adapter_input_transfers",
+        "candidate_memory",
+        "detection",
+        "ldpc",
+        "crc",
+        "output_transfers"
+      ],
+      "excludes": [
+        "initial_ls_estimation",
+        "initial_channel_interpolation"
+      ],
+      "original_paper_detector_timing": false
+    }
+  },
+  "runtime_sources": {
+    "config/nrx_large.cfg": "9cd550576d8fd7fb643164a1a4f078c91929cb62977e7aaffef0ecf8c15c36e6",
+    "config/temporal_benchmark_v1.json": "36aa955240fff91a49215e5c4494f98abe0cc1f47dc21cae92d00cba042f91ad",
+    "scripts/artifact_io.py": "7178aa3914388538a337f98901aa4908dea3c9a63a55e472498b0bbf5ebab16a",
+    "scripts/artifact_provenance.py": "08dab0577c7d1eeb0596e1d5835f454471ca6574e4e3db10df9e3bd32861037e",
+    "scripts/cnn_autoencoder/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "scripts/cnn_autoencoder/benchmark.py": "227d21451c6090d050c7a4e9e1c6b75286ac76372d9b2d9b7a70fd19c6bb8c6d",
+    "scripts/cnn_autoencoder/channel_memory.py": "206d6cc25f7535a8a35ee578e46391533c691e6ce886750cd50d90bb5609053b",
+    "scripts/cnn_autoencoder/decoder_correction.py": "f87722f8a900c4ed455c52bc7d2f01ab53f251beae349cf8245d630a4bda5d7a",
+    "scripts/cnn_autoencoder/memory.py": "04defd825319c52224ba333f13fdd413d486f265f9c1beb5512786f9633bfa5f",
+    "scripts/cnn_autoencoder/model.py": "46541a29fbf2c616e5a546ec4e26a3a5b0f015a0617e7c2bffe940b7bfcf8bca",
+    "scripts/cnn_autoencoder/native_ops/__init__.py": "c4afc3aff9afd30ff7bc209045ed1931359f535182a377d98a4c65637207404b",
+    "scripts/cnn_autoencoder/native_ops/channel_uncertainty.cc": "302b25a2c8b1e54e3e3c44f485d3409345c4b61c515586f0dd5e43b5fb5f99c4",
+    "scripts/cnn_autoencoder/native_ops/channel_uncertainty.cu.cc": "a7fb38aa00be09859b388050984f91d84f9ec95f49d0e3c989d2db759c850aa2",
+    "scripts/cnn_autoencoder/native_ops/memory_append.cc": "f913a200a257b4d082b29c37e93bc8d0c49d542700747277677a350dbf8e3814",
+    "scripts/cnn_autoencoder/native_ops/memory_append.cu.cc": "54f8a62aedc01d4697f686b1d39f1efcda854de5964343d138c4dbcc99a1571b",
+    "scripts/cnn_autoencoder/native_ops/pair_correction.cc": "012f2dda05e713c74c4daf7363f5cc826f131cb6f59440e3d107823f118398d9",
+    "scripts/cnn_autoencoder/native_ops/pair_correction.cu.cc": "2c0f5254a4df650522a8096ec0956ac78e04d3c903cec6263b30c5f898c83912",
+    "scripts/cnn_autoencoder/native_ops/pair_prepare.cc": "24463d3ae70827295e76f0b58d3cc6e15ad25a926afa730837026bf4e8a9ac1c",
+    "scripts/cnn_autoencoder/native_ops/pair_prepare.cu.cc": "d25d84cdb637b9a57a121e8030ad4179a7b6249002ab8f8a826ae442c5939b81",
+    "scripts/cnn_autoencoder/native_ops/pair_scores.cc": "8f2307ddfb2b1b78e3a3378539962c5b0b09074b3aa2076f10fb15fa6fc6bc1b",
+    "scripts/cnn_autoencoder/pilot_layout.py": "e24f1fd3cf72e8510da9b5cf3fe2bf92ac1582aebd08170c0510408fcffbf4f9",
+    "scripts/geometry_mumimo_data.py": "764b6940ef2c8bcb1525cbb341bc3add4ee0410873bb7263e37d52e07d0878a7",
+    "scripts/receiver_decoding.py": "baec63199b1b34434287c3f39fac8888ae1480c5498285d0f81df1eb57eb7b6e",
+    "scripts/rt_channel_bank.py": "5e555465740e3005c77ab99a4d5bac8f7d7c76ad5cd282d7d22431462e7519d5",
+    "scripts/rt_channel_data.py": "d6cdb82276a59dab68884e79aa3f090c01428e3805c74b1535f0ca9af69a03e7",
+    "scripts/temporal_benchmark_adapters.py": "d30584281e0c2a7d8707e74afaa8a0b0f47aa224d9bd62cb8a90cbf344831513",
+    "scripts/temporal_benchmark_candidate.py": "089e5fe484b979b0be1f5146240241d15e8ac5854a8e71ac6d612fa6af91cc74",
+    "scripts/temporal_benchmark_episodes.py": "52c0d9235c03c7a5f09bafdc96dcfea22a3ff77414010aed89ec02aedd0aaf52",
+    "scripts/temporal_benchmark_frozen.py": "e8bb021ac9033d83518d3ea82e298395d147c6baf08d022f68c76c1534ab4bef",
+    "scripts/temporal_benchmark_io.py": "c864894c5cf88c6927f7413c5cf433ca8f54a5b6124f62583c8f0eb407fa5596",
+    "scripts/temporal_benchmark_plan.py": "6a8c18e5f8a76b88131362e073df972e5caa005eb3c6a61002b7c31ca5b8b011",
+    "scripts/temporal_benchmark_protocol.py": "159fa1f94827d6d27a1ef89a369ef1f5205df939e5bdb860db2c6a010750fe05",
+    "scripts/temporal_benchmark_reference.py": "da1157e7c98120bf770df72811160c79b24ec9103335fce1b64ae016c82917cb",
+    "scripts/temporal_benchmark_runtime.py": "31a8a9c58c370bd17362a9783bcc56b7381110459796992a19cd3134ac5c8ae3",
+    "scripts/temporal_benchmark_scenarios.py": "1737b4c57f62aaa4bb33909bce93aa42a94c8bc0d3d0793081cc91345e249f28",
+    "scripts/temporal_benchmark_scoring.py": "cb346d7e59a38686b1de92afef597f2f4c322f35dd0f13b3b6688c189ff201ca",
+    "scripts/temporal_generalization_protocol.py": "0fa25713ea54e2497de7c45b86fa0c75d597d1a511c59f69cd7073c76d651cb5",
+    "scripts/temporal_receiver_core.py": "e435b483159822d8a3cca25eb7093697db5cb5b65e96648fefe03c7358380e01",
+    "scripts/temporal_training_data.py": "14796931025e1ade60534422178ed95582b6c1658b7a57c238aeb296e7039ab0",
+    "utils/__init__.py": "3de504ecd4e7eeddb7e7e5e8418a4359af7eac48229b46650235204745f7b1fa",
+    "utils/channel_models.py": "4352cef58f873573622503c7d84d8dba77795f23dea0a2d5834d433e5423203d",
+    "utils/e2e_model.py": "bbfcbeceadd8d744e3c06e07a50d8522a4a0b2d81787b884ed4f060e5839907c",
+    "utils/neural_rx.py": "0f9760faa0cb13fa79b3081162e8c6f23e2b2dd31226af3d26c5e9b18a2e4f74",
+    "utils/parameters.py": "896e8cf0918e94270a399de6eca4ea4cdb845edd3e8ff03b3193dfc19e230e40",
+    "utils/utils.py": "5fb8f1e95fa5b021aaf46c1869d799bee72cbb4167fd05efb9b4443197937a22"
+  },
+  "protocol_sha256": "9f6514b31f394133d4e7ab79ec053b704a68cace0be1e0a411a3f7a6bff0d7b0"
+}

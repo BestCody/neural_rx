@@ -4,8 +4,8 @@ import json
 import math
 from pathlib import Path
 
-from temporal_generalization_protocol import verify_payload
-from temporal_benchmark_scoring import TBLER_DEFINITION
+from neural_rx.benchmark.generalization_protocol import verify_payload
+from neural_rx.benchmark.scoring import TBLER_DEFINITION
 
 
 METHOD_ROLES = {
@@ -46,7 +46,8 @@ def validate_benchmark_protocol(protocol):
     for phase, settings in phases.items():
         _only_keys(settings, "episodes num_tbs scoring_start_tb seed snr_db" +
                    (" snr_bounds_db" if phase == "calibration" else ""), "evaluation phase")
-        if any(type(settings[k]) is not int or settings[k] < 1 for k in ("episodes", "num_tbs", "scoring_start_tb", "seed")):
+        if any(type(settings[k]) is not int or settings[k] < 1
+               for k in ("episodes", "num_tbs", "scoring_start_tb", "seed")):
             raise ValueError("Evaluation sizes and seeds must be positive integers")
         if settings["scoring_start_tb"] > settings["num_tbs"]:
             raise ValueError("Scoring starts outside the episode")
@@ -65,13 +66,15 @@ def validate_benchmark_protocol(protocol):
     seeds = [settings["seed"] for settings in phases.values()]
     if len(set(seeds)) != len(seeds):
         raise ValueError("Calibration, development, and confirmation need independent seeds")
-    for condition in protocol["conditions"].values():
+    for name, condition in protocol["conditions"].items():
         _only_keys(condition, "provider receiver_inputs profile doppler_hz "
                    "scenario force_los angular_separation_deg doppler_strata_hz change_fraction "
                    "gap_start_probability maximum_gap_tbs ue_pool_size schedule_switch_probability "
-                   "schedule_reorder_probability received_power_gap_db power_control", "condition")
+                   "schedule_reorder_probability received_power_gap_db power_control channel_banks", "condition")
         if condition.get("receiver_inputs") != []:
             raise ValueError("Scenario labels cannot enter the receiver")
+        if condition["provider"] == "ray_traced":
+            _validate_ray_traced(name, condition, protocol)
     execution = protocol["execution"]
     _only_keys(execution, "observable_receiver_inputs "
                "accuracy_episode_batch_size latency", "execution")
@@ -87,6 +90,21 @@ def validate_benchmark_protocol(protocol):
                "primary_snr_point tbler_definition", "statistics")
     if protocol["statistics"].get("tbler_definition") != TBLER_DEFINITION:
         raise ValueError("TBLER must pool failed and evaluated active user blocks")
+
+
+def _validate_ray_traced(name, condition, protocol):
+    banks = condition.get("channel_banks", {})
+    required = {"calibration", "confirmation"}
+    if name in protocol["development_conditions"]:
+        required.add("development")
+    if not required <= set(banks) <= {"calibration", "development", "confirmation"}:
+        raise ValueError("Ray-traced conditions need a declared channel bank for every accuracy phase")
+    if any(set(bank) != {"path", "sha256"} for bank in banks.values()):
+        raise ValueError("Declare each ray-traced channel bank by path and sha256")
+    if len({bank["sha256"] for bank in banks.values()}) != len(banks):
+        raise ValueError("Each phase needs an independently exported ray-traced channel bank")
+    if name in protocol["stationary_conditions"] or name == protocol["execution"]["latency"]["condition"]:
+        raise ValueError("Ray-traced conditions cannot be stationary or the latency condition")
 
 
 def load_benchmark_protocol(path):

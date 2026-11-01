@@ -4,10 +4,10 @@ import unittest
 
 import numpy as np
 
-from run_memory_training import selection_key
-from temporal_benchmark_frozen import development_report, protocol_and_plan, rates
-from temporal_benchmark_plan import calibrate_condition
-from temporal_benchmark_scoring import (
+from neural_rx.cli.campaign import selection_key
+from neural_rx.benchmark.frozen import development_report, protocol_and_plan, rates
+from neural_rx.benchmark.plan import calibrate_condition
+from neural_rx.benchmark.scoring import (
     TBLER_DEFINITION, adaptation_summary, block_error_rate, late_drift_summary,
     method_summary, paired_summary, payload_error_flags,
 )
@@ -24,7 +24,7 @@ class EnumeratedBootstrap:
 
 class PooledScoringTest(unittest.TestCase):
     def test_payload_and_crc_flags_exclude_inactive_users_and_preserve_batches(self):
-        from smoke_temporal_benchmark_adapters import _crc_diagnostics
+        from neural_rx.benchmark.smoke import _crc_diagnostics
         truth = np.zeros((4, 2, 3), np.int8)
         hard = truth.copy()
         hard[[1, 3], :, 1] = 1
@@ -77,8 +77,9 @@ class PooledScoringTest(unittest.TestCase):
         for method, expected in (("a", 3/13), ("b", 2/13)):
             self.assertAlmostEqual(reported[method][0][0], expected)
             self.assertAlmostEqual(summaries[method]["core_tbler"], expected)
-        result = lambda m: dict(summary={"candidate_persistent": summaries[m]},
-                               manifests={"candidate": {"training": {"additional_updates": 1}}})
+        def result(m):
+            return dict(summary={"candidate_persistent": summaries[m]},
+                        manifests={"candidate": {"training": {"additional_updates": 1}}})
         self.assertLess(selection_key(result("b")), selection_key(result("a")))
         paired = paired_summary([self.arrays], "a", "b", self.protocol,
                                 "development", 4, EnumeratedBootstrap())
@@ -151,12 +152,14 @@ class PooledScoringTest(unittest.TestCase):
                         value += sign * numerator / active.sum()
                     return value
                 self.assertAlmostEqual(observed["difference"], estimate([0, 1]))
-                expected = np.quantile([estimate(indices) for indices in ([0, 0], [0, 1], [1, 0], [1, 1])], [.025, .975])
+                expected = np.quantile([estimate(indices) for indices in ([0, 0], [0, 1], [1, 0], [1, 1])],
+                                       [.025, .975])
                 np.testing.assert_allclose(observed["ci95"], expected)
 
     def test_development_windows_match_direct_counts(self):
-        from temporal_benchmark_protocol import load_benchmark_protocol
-        names = load_benchmark_protocol(Path(__file__).resolve().parents[1]/"config/temporal_benchmark_v1.json")["development_conditions"]
+        from neural_rx.benchmark.protocol import load_benchmark_protocol
+        names = load_benchmark_protocol(
+            Path(__file__).resolve().parents[1]/"config/temporal_benchmark_v1.json")["development_conditions"]
         protocol, _ = protocol_and_plan("development", 132, episodes=2,
             anchors={name: {"anchor_snr_db": 3.} for name in names})
         protocol["statistics"]["bootstrap_samples"] = 40
@@ -165,7 +168,7 @@ class PooledScoringTest(unittest.TestCase):
         arrays["active"][:, 1, ::2, 1] = False
         methods = ("candidate_persistent", "candidate_reset", "frozen_cold_k2", "frozen_cold_k8")
         random = np.random.RandomState(9).rand(len(names), 1, 2, 64, 2)
-        for method, threshold in zip(methods, [.1, .2, .3, .4]):
+        for method, threshold in zip(methods, [.1, .2, .3, .4], strict=True):
             arrays[f"errors_{method}"] = random < threshold
         report = development_report(arrays, methods, protocol)
         self.assertEqual(report["tbler_definition"], TBLER_DEFINITION)

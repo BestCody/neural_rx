@@ -1,0 +1,412 @@
+{
+  "stage": "development",
+  "jobs": [
+    {
+      "condition": "historical_tdl_b100",
+      "provider": "independent_tdl",
+      "provider_settings": {
+        "provider": "independent_tdl",
+        "receiver_inputs": [],
+        "profile": "B100",
+        "doppler_hz": [
+          0.0,
+          400.0
+        ]
+      },
+      "episode_count": 8,
+      "num_tbs": 16,
+      "snr_db": [
+        -2.0,
+        -1.0,
+        0.0,
+        1.0,
+        2.0,
+        3.0,
+        4.0,
+        5.0,
+        6.0,
+        7.0,
+        8.0,
+        9.0,
+        10.0,
+        11.0,
+        12.0
+      ],
+      "seed_streams": {
+        "channel": 63000000,
+        "payload": 63100000,
+        "noise": 63200000,
+        "schedule": 63300000
+      }
+    },
+    {
+      "condition": "historical_tdl_c300",
+      "provider": "independent_tdl",
+      "provider_settings": {
+        "provider": "independent_tdl",
+        "receiver_inputs": [],
+        "profile": "C300",
+        "doppler_hz": [
+          0.0,
+          100.0
+        ]
+      },
+      "episode_count": 8,
+      "num_tbs": 16,
+      "snr_db": [
+        -2.0,
+        -1.0,
+        0.0,
+        1.0,
+        2.0,
+        3.0,
+        4.0,
+        5.0,
+        6.0,
+        7.0,
+        8.0,
+        9.0,
+        10.0,
+        11.0,
+        12.0
+      ],
+      "seed_streams": {
+        "channel": 63001000,
+        "payload": 63101000,
+        "noise": 63201000,
+        "schedule": 63301000
+      }
+    },
+    {
+      "condition": "natural_umi",
+      "provider": "shared_geometry",
+      "provider_settings": {
+        "provider": "shared_geometry",
+        "receiver_inputs": [],
+        "scenario": "umi",
+        "force_los": null,
+        "angular_separation_deg": [
+          0.0,
+          180.0
+        ],
+        "doppler_strata_hz": [
+          [
+            0.0,
+            50.0
+          ],
+          [
+            50.0,
+            175.0
+          ],
+          [
+            175.0,
+            400.0
+          ]
+        ]
+      },
+      "episode_count": 8,
+      "num_tbs": 16,
+      "snr_db": [
+        -2.0,
+        -1.0,
+        0.0,
+        1.0,
+        2.0,
+        3.0,
+        4.0,
+        5.0,
+        6.0,
+        7.0,
+        8.0,
+        9.0,
+        10.0,
+        11.0,
+        12.0
+      ],
+      "seed_streams": {
+        "channel": 63002000,
+        "payload": 63102000,
+        "noise": 63202000,
+        "schedule": 63302000
+      }
+    },
+    {
+      "condition": "natural_uma",
+      "provider": "shared_geometry",
+      "provider_settings": {
+        "provider": "shared_geometry",
+        "receiver_inputs": [],
+        "scenario": "uma",
+        "force_los": null,
+        "angular_separation_deg": [
+          0.0,
+          180.0
+        ],
+        "doppler_strata_hz": [
+          [
+            0.0,
+            50.0
+          ],
+          [
+            50.0,
+            175.0
+          ],
+          [
+            175.0,
+            400.0
+          ]
+        ]
+      },
+      "episode_count": 8,
+      "num_tbs": 16,
+      "snr_db": [
+        -2.0,
+        -1.0,
+        0.0,
+        1.0,
+        2.0,
+        3.0,
+        4.0,
+        5.0,
+        6.0,
+        7.0,
+        8.0,
+        9.0,
+        10.0,
+        11.0,
+        12.0
+      ],
+      "seed_streams": {
+        "channel": 63003000,
+        "payload": 63103000,
+        "noise": 63203000,
+        "schedule": 63303000
+      }
+    },
+    {
+      "condition": "controlled_topology_change",
+      "provider": "shared_geometry_change",
+      "provider_settings": {
+        "provider": "shared_geometry_change",
+        "receiver_inputs": [],
+        "scenario": "umi",
+        "change_fraction": 0.5,
+        "force_los": null,
+        "change_tb": 9
+      },
+      "episode_count": 8,
+      "num_tbs": 16,
+      "snr_db": [
+        -2.0,
+        -1.0,
+        0.0,
+        1.0,
+        2.0,
+        3.0,
+        4.0,
+        5.0,
+        6.0,
+        7.0,
+        8.0,
+        9.0,
+        10.0,
+        11.0,
+        12.0
+      ],
+      "seed_streams": {
+        "channel": 63004000,
+        "payload": 63104000,
+        "noise": 63204000,
+        "schedule": 63304000
+      }
+    },
+    {
+      "condition": "schedule_gap_reentry",
+      "provider": "shared_geometry_schedule",
+      "provider_settings": {
+        "provider": "shared_geometry_schedule",
+        "receiver_inputs": [],
+        "scenario": "umi",
+        "gap_start_probability": 0.05,
+        "maximum_gap_tbs": 4,
+        "ue_pool_size": 4,
+        "schedule_switch_probability": 0.25,
+        "schedule_reorder_probability": 0.25
+      },
+      "episode_count": 8,
+      "num_tbs": 16,
+      "snr_db": [
+        -2.0,
+        -1.0,
+        0.0,
+        1.0,
+        2.0,
+        3.0,
+        4.0,
+        5.0,
+        6.0,
+        7.0,
+        8.0,
+        9.0,
+        10.0,
+        11.0,
+        12.0
+      ],
+      "seed_streams": {
+        "channel": 63005000,
+        "payload": 63105000,
+        "noise": 63205000,
+        "schedule": 63305000
+      }
+    },
+    {
+      "condition": "close_los",
+      "provider": "shared_geometry",
+      "provider_settings": {
+        "provider": "shared_geometry",
+        "receiver_inputs": [],
+        "scenario": "umi",
+        "force_los": true,
+        "angular_separation_deg": [
+          0.0,
+          5.0
+        ],
+        "doppler_strata_hz": [
+          [
+            0.0,
+            400.0
+          ]
+        ]
+      },
+      "episode_count": 8,
+      "num_tbs": 16,
+      "snr_db": [
+        -2.0,
+        -1.0,
+        0.0,
+        1.0,
+        2.0,
+        3.0,
+        4.0,
+        5.0,
+        6.0,
+        7.0,
+        8.0,
+        9.0,
+        10.0,
+        11.0,
+        12.0
+      ],
+      "seed_streams": {
+        "channel": 63006000,
+        "payload": 63106000,
+        "noise": 63206000,
+        "schedule": 63306000
+      }
+    },
+    {
+      "condition": "near_far",
+      "provider": "shared_geometry_power",
+      "provider_settings": {
+        "provider": "shared_geometry_power",
+        "receiver_inputs": [],
+        "scenario": "umi",
+        "force_los": null,
+        "received_power_gap_db": [
+          6.0,
+          12.0
+        ],
+        "power_control": "controlled_residual_gap"
+      },
+      "episode_count": 8,
+      "num_tbs": 16,
+      "snr_db": [
+        -2.0,
+        -1.0,
+        0.0,
+        1.0,
+        2.0,
+        3.0,
+        4.0,
+        5.0,
+        6.0,
+        7.0,
+        8.0,
+        9.0,
+        10.0,
+        11.0,
+        12.0
+      ],
+      "seed_streams": {
+        "channel": 63007000,
+        "payload": 63107000,
+        "noise": 63207000,
+        "schedule": 63307000
+      }
+    },
+    {
+      "condition": "ray_traced_munich",
+      "provider": "ray_traced",
+      "provider_settings": {
+        "provider": "ray_traced",
+        "receiver_inputs": [],
+        "ue_pool_size": 2,
+        "channel_banks": {
+          "calibration": {
+            "path": "datasets/rt_munich/calibration",
+            "sha256": "598636d11b2a5b1c38983f2c6bef68f4e3824619f78273006f6fb8f036173e6b"
+          },
+          "confirmation": {
+            "path": "datasets/rt_munich/confirmation",
+            "sha256": "6da51eaf3d6246783f3c7bbcd321ad6a4cf7463f3508143da557fad780e854ff"
+          }
+        },
+        "channel_bank_sha256": "598636d11b2a5b1c38983f2c6bef68f4e3824619f78273006f6fb8f036173e6b"
+      },
+      "episode_count": 8,
+      "num_tbs": 16,
+      "snr_db": [
+        -2.0,
+        -1.0,
+        0.0,
+        1.0,
+        2.0,
+        3.0,
+        4.0,
+        5.0,
+        6.0,
+        7.0,
+        8.0,
+        9.0,
+        10.0,
+        11.0,
+        12.0
+      ],
+      "seed_streams": {
+        "channel": 63008000,
+        "payload": 63108000,
+        "noise": 63208000,
+        "schedule": 63308000
+      }
+    }
+  ],
+  "episodes_per_condition": 8,
+  "snr_point_names": [
+    "point_0",
+    "point_1",
+    "point_2",
+    "point_3",
+    "point_4",
+    "point_5",
+    "point_6",
+    "point_7",
+    "point_8",
+    "point_9",
+    "point_10",
+    "point_11",
+    "point_12",
+    "point_13",
+    "point_14"
+  ],
+  "protocol_sha256": "c16ff4c8be25c966de86c6b3434b3ad0cb5dd216598b5002b0aeea860ac632bd"
+}

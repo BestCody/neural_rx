@@ -9,13 +9,13 @@ from typing import Any, Protocol, runtime_checkable
 
 import numpy as np
 
-from temporal_benchmark_candidate import (
+from neural_rx.benchmark.candidate import (
     BenchmarkDecoderAdapter,
     validate_adapter_output,
 )
-from temporal_benchmark_candidate import validate_manifest
-from temporal_benchmark_scoring import payload_error_flags
-from temporal_benchmark_protocol import METHOD_ROLES
+from neural_rx.benchmark.candidate import validate_manifest
+from neural_rx.benchmark.scoring import payload_error_flags
+from neural_rx.benchmark.protocol import METHOD_ROLES
 
 
 @dataclass(frozen=True)
@@ -369,7 +369,7 @@ def evaluate_method_set(
             "frozen_reference_finite_outputs": True,
             "frozen_references_paired": True,
         }
-    from temporal_benchmark_io import validate_common_arrays, validate_method_arrays
+    from neural_rx.benchmark.arrays import validate_common_arrays, validate_method_arrays
 
     validate_common_arrays(arrays, protocol, plan)
     validate_method_arrays(arrays, methods, protocol, plan)

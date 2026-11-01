@@ -1,6 +1,6 @@
 {
   "active_receiver": "pilot_filter_learned_blend",
-  "implementation": "scripts/pilot_history_receiver",
+  "implementation": "src/neural_rx/receiver",
   "receiver_config": "config/memory_receiver.json",
   "training_recipe": "config/memory_training.json",
   "selected_checkpoint": {
@@ -37,7 +37,8 @@
     "campaign": "experiments/20261019_learned_blend_joint_training_6000",
     "selection": "experiments/20261019_learned_blend_joint_training_6000/results/selection.json",
     "confirmation": "experiments/20261019_learned_blend_joint_training_6000/results/confirmation_005000/results.json",
-    "latency": "experiments/20261019_learned_blend_joint_training_6000/results/latency_005000/results.json"
+    "latency": "experiments/20261019_learned_blend_joint_training_6000/results/latency_005000/results.json",
+    "current_code_reproduction": "experiments/20261021_current_code_reproduction/results/confirmation_005000/results.json"
   },
   "result_status": {
     "campaign_complete": true,
@@ -49,12 +50,14 @@
   "evaluation_data": {
     "retained_disk_banks": [
       "datasets/evaluation",
-      "datasets/smoke"
+      "datasets/smoke",
+      "datasets/rt_munich/calibration",
+      "datasets/rt_munich/confirmation"
     ],
     "campaign_cache": "experiments/20261019_learned_blend_joint_training_6000/episodes",
-    "campaign_cache_storage": "RAM-backed tmpfs; recreate from retained source, plans, seeds and anchors after reboot"
+    "campaign_cache_storage": "RAM-backed tmpfs, not currently present (deleted 2026-10-21); the episodes symlink is dangling until the cache is regenerated from retained source, plans, seeds and anchors",
+    "default_protocol": "config/temporal_benchmark_v2.json"
   },
-  "literature": "docs/literature_review_20260914",
   "artifact_format": {
     "checkpoint_config": "cnn_autoencoder_finalist.json",
     "training_protocol": "cnn_memory_training",

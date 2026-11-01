@@ -1,6 +1,6 @@
 .vscode/
-*.md
 build/
+*.egg-info/
 __pycache__
 .ipynb_checkpoints
 .pytest_cache
@@ -19,8 +19,27 @@ logs/
 /data/
 /saved_models/
 /wandb/
+# Checkpoints stay out of git; retained_artifacts.json records their SHA-256.
 /models/*
 !/models/pretrained/
-/datasets/
-/experiments/
-/docs/literature_review_20260914/
+
+# Datasets are regenerable and large, except the small declared RT channel banks
+# that config/temporal_benchmark_v2.json references by bank_sha256.
+/datasets/*
+!/datasets/rt_munich/
+/datasets/rt_munich/*
+!/datasets/rt_munich/calibration/
+!/datasets/rt_munich/confirmation/
+!/datasets/rt_munich/export.log
+
+# Experiments: keep small records (configs, results JSON, logs, run scripts, source
+# snapshots); drop caches, arrays, weight copies, and oversized logs.
+/experiments/**/episodes
+/experiments/**/reference_cache*/
+/experiments/**/*.npz
+!/experiments/**/results/**/*.npz
+/experiments/**/*.h5
+/experiments/**/source/models/
+/experiments/**/source_state.patch
+/experiments/20261019_learned_blend_joint_training_6000/run.log
+*.lock

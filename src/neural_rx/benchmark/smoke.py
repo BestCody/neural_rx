@@ -5,16 +5,13 @@ from __future__ import annotations
 import argparse
 import json
 import os
-import sys
 import time
 from pathlib import Path
 
 import numpy as np
 
 
-HERE = Path(__file__).resolve().parent
-ROOT = HERE.parent
-sys.path.insert(0, str(ROOT))
+from neural_rx.paths import ROOT
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -40,7 +37,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def _crc_diagnostics(output, truth, active):
-    from temporal_benchmark_scoring import crc_diagnostics, payload_error_flags
+    from neural_rx.benchmark.scoring import crc_diagnostics, payload_error_flags
     return crc_diagnostics(*payload_error_flags(
         output["hard_bits"], output["crc_status"], truth, active,
     ))
@@ -53,15 +50,15 @@ def main() -> None:
 
     import sionna as sn
     import tensorflow as tf
-    from temporal_benchmark_candidate import (
+    from neural_rx.benchmark.candidate import (
         validate_adapter_output,
     )
-    from temporal_benchmark_protocol import (
+    from neural_rx.benchmark.protocol import (
         resolved_condition_settings,
     )
-    from temporal_benchmark_scenarios import TemporalBenchmarkScenarioBank
-    from temporal_benchmark_episodes import CachedScenarioBank, scenario_identity
-    from utils import E2E_Model, Parameters
+    from neural_rx.benchmark.scenarios import TemporalBenchmarkScenarioBank
+    from neural_rx.benchmark.episodes import CachedScenarioBank, scenario_identity
+    from neural_rx.backbone import E2E_Model, Parameters
 
     tf.config.experimental.enable_op_determinism()
     for gpu in tf.config.list_physical_devices("GPU"):
@@ -71,7 +68,7 @@ def main() -> None:
     np.random.seed(seed)
     sn.config.seed = seed
 
-    from temporal_benchmark_frozen import make_benchmark_adapter, make_manifest, protocol_and_plan
+    from neural_rx.benchmark.frozen import make_benchmark_adapter, make_manifest, protocol_and_plan
     if args.prbs < 1 or args.prbs > 273:
         raise ValueError("Invalid smoke-test PRB count")
     protocol, plan = protocol_and_plan("smoke", args.prbs)
@@ -175,7 +172,7 @@ def main() -> None:
             raise RuntimeError("reset candidate retained memory before decode")
         outputs[("candidate_reset", tb)] = reset.decode_tb(observable[tb])
 
-    from verification.pilot_history import ReferenceMemoryManager, make_decode_step
+    from neural_rx.verification.pilot_history import ReferenceMemoryManager, make_decode_step
     manager = persistent.manager
     reference_manager = ReferenceMemoryManager(manager, persistent.layout.count, persistent._channel_shape[-1]+1)
     reference_decode = make_decode_step(persistent.receiver, persistent.model, reference_manager, persistent.decoder)
@@ -200,7 +197,7 @@ def main() -> None:
         actual = adapter._buffer.read(adapter._committed.head, adapter._committed.count,
                                       identities, active_ids, tf.constant(num_tbs))
         expected = reference_manager.gather(state, identities, num_tbs, active_ids)
-        for left, right in zip(actual, expected):
+        for left, right in zip(actual, expected, strict=True):
             np.testing.assert_array_equal(left.numpy(), right.numpy())
         memory_drift[method] = {"max_absolute": 0., "rms": 0.,
                                 "reference_rms": float(tf.sqrt(tf.reduce_mean(expected.observations**2)))}
@@ -335,7 +332,7 @@ def main() -> None:
     }
     destination = args.output.expanduser().resolve()
     destination.parent.mkdir(parents=True, exist_ok=True)
-    from artifact_io import atomic_json
+    from neural_rx.provenance.artifacts import atomic_json
     atomic_json(destination, result)
     print(json.dumps(result, indent=2))
     print(f"wrote {destination}")

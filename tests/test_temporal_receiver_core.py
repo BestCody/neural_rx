@@ -7,8 +7,8 @@ import unittest
 import numpy as np
 import tensorflow as tf
 
-from temporal_receiver_core import expand_noise
-from verification.radio import exact_contributions, received_to_grid
+from neural_rx.backbone.core import expand_noise
+from neural_rx.verification.radio import exact_contributions, received_to_grid
 
 
 class TemporalReceiverCoreTest(unittest.TestCase):

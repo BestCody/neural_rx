@@ -6,9 +6,9 @@ from unittest import mock
 import numpy as np
 import tensorflow as tf
 
-from pilot_history_receiver.pilot_history import validate_memory_metadata, MemoryPolicy, PilotMemoryBuffer
-from receiver_decoding import OneLayerGridCodeMap
-from verification.pilot_history import ReferenceMemoryManager
+from neural_rx.receiver.pilot_history import validate_memory_metadata, MemoryPolicy, PilotMemoryBuffer
+from neural_rx.decoding import OneLayerGridCodeMap
+from neural_rx.verification.pilot_history import ReferenceMemoryManager
 
 
 
@@ -19,8 +19,8 @@ class PilotHistoryExecutionTest(unittest.TestCase):
         tf.config.experimental.enable_op_determinism()
 
     def test_shared_mapping_matches_demapper_values_and_gradients(self):
-        from verification.radio import demap_llr
-        from utils import Parameters, E2E_Model
+        from neural_rx.verification.radio import demap_llr
+        from neural_rx.backbone import Parameters, E2E_Model
         tf.keras.utils.set_random_seed(413)
         for prbs in (12,48,132):
             parameters=Parameters("nrx_large.cfg",training=True,n_size_bwp_override=prbs)
@@ -40,7 +40,7 @@ class PilotHistoryExecutionTest(unittest.TestCase):
                         result=call()
                         loss=tf.reduce_sum(result*weighted)
                     outputs.append((result,tape.gradient(loss,values)))
-                for left,right in zip(outputs[0],outputs[1]):
+                for left,right in zip(outputs[0],outputs[1], strict=True):
                     np.testing.assert_array_equal(left,right)
 
 
@@ -81,14 +81,14 @@ class PilotHistoryExecutionTest(unittest.TestCase):
                 validate_memory_metadata(ids, active, 7)
                 expected = manager.gather(reference, ids, step, active)
                 actual = read(head, count, ids, active, tf.constant(step))
-                for a, b in zip(expected, actual):
+                for a, b in zip(expected, actual, strict=True):
                     np.testing.assert_array_equal(a, b)
                 written = tf.random.normal([2, 3, 5, 9])
                 if step % 4 == 0:
                     _, _, complete = stage(written*2., head, count, ids, active, tf.constant(step))
                     complete.numpy()
                     rolled_back = read(head, count, ids, active, tf.constant(step))
-                    for a, b in zip(actual, rolled_back):
+                    for a, b in zip(actual, rolled_back, strict=True):
                         np.testing.assert_array_equal(a, b)
                 next_head, next_count, complete = stage(written, head, count, ids, active, tf.constant(step))
                 complete.numpy()
@@ -130,11 +130,11 @@ class PilotHistoryExecutionTest(unittest.TestCase):
                 before = [v.numpy().copy() for v in tables]
                 pending, finite = buffer.prepare_stage(observations, head, count, ids, active)
                 self.assertTrue(finite.numpy())
-                for expected, current in zip(before, buffer.snapshot(head, count)[:3]):
+                for expected, current in zip(before, buffer.snapshot(head, count)[:3], strict=True):
                     np.testing.assert_array_equal(expected, current)
                 head, count, complete = buffer.commit(pending, finite, tf.constant(0))
                 complete.numpy()
-                for expected, retained_snapshot in zip(before, tables):
+                for expected, retained_snapshot in zip(before, tables, strict=True):
                     np.testing.assert_array_equal(expected, retained_snapshot)
                 for value in (buffer.observations, buffer.timestamps, buffer.ports, head, count):
                     self.assertIn('GPU:', value.device)
@@ -148,11 +148,11 @@ class PilotHistoryExecutionTest(unittest.TestCase):
                 self.assertFalse(finite.numpy())
                 with self.assertRaises(tf.errors.InvalidArgumentError):
                     buffer.commit(pending, finite, tf.constant(1))
-                for expected, current in zip(before, buffer.snapshot(head, count)):
+                for expected, current in zip(before, buffer.snapshot(head, count), strict=True):
                     np.testing.assert_array_equal(expected, current)
 
     def test_adapter_serializes_calls_and_failed_output_does_not_commit(self):
-        from pilot_history_receiver.benchmark_adapter import PilotHistoryBenchmarkAdapter, CommittedMemory
+        from neural_rx.receiver.benchmark_adapter import PilotHistoryBenchmarkAdapter, CommittedMemory
         adapter = PilotHistoryBenchmarkAdapter.__new__(PilotHistoryBenchmarkAdapter)
         adapter.tf, adapter._lock, adapter._batch_size, adapter._users = tf, RLock(), 1, 2
         adapter._received_shape, adapter._channel_shape = (1, 4, 1, 1), (2, 1, 1, 8)
@@ -178,13 +178,14 @@ class PilotHistoryExecutionTest(unittest.TestCase):
         before = adapter._buffer.read(adapter._committed.head, adapter._committed.count,
             tf.constant([[0, 1]]), tf.ones([1, 2], tf.bool), tf.constant(2))
         changed = dict(point, ls_channel=point['ls_channel']*3.)
-        with mock.patch('pilot_history_receiver.benchmark_adapter.decoder_output', side_effect=RuntimeError('output failed')):
+        with mock.patch('neural_rx.receiver.benchmark_adapter.decoder_output',
+                        side_effect=RuntimeError('output failed')):
             with self.assertRaisesRegex(RuntimeError, 'output failed'):
                 adapter.decode_tb(changed)
         self.assertEqual(adapter._step, 2)
         after = adapter._buffer.read(adapter._committed.head, adapter._committed.count,
             tf.constant([[0, 1]]), tf.ones([1, 2], tf.bool), tf.constant(2))
-        for a, b in zip(before, after):
+        for a, b in zip(before, after, strict=True):
             np.testing.assert_array_equal(a, b)
         adapter.decode_tb(changed)
         self.assertEqual(adapter._step, 3)

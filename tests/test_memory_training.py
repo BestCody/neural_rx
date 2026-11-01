@@ -7,9 +7,9 @@ from unittest import mock
 import numpy as np
 import tensorflow as tf
 
-from pilot_history_receiver.training import MemoryTrainer, validate_recipe
-from pilot_history_receiver.training_data import domain_seed, noise_schedule, sample_schedule, TrainingEpisodes
-from temporal_benchmark_reference import frozen_result_cache
+from neural_rx.receiver.training import MemoryTrainer, validate_recipe
+from neural_rx.receiver.training_data import domain_seed, noise_schedule, sample_schedule, TrainingEpisodes
+from neural_rx.benchmark.reference import frozen_result_cache
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -160,7 +160,7 @@ class MemoryTrainingTest(unittest.TestCase):
         def compute():
             return {"errors":np.zeros([3],bool)}, {"checked":True}, 1.
         with tempfile.TemporaryDirectory() as directory:
-            with mock.patch("temporal_benchmark_reference.atomic_json", side_effect=OSError("disk full")):
+            with mock.patch("neural_rx.benchmark.reference.atomic_json", side_effect=OSError("disk full")):
                 with self.assertRaisesRegex(OSError, "disk full"):
                     frozen_result_cache(directory, {"reference":"frozen"}, compute)
             self.assertFalse(any(p.is_dir() for p in Path(directory).iterdir()))
@@ -213,9 +213,9 @@ class JointUpdateTest(unittest.TestCase):
                   "round1":trainer.model.base._iterations[0].trainable_variables,
                   "round2":trainer.model.base._iterations[1].trainable_variables,
                   "readout":trainer.model.base._readout_llrs[0].trainable_variables}
-        from receiver_decoding import OneLayerGridCodeMap, DecoderAssistedTB
-        from temporal_receiver_core import prepare_cgnn_inputs
-        from pilot_history_receiver.pilot_history import PilotHistory
+        from neural_rx.decoding import OneLayerGridCodeMap, DecoderAssistedTB
+        from neural_rx.backbone.core import prepare_cgnn_inputs
+        from neural_rx.receiver.pilot_history import PilotHistory
         receiver = trainer.contexts[width][1]._receiver
         mapping = OneLayerGridCodeMap(receiver._neural_rx, trainer.contexts[width][0].max_num_tx,
                                       trainer.model.base._num_bits_per_symbol[0])
@@ -232,7 +232,8 @@ class JointUpdateTest(unittest.TestCase):
         history = PilotHistory(observed,
             tf.broadcast_to(tf.range(length, 0, -1)[None, None], metadata),
             tf.broadcast_to(tf.range(metadata[1])[None, :, None], metadata), tf.ones(metadata, tf.bool))
-        sample = prepare_cgnn_inputs(receiver, paired['y'][:, length], paired['ls'][:, length], paired['active'][:, length])
+        sample = prepare_cgnn_inputs(receiver, paired['y'][:, length], paired['ls'][:, length],
+                                     paired['active'][:, length])
         from test_memory_receiver import activate_physical_path
         activate_physical_path(trainer.model, sample)
         @tf.function
@@ -241,10 +242,11 @@ class JointUpdateTest(unittest.TestCase):
                 output, _, _, _, _, _ = trainer.model.decode(sample, paired['no'][:, length],
                     paired['ue_ids'][:, length], history, decoder, mapping)
                 logits = output.logits
-                loss = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(labels=paired['bits'][:, length], logits=logits))
+                loss = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(labels=paired['bits'][:, length],
+                                                                              logits=logits))
             return tape.gradient(loss, trainer.optimization_variables)
         gradients = payload_gradients()
-        gradient_map = {id(v): g for v, g in zip(trainer.optimization_variables, gradients)}
+        gradient_map = {id(v): g for v, g in zip(trainer.optimization_variables, gradients, strict=True)}
         for variable in (trainer.model.blend_kernel, trainer.model.blend_bias):
             np.testing.assert_array_equal(gradient_map[id(variable)], 0.)
         for name, variables in groups.items():
@@ -262,7 +264,7 @@ class JointUpdateTest(unittest.TestCase):
         self.assertTrue(all(np.isfinite(g).all() for g in gradients))
         for name,variables in groups.items():
             with self.subTest(component=name):
-                self.assertTrue(any(np.any(v.numpy()!=old) for v,old in zip(variables,before[name])))
+                self.assertTrue(any(np.any(v.numpy()!=old) for v,old in zip(variables,before[name], strict=True)))
         self.assertAlmostEqual(record["learning_rate"],recipe["learning_rate"]/recipe["learning_rate_warmup"],places=10)
         with tempfile.TemporaryDirectory() as temporary:
             directory = Path(temporary)
@@ -278,7 +280,7 @@ class JointUpdateTest(unittest.TestCase):
             resumed = MemoryTrainer(recipe,detector_batch_tbs=7)
             resumed.restore(checkpoint)
             self.assertEqual(resumed.schedule_state(),trainer.schedule_state())
-            for variable,expected in zip(resumed.optimizer.variables(),saved):
+            for variable,expected in zip(resumed.optimizer.variables(),saved, strict=True):
                 np.testing.assert_array_equal(variable,expected)
             reference, reference_gradients = trainer.update(packets)
             for variable in (trainer.model.blend_kernel, trainer.model.blend_bias):
@@ -297,11 +299,11 @@ class JointUpdateTest(unittest.TestCase):
             gradient_max = float(np.max(np.abs(difference)))
             print(json.dumps(dict(check='restart_with_different_batch_size', prbs=width,
                                   relative_gradient_l2=gradient_l2, maximum_gradient_difference=gradient_max)))
-            for a,b in zip(actual_gradients,reference_gradients):
+            for a,b in zip(actual_gradients,reference_gradients, strict=True):
                 a, b = np.asarray(a), np.asarray(b)
                 self.assertLessEqual(np.linalg.norm(a-b), 1e-3*np.linalg.norm(b)+1e-6)
                 self.assertLessEqual(np.max(np.abs(a-b)), 1e-3*np.max(np.abs(b))+1e-6)
-            for a,b in zip(resumed.optimization_variables,trainer.optimization_variables):
+            for a,b in zip(resumed.optimization_variables,trainer.optimization_variables, strict=True):
                 np.testing.assert_allclose(a,b,rtol=1e-5,atol=1e-6)
             self.assertEqual(resumed.schedule_state(),trainer.schedule_state())
 
@@ -316,7 +318,7 @@ class JointUpdateTest(unittest.TestCase):
             setattr(trainer,name,tf.Variable(value,dtype=tf.int64))
         for name in ("development_bank","development_result"):
             setattr(trainer,name,tf.Variable("",dtype=tf.string))
-        from pilot_history_receiver.training import recipe_hash
+        from neural_rx.receiver.training import recipe_hash
         binding = dict(recipe=recipe,recipe_sha256=recipe_hash(recipe),execution={})
         trainer.binding = lambda: binding
         with tempfile.TemporaryDirectory() as temporary:

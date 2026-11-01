@@ -8,9 +8,9 @@ from pathlib import Path
 
 import numpy as np
 
-from artifact_io import atomic_json, file_sha256
-from rt_motion import Motion
-from temporal_generalization_protocol import seal_payload
+from neural_rx.provenance.artifacts import atomic_json, file_sha256
+from neural_rx.rt.motion import Motion
+from neural_rx.benchmark.generalization_protocol import seal_payload
 
 
 UPSTREAM = {
@@ -123,10 +123,10 @@ def export(config, output):
     for index in range(config["episodes"]):
         for attempt in range(config["max_attempts_per_episode"]):
             selected = [int(rng.randint(len(indices))) for indices, _ in starts]
-            trajectory_indices = [int(indices[pick]) for (indices, _), pick in zip(starts, selected)]
-            start_times = [0.] + [float(times[pick]) for (_, times), pick in zip(starts, selected)]
+            trajectory_indices = [int(indices[pick]) for (indices, _), pick in zip(starts, selected, strict=True)]
+            start_times = [0.] + [float(times[pick]) for (_, times), pick in zip(starts, selected, strict=True)]
             positions, velocities = [], []
-            for node, route, start in zip(nodes, motions, start_times):
+            for node, route, start in zip(nodes, motions, start_times, strict=True):
                 position = np.asarray(route.position_at(start))
                 velocity = np.asarray(route.velocity_at(start))
                 for delta in (duration / 2, duration):
@@ -171,7 +171,7 @@ def export(config, output):
         "scene_files": assets, "episodes": records,
         "packages": {name: importlib.metadata.version(name) for name in ("sionna-rt", "mitsuba", "drjit", "numpy")},
         "sources": {name: file_sha256(Path(__file__).parent/name)
-                    for name in ("export_rt_channels.py", "rt_motion.py")},
+                    for name in ("export.py", "motion.py")},
     }, field="bank_sha256")
     atomic_json(output/"manifest.json", manifest)
     print(json.dumps({"channel_bank": str(output), "bank_sha256": manifest["bank_sha256"]}), flush=True)

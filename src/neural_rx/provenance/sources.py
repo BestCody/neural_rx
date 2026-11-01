@@ -5,16 +5,16 @@ import copy
 import hashlib
 import json
 from pathlib import Path
-from artifact_io import file_sha256
+from neural_rx.provenance.artifacts import file_sha256
 
-ROOT = Path(__file__).resolve().parent.parent
+from neural_rx.paths import ROOT
 TRAINING_PROTOCOL = "cnn_memory_training"
 TRAINING_SCHEMA = 5
 TRAINING_SEED_NAMESPACE = "calibrated_feedback_joint_training_v1"
 
 
 def _module_file(name, root):
-    for base in (root, root / "scripts"):
+    for base in (root, root / "src"):
         path = base.joinpath(*name.split("."))
         for candidate in (path.with_suffix(".py"), path / "__init__.py"):
             if candidate.is_file():
@@ -43,7 +43,7 @@ def source_records(paths, root=ROOT):
             if initializer.is_file():
                 pending.append(initializer)
         package = list(Path(name).parts[:-1])
-        if package and package[0] == "scripts":
+        if package and package[0] == "src":
             package = package[1:]
         for node in ast.walk(ast.parse(path.read_text(), filename=name)):
             if isinstance(node, ast.Import):
@@ -64,8 +64,9 @@ def source_records(paths, root=ROOT):
 
 
 def evaluation_source_records(root=ROOT):
-    return source_records(("scripts/temporal_benchmark_frozen.py",
-                           "config/nrx_large.cfg", "config/temporal_benchmark_v1.json"), root)
+    return source_records(("src/neural_rx/benchmark/frozen.py",
+                           "config/nrx_large.cfg", "config/temporal_benchmark_v1.json",
+                           "config/temporal_benchmark_v2.json"), root)
 
 
 def validate_evaluation_sources(records, root=ROOT):
@@ -74,7 +75,7 @@ def validate_evaluation_sources(records, root=ROOT):
 
 
 def training_source_records(radio_config, root=ROOT):
-    return source_records(("scripts/train_memory_receiver.py",
+    return source_records(("src/neural_rx/cli/train.py",
                            f"config/{Path(radio_config).name}"), root)
 
 

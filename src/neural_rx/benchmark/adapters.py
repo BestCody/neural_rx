@@ -6,9 +6,11 @@ from pathlib import Path
 
 import numpy as np
 
-from temporal_benchmark_candidate import checked_decoder_tensors, decoder_output, stack_receiver_grids, validate_pretrained_checkpoint
-from temporal_benchmark_protocol import METHOD_ROLES
-from artifact_io import file_sha256, validate_file_record
+from neural_rx.benchmark.candidate import (checked_decoder_tensors, decoder_output, stack_receiver_grids,
+                                          validate_pretrained_checkpoint)
+from neural_rx.benchmark.protocol import METHOD_ROLES
+from neural_rx.provenance.artifacts import file_sha256, validate_file_record
+from neural_rx.paths import ROOT
 
 
 def _verify_method(manifest: dict, method: str) -> None:
@@ -61,7 +63,7 @@ def _runtime_config(
 ) -> str:
     name = Path(config_name).name
     registered = _support_path(manifest, artifacts, name)
-    repository = Path(__file__).resolve().parent.parent / "config" / name
+    repository = ROOT / "config" / name
     if not repository.is_file():
         raise FileNotFoundError(repository)
     if file_sha256(registered) != file_sha256(repository):
@@ -108,11 +110,11 @@ class ColdNeuralRxBenchmarkAdapter(_ArtifactGuard):
             raise ValueError("cold adapter requires a cold role")
         validate_pretrained_checkpoint(manifest, config_name)
         super().__init__(manifest, artifacts)
-        from receiver_decoding import (
+        from neural_rx.decoding import (
             OneLayerGridCodeMap,
             SoftTBInformationDecoder,
         )
-        from temporal_receiver_core import (
+        from neural_rx.backbone.core import (
             build_backbone,
             model_checksum,
             prepare_cgnn_inputs,

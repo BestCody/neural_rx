@@ -1,0 +1,271 @@
+{
+  "phase": "calibration",
+  "rates": {
+    "frozen_cold_k8": [
+      [
+        1.0,
+        0.9609375,
+        0.7578125,
+        0.3359375,
+        0.0546875,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      [
+        0.953125,
+        0.9296875,
+        0.734375,
+        0.421875,
+        0.078125,
+        0.0078125,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      [
+        0.8125,
+        0.8125,
+        0.5703125,
+        0.4375,
+        0.375,
+        0.296875,
+        0.21875,
+        0.0625,
+        0.0625,
+        0.0625,
+        0.0625,
+        0.0625,
+        0.0625,
+        0.0625,
+        0.0625
+      ],
+      [
+        0.5625,
+        0.546875,
+        0.375,
+        0.375,
+        0.375,
+        0.1875,
+        0.125,
+        0.125,
+        0.125,
+        0.0625,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      [
+        0.6875,
+        0.625,
+        0.5625,
+        0.5078125,
+        0.5,
+        0.421875,
+        0.2421875,
+        0.203125,
+        0.1875,
+        0.140625,
+        0.125,
+        0.078125,
+        0.0625,
+        0.0625,
+        0.0625
+      ],
+      [
+        0.6403508771929824,
+        0.5087719298245614,
+        0.41228070175438597,
+        0.32456140350877194,
+        0.15789473684210525,
+        0.07017543859649122,
+        0.05263157894736842,
+        0.03508771929824561,
+        0.017543859649122806,
+        0.008771929824561403,
+        0.008771929824561403,
+        0.008771929824561403,
+        0.0,
+        0.0,
+        0.0
+      ],
+      [
+        0.8046875,
+        0.625,
+        0.5625,
+        0.5390625,
+        0.359375,
+        0.3125,
+        0.265625,
+        0.1875,
+        0.125,
+        0.125,
+        0.125,
+        0.1015625,
+        0.0625,
+        0.0625,
+        0.0546875
+      ],
+      [
+        1.0,
+        0.9921875,
+        0.9296875,
+        0.8125,
+        0.8125,
+        0.7734375,
+        0.6640625,
+        0.609375,
+        0.5625,
+        0.5625,
+        0.46875,
+        0.4375,
+        0.4375,
+        0.4375,
+        0.4296875
+      ],
+      [
+        0.8046875,
+        0.625,
+        0.4375,
+        0.3203125,
+        0.25,
+        0.0703125,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ]
+    ]
+  },
+  "tbler_definition": "failed_active_user_blocks / evaluated_active_user_blocks",
+  "preflight": {
+    "frozen_reference_artifacts_unchanged": true,
+    "frozen_reference_deterministic_replay": true,
+    "frozen_reference_finite_outputs": true,
+    "frozen_references_paired": true
+  },
+  "manifests": {
+    "frozen_cold_k8": {
+      "manifest": "temporal_benchmark_frozen_v2",
+      "schema_version": 2,
+      "role": "frozen_cold_k8",
+      "radio": {
+        "receive_antennas": 4,
+        "maximum_active_ues": 2,
+        "bits_per_symbol": 4,
+        "mcs_index": 14,
+        "n_size_bwp": 132,
+        "noise_axis": "ebno_db",
+        "advancing_slot_pilots": true
+      },
+      "training": {
+        "additional_updates": 0,
+        "provenance": "shipped_neural_rx"
+      },
+      "inference": {
+        "iterations": 8,
+        "persistent_memory": false
+      },
+      "benchmark_protocol_sha256": "c16ff4c8be25c966de86c6b3434b3ad0cb5dd216598b5002b0aeea860ac632bd",
+      "checkpoints": [
+        {
+          "name": "nrx_large_weights",
+          "sha256": "0e6aa52dc89725bc982710c4a14a2c617295118d7153da1d512e276d62a06592",
+          "bytes": 1754101,
+          "training_seed": 0
+        }
+      ],
+      "support_artifacts": [
+        {
+          "name": "nrx_large.cfg",
+          "sha256": "9cd550576d8fd7fb643164a1a4f078c91929cb62977e7aaffef0ecf8c15c36e6",
+          "bytes": 2374
+        }
+      ],
+      "manifest_sha256": "f07275017d69022609cc3e24689f956263f8da388eaafb56213e71675fdc4471"
+    }
+  },
+  "protocol_sha256": "c16ff4c8be25c966de86c6b3434b3ad0cb5dd216598b5002b0aeea860ac632bd",
+  "episode_identity": {
+    "packages": {
+      "numpy": "1.26.4",
+      "sionna": "0.18.0",
+      "tensorflow": "2.15.1"
+    },
+    "radio": {
+      "advancing_slot_pilots": true,
+      "bits_per_symbol": 4,
+      "maximum_active_ues": 2,
+      "mcs_index": 14,
+      "n_size_bwp": 132,
+      "noise_axis": "ebno_db",
+      "receive_antennas": 4
+    },
+    "schema": "temporal_benchmark_episode_v2",
+    "sources": {
+      "config/nrx_large.cfg": "9cd550576d8fd7fb643164a1a4f078c91929cb62977e7aaffef0ecf8c15c36e6",
+      "src/neural_rx/backbone/__init__.py": "6531b635e0744fc258c93aab5073ef4411c54715977ffadaab092b43a25ea786",
+      "src/neural_rx/backbone/cgnn.py": "423c0e004b60e805cbeabb89a525231417faa1e6a6a27fb7c84098119e489b44",
+      "src/neural_rx/backbone/channel_models.py": "24e439b900a580fba391cdaa64001568206aab8b14d95ff9c018714201af089a",
+      "src/neural_rx/backbone/core.py": "1108681c0c775aef3f0570fbd70f9c1738885d0a18346e6873268ea1f4fba88f",
+      "src/neural_rx/backbone/e2e_model.py": "86c66837e3cf17d5aaacae5ba2cf427dec03a0b86ed6080fa70814a19da9f618",
+      "src/neural_rx/backbone/parameters.py": "209720d521074feb7a8d9f75dffdf3c26d326bc76d880314cd3ad373d87b8583",
+      "src/neural_rx/backbone/training.py": "b12da25bffd0450e7e10cbe8c45202adaa6453218e3c73f139fbfd3319bfa4c4",
+      "src/neural_rx/benchmark/generalization_protocol.py": "e996d51034af3e7d898d3fdbd57fd71bdbc2ad513652b03f2b6d30019ba0d2c8",
+      "src/neural_rx/benchmark/scenarios.py": "6c31d258b24d56f379c359d6a4cdc930436133299eeaa2446dd9e5c33af81bab",
+      "src/neural_rx/data/geometry.py": "9deba52aa7cd82e33b3da1e93aafd5411699da7882f9a3139e60dc44daeac0b0",
+      "src/neural_rx/data/temporal.py": "fd4426469b9c8b408d7939729be85b56654bb2e8f0e173ba554bb122f1dc42d8"
+    },
+    "ray_traced": {
+      "banks": {
+        "598636d11b2a5b1c38983f2c6bef68f4e3824619f78273006f6fb8f036173e6b": {
+          "scenario_sha256": "88b5974e960bcd18ab60f52c2dcdb5b0ec2e923bdd23d7dfc87ed9280cfc5790",
+          "seed": 20261015,
+          "split": "calibration"
+        }
+      },
+      "sources": {
+        "src/neural_rx/rt/bank.py": "25bb26ab9ec835242be7126991a7582a771ff5c52661dce1f5d69aab7840db5b",
+        "src/neural_rx/rt/data.py": "9ea68cec6b0833b7dbd2723bce78b760eb717a55026d698adbb7e076389eaf45"
+      }
+    }
+  },
+  "checkpoint": "/home/h3lou/neural_rx/models/learned_blend_joint_20261019/checkpoint_005000",
+  "receiver": "pilot-history-memory",
+  "scoring_start_tb": 9,
+  "crc_diagnostics": {
+    "frozen_cold_k8": {
+      "undetected_payload_errors": 0,
+      "crc_failures_with_correct_payload": 0
+    }
+  },
+  "calibration_extension_sha256": {
+    "extensions/near_far_015/errors.npz": "00e827bc66da2248adaa4151f23a5dea1ab58211f0270d5167ab3561484931ee",
+    "extensions/near_far_015/protocol.json": "40a614f43f7ce047567e88014ebfb20cd94bebd38b05f0a6fbd5b919b97947fd",
+    "extensions/near_far_015/plan.json": "0b68e0c8bae2b3765157b90e2d2caa6cb7972f0089d2c68fbbe3be0cbfffeac7"
+  },
+  "unbracketed_conditions": [],
+  "bank_sha256": "9556412b665e8c01e58c84b9116a6ae3148ec7f465de323782fa031936dc348a",
+  "raw_sha256": "1ac35748244bba3674c29ba4349b3f88e3307084118971e61ffab1ce7df93862",
+  "result_sha256": "20adface6438e159cb79f06109faf9a715bbdcee3a9d5fa6cb1d1ad6e4516441"
+}

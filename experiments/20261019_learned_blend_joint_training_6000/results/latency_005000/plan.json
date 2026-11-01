@@ -1,0 +1,49 @@
+{
+  "stage": "development",
+  "jobs": [
+    {
+      "condition": "natural_umi",
+      "provider": "shared_geometry",
+      "provider_settings": {
+        "provider": "shared_geometry",
+        "receiver_inputs": [],
+        "scenario": "umi",
+        "force_los": null,
+        "angular_separation_deg": [
+          0.0,
+          180.0
+        ],
+        "doppler_strata_hz": [
+          [
+            0.0,
+            50.0
+          ],
+          [
+            50.0,
+            175.0
+          ],
+          [
+            175.0,
+            400.0
+          ]
+        ]
+      },
+      "episode_count": 3,
+      "num_tbs": 64,
+      "snr_db": [
+        3.0
+      ],
+      "seed_streams": {
+        "channel": 52002000,
+        "payload": 52102000,
+        "noise": 52202000,
+        "schedule": 52302000
+      }
+    }
+  ],
+  "episodes_per_condition": 3,
+  "snr_point_names": [
+    "anchor"
+  ],
+  "protocol_sha256": "a60c5419432cba0aa87ce274338625baafe3f330c0a28f415b2a47ac152312b8"
+}

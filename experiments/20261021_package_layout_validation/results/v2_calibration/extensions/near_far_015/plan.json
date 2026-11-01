@@ -1,0 +1,62 @@
+{
+  "stage": "development",
+  "jobs": [
+    {
+      "condition": "near_far",
+      "provider": "shared_geometry_power",
+      "provider_settings": {
+        "provider": "shared_geometry_power",
+        "receiver_inputs": [],
+        "scenario": "umi",
+        "force_los": null,
+        "received_power_gap_db": [
+          6.0,
+          12.0
+        ],
+        "power_control": "controlled_residual_gap"
+      },
+      "episode_count": 8,
+      "num_tbs": 16,
+      "snr_db": [
+        13.0,
+        14.0,
+        15.0,
+        16.0,
+        17.0,
+        18.0,
+        19.0,
+        20.0,
+        21.0,
+        22.0,
+        23.0,
+        24.0,
+        25.0,
+        26.0
+      ],
+      "seed_streams": {
+        "channel": 63007000,
+        "payload": 63107000,
+        "noise": 63207000,
+        "schedule": 63307000
+      }
+    }
+  ],
+  "episodes_per_condition": 8,
+  "snr_point_names": [
+    "point_0",
+    "point_1",
+    "point_2",
+    "point_3",
+    "point_4",
+    "point_5",
+    "point_6",
+    "point_7",
+    "point_8",
+    "point_9",
+    "point_10",
+    "point_11",
+    "point_12",
+    "point_13"
+  ],
+  "protocol_sha256": "8dfb45a076e78f01381e2791f864817f6c56589961ca15bb3a7bab31a0fe8644"
+}

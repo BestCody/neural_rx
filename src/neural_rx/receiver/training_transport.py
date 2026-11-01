@@ -76,7 +76,8 @@ def open_shared_message(message, *, owner=False):
 
 class SharedArrayStore:
     def __init__(self):
-        self.directory = tempfile.mkdtemp(prefix="neural_rx_arrays_", dir="/dev/shm" if os.path.isdir("/dev/shm") else None)
+        self.directory = tempfile.mkdtemp(prefix="neural_rx_arrays_",
+                                          dir="/dev/shm" if os.path.isdir("/dev/shm") else None)
         self.owner = os.getpid()
 
     def pack(self, message, *, borrow=False):

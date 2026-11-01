@@ -1,0 +1,173 @@
+{
+  "protocol": "channel_memory_joint_training_run_v1",
+  "recipe": {
+    "protocol": "cnn_memory_training",
+    "schema_version": 5,
+    "radio_config": "nrx_large.cfg",
+    "learning_rate": 0.0001,
+    "minimum_learning_rate": 1e-06,
+    "plateau_patience": 2,
+    "plateau_factor": 0.5,
+    "coded_loss_weight": 1.0,
+    "payload_loss_weight": 1.0,
+    "reset_weight": 0.5,
+    "learning_rate_warmup": 32,
+    "gradient_clip_norm": 1.0,
+    "effective_examples": 8,
+    "episode_tbs": [
+      8,
+      16,
+      32,
+      64
+    ],
+    "episode_probabilities": [
+      0.25,
+      0.35,
+      0.25,
+      0.15
+    ],
+    "cold_tbs": 4,
+    "cold_fraction": 0.125,
+    "paired_history_fraction": 0.25,
+    "paired_suffix_tbs": 4,
+    "channel_families": [
+      "tdl",
+      "umi",
+      "uma"
+    ],
+    "channel_probabilities": [
+      0.3333333333333333,
+      0.3333333333333333,
+      0.3333333333333333
+    ],
+    "doppler_strata_hz": [
+      [
+        0.0,
+        50.0
+      ],
+      [
+        50.0,
+        175.0
+      ],
+      [
+        175.0,
+        400.0
+      ]
+    ],
+    "tdl_profiles": [
+      "A",
+      "B",
+      "C"
+    ],
+    "delay_spread_s": [
+      3e-08,
+      5e-07
+    ],
+    "schedule_gap_tbs": [
+      1,
+      4,
+      7,
+      8,
+      9,
+      12
+    ],
+    "schedule_reorder_probability": 0.25,
+    "power_imbalance_probability": 0.5,
+    "power_gap_db": [
+      0.0,
+      15.0
+    ],
+    "noise_schedule": {
+      "core_range_db": [
+        0.0,
+        6.0
+      ],
+      "range_db": [
+        -2.0,
+        10.0
+      ],
+      "core_probability": 0.75,
+      "change_probability": 0.5,
+      "max_change_db": 6.0
+    },
+    "prbs": [
+      12,
+      48,
+      132
+    ],
+    "prb_probabilities": [
+      0.5,
+      0.25,
+      0.25
+    ],
+    "checkpoint_every": 64,
+    "development_interval": 1000,
+    "memory_capacity": 4,
+    "expiry_tbs": 8,
+    "seed": 2026101901,
+    "latency_scope": "prepared_full_grid_ls_to_decoded_payload",
+    "initializer_checkpoint": "models/learned_blend/initial_receiver.weights.h5",
+    "initializer_sha256": "2139a18e2dd16662a915716b590740760275e2b57c8a0e50ff655c581a8fc501",
+    "channel_loss_weight": 0.1,
+    "schedule_probability": 0.3,
+    "channel_change_probability": 0.2,
+    "schedule_switch_probability_range": [
+      0.0,
+      0.5
+    ],
+    "schedule_gap_probability_range": [
+      0.02,
+      0.15
+    ],
+    "weak_link_noise_probability": 0.5,
+    "initializer_parent_updates": 17000
+  },
+  "architecture": {
+    "cgnn_rounds": 2,
+    "state_features": 56,
+    "memory": "pilot_filter_learned_blend",
+    "blend_features": "corrected_endpoints_residual_fit_v1",
+    "blend_hidden": 8,
+    "history_tbs": 7,
+    "filter_hidden": 16,
+    "error_hidden": 16,
+    "neighbor_radius": 1,
+    "ldpc_iterations": 18,
+    "ldpc_first_iterations": 8
+  },
+  "model_directory": "models/learned_blend_joint_20261019",
+  "benchmark_protocol_sha256": "5b264b2304eaa5cf9f9e6a1e873c586e059d8ad5ba336c07fff33419b2c2a388",
+  "calibration_anchors": {
+    "path": "experiments/20261019_learned_blend_joint_training_6000/inputs/anchors.json",
+    "sha256": "d58f4e02184391dd92c871ef3ed889ebb17cbe673bfec83adcfc65f6dbec7d50"
+  },
+  "development_cache": {
+    "path": "/dev/shm/neural_rx_1003_20261019_learned_blend_joint_training_6000/development",
+    "manifest_sha256": "31f31e573b677daebd8dcc72afb2e9c6c5824930511ea25657f02c640ff9b8bd"
+  },
+  "execution": {
+    "detector_batch_tbs": 8,
+    "descriptor_chunk_tbs": 32,
+    "render_batch_tbs": 16,
+    "replica_gpu": 1,
+    "replica_memory_mib": 21882,
+    "preparation_gpu_memory_mib": 21883,
+    "data_gpu": 1,
+    "prefetch_examples": 8,
+    "evaluation_gpu": 1,
+    "channel_workers": 1,
+    "prefetch_memory_mib": 4096
+  },
+  "requested_updates": 6000,
+  "checkpoints": [
+    1000,
+    2000,
+    3000,
+    4000,
+    5000,
+    6000
+  ],
+  "reference_policy": "frozen_k8_accuracy; frozen_k3_latency; reset_ablation_at_confirmation_only",
+  "evaluation_policy": "one learner; development TBLER controls learning rate and selection, never duration; automatic independent confirmation",
+  "selection": "lowest pooled persistent TBLER over the declared primary conditions on the fixed development bank; retain earlier checkpoint on ties"
+}

@@ -1,0 +1,137 @@
+ M .gitignore
+ M config/nrx_large.cfg
+ D config/segment_safe_pd_l8_threshold.json
+ D config/temporal_benchmark_checkpoint_selection_v1.json
+ D config/temporal_benchmark_training_data_v2.json
+ D config/temporal_benchmark_training_data_v3.json
+ D config/temporal_benchmark_training_recipe_v2.json
+ D config/temporal_benchmark_training_recipe_v3.json
+ M config/temporal_benchmark_v1.json
+ D config/temporal_generalization_protocol.json
+ D config/temporal_receiver_v18_segment_safe.json
+ D docs/evidence/memory_nrx/cjlr_final_stage2a_result.json
+ D docs/evidence/memory_nrx/cjlr_snr_confirmation_result.json
+ D docs/evidence/memory_nrx/cjlr_snr_confirmation_shard.json
+ D docs/v20_rejection_audit.json
+ D misc/memory_nrx_architecture.png
+ D misc/memory_nrx_evaluation.png
+ D misc/v18_snr_vs_iterations.png
+ D scripts/analyze_temporal_benchmark.py
+ D scripts/calibrate_segment_safe_pd_l8.py
+ D scripts/calibrate_temporal_benchmark.py
+ D scripts/cjlr_final_runtime.py
+ D scripts/cjlr_optimized_receiver.py
+ D scripts/cjlr_receiver.py
+ D scripts/compose_temporal_benchmark_run.py
+ M scripts/geometry_mumimo_data.py
+ D scripts/orchestrate_v18_aligned_training.py
+ D scripts/pilot_domain_channel.py
+ D scripts/pilot_domain_channel_v19.py
+ D scripts/pilot_domain_memory.py
+ D scripts/pilot_domain_memory_v19.py
+ D scripts/plot_memory_nrx_presentation_diagrams.py
+ D scripts/plot_v18_iteration_results.py
+ D scripts/prepare_temporal_benchmark.py
+ D scripts/rebind_temporal_benchmark_k3.py
+ D scripts/register_temporal_benchmark_candidate.py
+ D scripts/register_temporal_benchmark_stage.py
+ M scripts/run_temporal_benchmark.py
+ M scripts/smoke_temporal_benchmark_adapters.py
+ M scripts/temporal_benchmark_adapters.py
+ D scripts/temporal_benchmark_cache.py
+ M scripts/temporal_benchmark_candidate.py
+ M scripts/temporal_benchmark_io.py
+ M scripts/temporal_benchmark_plan.py
+ M scripts/temporal_benchmark_protocol.py
+ M scripts/temporal_benchmark_runtime.py
+ M scripts/temporal_benchmark_scenarios.py
+ M scripts/temporal_benchmark_scoring.py
+ M scripts/temporal_generalization_protocol.py
+ D scripts/temporal_power_training_data.py
+ M scripts/temporal_receiver_core.py
+ D scripts/temporal_training_curriculum.py
+ M scripts/temporal_training_data.py
+ D scripts/test_cjlr_optimized_receiver.py
+ D scripts/test_cjlr_receiver.py
+ M scripts/test_geometry_mumimo_data.py
+ D scripts/test_pilot_domain_channel.py
+ D scripts/test_pilot_domain_memory.py
+ D scripts/test_temporal_benchmark_v1.py
+ D scripts/test_temporal_generalization_protocol.py
+ D scripts/test_temporal_power_training_data.py
+ M scripts/test_temporal_receiver_core.py
+ D scripts/test_temporal_receiver_v18.py
+ D scripts/test_temporal_training_correction.py
+ D scripts/test_temporal_training_curriculum.py
+ D scripts/test_temporal_training_data_v2.py
+ M scripts/train_neural_rx.py
+ D scripts/train_temporal_benchmark.py
+ D scripts/validate_v18_aligned_training.py
+ D utils/baseline_rx.py
+ M utils/e2e_model.py
+ M utils/neural_rx.py
+ M utils/parameters.py
+ M utils/utils.py
+ D weights/nrx_large_weights
+?? config/cnn_autoencoder_finalist.json
+?? config/cnn_memory_training.json
+?? config/rt_munich.json
+?? docs/channel_memory_backward_execution_design.txt
+?? docs/channel_memory_conditional_implementation.txt
+?? docs/channel_memory_consolidated_design.txt
+?? docs/channel_memory_coverage_feedback_design.txt
+?? docs/channel_memory_coverage_feedback_latency_design.txt
+?? docs/channel_memory_decoder_assisted_implementation.txt
+?? docs/channel_memory_decoder_state_feedback_design.txt
+?? docs/channel_memory_frontend_implementation.txt
+?? docs/channel_memory_frontend_latency_design.txt
+?? docs/channel_memory_gpu_execution_design.txt
+?? docs/channel_memory_joint_separation_design.txt
+?? docs/channel_memory_latency_budget_design.txt
+?? docs/channel_memory_latency_deep_audit.txt
+?? docs/channel_memory_latency_execution_design.txt
+?? docs/channel_memory_learned_blend_design.txt
+?? docs/channel_memory_learned_blend_implementation.txt
+?? docs/channel_memory_pipeline_design.txt
+?? docs/channel_memory_separation_design.txt
+?? docs/channel_memory_separation_implementation.txt
+?? docs/channel_memory_state_query_design.txt
+?? docs/channel_memory_training_design.txt
+?? docs/cnn_memory_redesign.txt
+?? docs/sionna_rt_evaluation.txt
+?? licenses/
+?? models/
+?? requirements-rt.txt
+?? retained_artifacts.json
+?? scripts/artifact_io.py
+?? scripts/artifact_provenance.py
+?? scripts/cnn_autoencoder/
+?? scripts/export_rt_channels.py
+?? scripts/migrate_channel_memory.py
+?? scripts/receiver_decoding.py
+?? scripts/rt_channel_bank.py
+?? scripts/rt_channel_data.py
+?? scripts/rt_motion.py
+?? scripts/run_cnn_memory_pilot.py
+?? scripts/temporal_benchmark_episodes.py
+?? scripts/temporal_benchmark_frozen.py
+?? scripts/temporal_benchmark_reference.py
+?? scripts/test_artifact_io.py
+?? scripts/test_artifact_provenance.py
+?? scripts/test_benchmark_fixtures.py
+?? scripts/test_benchmark_reuse.py
+?? scripts/test_checkpoint_loading.py
+?? scripts/test_cnn_autoencoder.py
+?? scripts/test_cnn_memory_execution.py
+?? scripts/test_cnn_memory_training.py
+?? scripts/test_cnn_training_controls.py
+?? scripts/test_cnn_training_execution.py
+?? scripts/test_cnn_training_parallel.py
+?? scripts/test_cnn_training_prefetch.py
+?? scripts/test_pretrained_benchmark.py
+?? scripts/test_receiver_decoding.py
+?? scripts/test_temporal_benchmark_episodes.py
+?? scripts/test_temporal_benchmark_scoring.py
+?? scripts/test_temporal_training_data.py
+?? scripts/train_cnn_autoencoder.py
+?? scripts/verification/

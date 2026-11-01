@@ -1,0 +1,16 @@
+2026-10-20 10:14:12.959079: E external/local_xla/xla/stream_executor/cuda/cuda_dnn.cc:9261] Unable to register cuDNN factory: Attempting to register factory for plugin cuDNN when one has already been registered
+2026-10-20 10:14:12.959132: E external/local_xla/xla/stream_executor/cuda/cuda_fft.cc:607] Unable to register cuFFT factory: Attempting to register factory for plugin cuFFT when one has already been registered
+2026-10-20 10:14:12.960220: E external/local_xla/xla/stream_executor/cuda/cuda_blas.cc:1515] Unable to register cuBLAS factory: Attempting to register factory for plugin cuBLAS when one has already been registered
+Evaluating the first 2 port sets.
+Loading DoubleTDL with low correlation.
+Evaluating the first 2 port sets.
+Loading DoubleTDL with low correlation.
+WARNING: All log messages before absl::InitializeLog() is called are written to STDERR
+I0000 00:00:1792491310.535334 1713462 device_compiler.h:186] Compiled cluster using XLA!  This line is logged at most once for the lifetime of the process.
+WARNING:tensorflow:Model's `__init__()` arguments contain non-serializable objects. Please implement a `get_config()` method in the subclassed Model for proper saving and loading. Defaulting to empty config.
+WARNING:tensorflow:Model's `__init__()` arguments contain non-serializable objects. Please implement a `get_config()` method in the subclassed Model for proper saving and loading. Defaulting to empty config.
+WARNING:tensorflow:Model's `__init__()` arguments contain non-serializable objects. Please implement a `get_config()` method in the subclassed Model for proper saving and loading. Defaulting to empty config.
+WARNING:tensorflow:Model's `__init__()` arguments contain non-serializable objects. Please implement a `get_config()` method in the subclassed Model for proper saving and loading. Defaulting to empty config.
+Evaluating the first 2 port sets.
+Loading DoubleTDL with low correlation.
+{"candidate_persistent": {"p50_ms": 41.64208495058119, "p95_ms": 42.84608708694577, "crc_diagnostics": {"undetected_payload_errors": 0, "crc_failures_with_correct_payload": 0}}, "frozen_cold_k3": {"p50_ms": 43.16457803361118, "p95_ms": 44.0181475947611, "crc_diagnostics": {"undetected_payload_errors": 0, "crc_failures_with_correct_payload": 0}}}

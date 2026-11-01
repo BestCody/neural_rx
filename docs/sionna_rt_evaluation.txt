@@ -34,8 +34,8 @@ Reused motion utility
   License: licenses/ocudu-gpu-channel.txt
 
 The live OCUDU bridge, ZMQ transport, sample filtering, and broker are not needed
-for this offline evaluation. The previous street-canyon setup is no longer an
-active configuration; its saved experiments remain in their original folders.
+for this offline evaluation. The previous street-canyon setup and its
+experiments have been retired.
 
 Channel generation
   Each UE independently samples an index from 10,000 positions spaced uniformly
@@ -90,33 +90,49 @@ Integration
   estimate. The shared episode cache saves exactly these receiver inputs.
   Persistent, reset, and Cold receivers use identical cached episodes and the
   existing active-block TBLER definition and scoring windows. Paths are never
-  supplied to the receivers. RT results are a separate scenario report; the
-  existing statistical-channel benchmark keeps its original meaning.
+  supplied to the receivers.
+
+Default benchmark condition
+  config/temporal_benchmark_v2.json is the benchmark default. It declares
+  ray_traced_munich as a report condition beside the v1 statistical conditions.
+  It is evaluated in calibration and confirmation and reported per condition,
+  but it is excluded from core TBLER, the statistical decisions, development
+  (checkpoint selection), and training. The statistical conditions keep their
+  v1 settings and seeds. config/temporal_benchmark_v1.json is unchanged and
+  remains the training protocol.
+
+Channel banks
+  datasets/rt_munich/calibration    seed 20261015, 8 episodes
+  datasets/rt_munich/confirmation   seed 20261014, 32 episodes
+  v2 declares both by path and bank_sha256; the benchmark verifies every path
+  file against its manifest before use. Ray-traced episodes are cached in
+  datasets/rt_munich/episodes, separate from the statistical episode cache.
 
 Commands (run from the repository root)
-  RT_PYTHON scripts/export_rt_channels.py --config config/rt_munich.json
+  PYTHONPATH=src RT_PYTHON -m neural_rx.rt.export --config config/rt_munich.json
       --split calibration --seed 20261015 --episodes 8
-      --output-dir experiments/DATE_NAME/results/calibration_channel_bank
-  RT_PYTHON scripts/export_rt_channels.py --config config/rt_munich.json
+      --output-dir datasets/rt_munich/calibration
+  PYTHONPATH=src RT_PYTHON -m neural_rx.rt.export --config config/rt_munich.json
       --split confirmation --seed 20261014 --episodes 32
-      --output-dir experiments/DATE_NAME/results/confirmation_channel_bank
-  PHY_PYTHON scripts/run_temporal_benchmark.py --rt-channel-bank BANK_DIRECTORY
+      --output-dir datasets/rt_munich/confirmation
+  nrx-benchmark --experiment-phase calibration
       --experiment-checkpoint models/learned_blend_joint_20261019/checkpoint_005000
-      --experiment-phase smoke --experiment-episodes 2
-      --episode-cache experiments/DATE_NAME/episodes
-      --reference-cache experiments/DATE_NAME/reference_cache
-      --output-dir experiments/DATE_NAME/results/benchmark
+      --output-dir experiments/DATE_NAME/results/calibration
+  nrx-benchmark --experiment-phase confirmation
+      --experiment-checkpoint models/learned_blend_joint_20261019/checkpoint_005000
+      --experiment-anchors experiments/DATE_NAME/results/calibration/anchors.json
+      --output-dir experiments/DATE_NAME/results/confirmation
 
-RT_PYTHON is /home/h3lou/miniforge3/envs/sionna2/bin/python on this machine.
-PHY_PYTHON is /home/h3lou/miniforge3/envs/neural_rx/bin/python.
-Use distinct experiment directories with run.py, config.json, provenance.json,
-source snapshots, results/, and run.log. Export never overwrites a channel bank.
+RT_PYTHON is the Python of the Sionna RT environment (see README, Setup); the
+exporter needs only src/ on its path, not an install. nrx-benchmark is installed
+in the neural_rx environment.
+Export never overwrites a channel bank. Re-exporting changes bank_sha256, so
+update the declaration in v2 and seal a new protocol.
 
-For full comparisons, export separate calibration and confirmation banks with
-different seeds and matching scene/radio settings. Set split accordingly.
-The existing calibration phase produces anchors.json. Supply that file with
---experiment-anchors for confirmation. Do not reuse statistical-channel anchors.
-The previous street-canyon calibration is also incompatible with Munich.
+Calibration and confirmation banks must use different seeds and matching
+scene/radio settings; the benchmark rejects anchors calibrated on the same seed.
+The v2 calibration phase produces anchors for every condition, including Munich.
+Anchors calibrated under v1 have no Munich anchor and cannot drive a v2 run.
 Different seeds provide independent draws on the same routes; they do not create
 spatially disjoint routes. No Munich channels are used by the current trainer.
 An integration smoke result is not sufficient evidence of accuracy superiority.

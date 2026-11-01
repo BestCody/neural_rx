@@ -10,17 +10,15 @@ from unittest import mock
 import numpy as np
 import tensorflow as tf
 
-from pilot_history_receiver import training
-from pilot_history_receiver.checkpoints import recover_latest
-import smoke_temporal_benchmark_adapters as smoke
-import temporal_benchmark_adapters as adapters
-from temporal_benchmark_candidate import artifact_record, resolve_manifest_artifacts
-from temporal_benchmark_frozen import load_receiver_checkpoint_export, make_manifest, protocol_and_plan
-from temporal_generalization_protocol import seal_payload
-from run_memory_training import verified_result
-import temporal_receiver_core as core
-
-
+from neural_rx.receiver import training
+from neural_rx.receiver.checkpoints import recover_latest
+import neural_rx.benchmark.smoke as smoke
+import neural_rx.benchmark.adapters as adapters
+from neural_rx.benchmark.candidate import artifact_record, resolve_manifest_artifacts
+from neural_rx.benchmark.frozen import load_receiver_checkpoint_export, make_manifest, protocol_and_plan
+from neural_rx.benchmark.generalization_protocol import seal_payload
+from neural_rx.cli.campaign import verified_result
+import neural_rx.backbone.core as core
 ROOT = Path(__file__).resolve().parent.parent
 
 
@@ -47,7 +45,8 @@ class CheckpointLoadingTest(unittest.TestCase):
         manifest = {"checkpoints": [record], "support_artifacts": []}
         artifact_map = {record["sha256"]: str(path)}
         checksum = mock.Mock(wraps=core.file_sha256)
-        with mock.patch("artifact_io.file_sha256", checksum), mock.patch.object(adapters, "file_sha256", checksum):
+        with mock.patch("neural_rx.provenance.artifacts.file_sha256", checksum), \
+                mock.patch.object(adapters, "file_sha256", checksum):
             artifacts = resolve_manifest_artifacts(manifest, artifact_map)
             guard = adapters._ArtifactGuard(manifest, artifacts)
             self.assertEqual(checksum.call_count, 1)
@@ -89,7 +88,7 @@ class CheckpointLoadingTest(unittest.TestCase):
         for v in variables:
             v.assign(tf.zeros_like(v))
         trainer.checkpoint.read(str(self.directory/latest["checkpoint"]/"state")).assert_consumed()
-        for v, value in zip(variables,expected):
+        for v, value in zip(variables,expected, strict=True):
             np.testing.assert_array_equal(v.numpy(),value)
         trainer.step.assign_add(1)
         trainer.save(self.directory)
@@ -138,7 +137,7 @@ class CheckpointLoadingTest(unittest.TestCase):
             raise InspectedManifest
 
         for path in (self.directory, weights):
-            with self.subTest(path=path), mock.patch("temporal_benchmark_frozen.make_manifest", side_effect=inspect), \
+            with self.subTest(path=path), mock.patch("neural_rx.benchmark.frozen.make_manifest", side_effect=inspect), \
                     mock.patch.object(tf.config, "list_physical_devices", return_value=[]), \
                     mock.patch("sys.argv", ["smoke",
                                            "--candidate-checkpoint", str(path), "--prbs", "4"]), \

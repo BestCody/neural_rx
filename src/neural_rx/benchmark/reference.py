@@ -11,15 +11,15 @@ import tempfile
 
 import numpy as np
 
-from artifact_io import atomic_json, canonical_json, file_sha256
-from artifact_provenance import source_records
-from temporal_benchmark_adapters import ColdNeuralRxBenchmarkAdapter
-from temporal_benchmark_candidate import resolve_manifest_artifacts, validate_manifest
-from temporal_benchmark_episodes import CachedScenarioBank
-from temporal_benchmark_runtime import evaluate_method_set
-from temporal_generalization_protocol import seal_payload, verify_payload
+from neural_rx.provenance.artifacts import atomic_json, canonical_json, file_sha256
+from neural_rx.provenance.sources import source_records
+from neural_rx.benchmark.adapters import ColdNeuralRxBenchmarkAdapter
+from neural_rx.benchmark.candidate import resolve_manifest_artifacts, validate_manifest
+from neural_rx.benchmark.episodes import CachedScenarioBank
+from neural_rx.benchmark.runtime import evaluate_method_set
+from neural_rx.benchmark.generalization_protocol import seal_payload, verify_payload
 
-ROOT = Path(__file__).resolve().parent.parent
+from neural_rx.paths import ROOT
 
 
 def reference_runtime(tf):
@@ -55,7 +55,7 @@ def reference_binding(protocol, plan, identity, manifests, episode_hashes, runti
             "persistent_methods": [m for m in methods if m in protocol["execution"].get("persistent_methods", [])],
         },
         "runtime": runtime,
-        "sources": source_records(("scripts/temporal_benchmark_reference.py",), root),
+        "sources": source_records(("src/neural_rx/benchmark/reference.py",), root),
     }))
 
 

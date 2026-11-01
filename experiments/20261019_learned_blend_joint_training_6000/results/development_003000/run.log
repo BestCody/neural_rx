@@ -1,0 +1,14 @@
+2026-10-20 02:22:52.764644: E external/local_xla/xla/stream_executor/cuda/cuda_dnn.cc:9261] Unable to register cuDNN factory: Attempting to register factory for plugin cuDNN when one has already been registered
+2026-10-20 02:22:52.764696: E external/local_xla/xla/stream_executor/cuda/cuda_fft.cc:607] Unable to register cuFFT factory: Attempting to register factory for plugin cuFFT when one has already been registered
+2026-10-20 02:22:52.765555: E external/local_xla/xla/stream_executor/cuda/cuda_blas.cc:1515] Unable to register cuBLAS factory: Attempting to register factory for plugin cuBLAS when one has already been registered
+Evaluating the first 2 port sets.
+Loading DoubleTDL with low correlation.
+Evaluating the first 2 port sets.
+Loading DoubleTDL with low correlation.
+WARNING: All log messages before absl::InitializeLog() is called are written to STDERR
+I0000 00:00:1792462994.288954 1440175 device_compiler.h:186] Compiled cluster using XLA!  This line is logged at most once for the lifetime of the process.
+WARNING:tensorflow:Model's `__init__()` arguments contain non-serializable objects. Please implement a `get_config()` method in the subclassed Model for proper saving and loading. Defaulting to empty config.
+WARNING:tensorflow:Model's `__init__()` arguments contain non-serializable objects. Please implement a `get_config()` method in the subclassed Model for proper saving and loading. Defaulting to empty config.
+WARNING:tensorflow:Model's `__init__()` arguments contain non-serializable objects. Please implement a `get_config()` method in the subclassed Model for proper saving and loading. Defaulting to empty config.
+WARNING:tensorflow:Model's `__init__()` arguments contain non-serializable objects. Please implement a `get_config()` method in the subclassed Model for proper saving and loading. Defaulting to empty config.
+{"rates": {"candidate_persistent": [[0.08528645833333333], [0.09733072916666667], [0.17350260416666666], [0.166015625], [0.035481770833333336], [0.26329022988505746], [0.0947265625], [0.057291666666666664]], "frozen_cold_k8": [[0.14485677083333334], [0.17154947916666666], [0.1787109375], [0.15852864583333334], [0.0302734375], [0.2550287356321839], [0.1083984375], [0.0595703125]]}, "preflight": {"candidate_artifacts_unchanged": true, "candidate_deterministic_replay": true, "candidate_finite_outputs": true, "no_future_inputs": true, "persistent_and_reset_paired": true, "receiver_inputs_observable": true, "reset_state_is_empty": true, "frozen_reference_artifacts_unchanged": true, "frozen_reference_deterministic_replay": true, "frozen_reference_finite_outputs": true, "frozen_references_paired": true}}

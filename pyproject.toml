@@ -1,0 +1,56 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "neural-rx"
+version = "0.1.0"
+description = "Pilot-history neural receiver with temporal benchmark and training tools"
+readme = "README.md"
+requires-python = "==3.10.*"
+# Runtime dependencies are pinned in requirements.txt / requirements-lock.txt;
+# install those first, then install this project with --no-deps.
+dependencies = []
+
+[project.optional-dependencies]
+dev = ["pytest==8.3.5", "ruff==0.17.1"]
+
+[project.scripts]
+nrx-benchmark = "neural_rx.cli.benchmark:main"
+nrx-campaign = "neural_rx.cli.campaign:main"
+nrx-train = "neural_rx.cli.train:main"
+nrx-train-backbone = "neural_rx.cli.train_backbone:main"
+nrx-smoke = "neural_rx.benchmark.smoke:main"
+# nrx-export-rt runs in the separate Sionna RT environment; see docs/sionna_rt_evaluation.txt.
+nrx-export-rt = "neural_rx.rt.export:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+"neural_rx.receiver.native_ops" = ["*.cc"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+pythonpath = ["src", "tests"]
+addopts = "-p no:cacheprovider"
+
+[tool.ruff]
+target-version = "py310"
+line-length = 120
+extend-exclude = ["experiments", "datasets", "models", "results"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "B"]
+
+[tool.ruff.lint.per-file-ignores]
+# Audited: these closures capture loop variables but are always called, passed to
+# tf.cond, or traced by tf.function within the same iteration, so no stale binding.
+# Default-argument binding is avoided because it changes tf.function signatures.
+"src/neural_rx/receiver/decoder_correction.py" = ["B023"]
+"tests/test_memory_execution.py" = ["B023"]
+"tests/test_memory_receiver.py" = ["B023"]
+"tests/test_memory_training.py" = ["B023"]
+"tests/test_receiver_decoding.py" = ["B023"]
+"tests/test_temporal_benchmark_scoring.py" = ["B023"]

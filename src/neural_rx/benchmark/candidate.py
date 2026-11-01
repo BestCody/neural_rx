@@ -7,12 +7,13 @@ from typing import Any, Protocol, runtime_checkable
 
 import numpy as np
 
-from artifact_io import file_sha256
-from temporal_generalization_protocol import verify_payload
+from neural_rx.provenance.artifacts import file_sha256
+from neural_rx.benchmark.generalization_protocol import verify_payload
+from neural_rx.paths import ROOT
 
 
 def pretrained_checkpoint(config_name="nrx_large.cfg"):
-    root = Path(__file__).resolve().parent.parent
+    root = ROOT
     config = configparser.ConfigParser()
     with (root / "config" / config_name).open() as stream:
         config.read_file(stream)

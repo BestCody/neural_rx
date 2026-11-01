@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from temporal_benchmark_protocol import benchmark_method_names
+from neural_rx.benchmark.protocol import benchmark_method_names
 
 
 COMMON_ARRAYS = (

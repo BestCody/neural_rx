@@ -9,16 +9,16 @@ from unittest import mock
 import numpy as np
 import tensorflow as tf
 
-from pilot_history_receiver.pilot_history import MemoryPolicy, PilotHistory
-from pilot_history_receiver.training_execution import BatchedTrainingExecution, routing_plan, channel_nll
-from verification.pilot_history import ReferenceMemoryManager
+from neural_rx.receiver.pilot_history import MemoryPolicy, PilotHistory
+from neural_rx.receiver.training_execution import BatchedTrainingExecution, routing_plan, channel_nll
+from neural_rx.verification.pilot_history import ReferenceMemoryManager
 
 
 class TrainingRoutingTests(unittest.TestCase):
     def test_batched_renderer_preserves_per_tb_seeds_pilots_and_schedule(self):
-        from temporal_receiver_core import build_backbone
-        from temporal_training_data import TemporalTrainingDataGenerator
-        from pilot_history_receiver.training_render import TrainingRenderer
+        from neural_rx.backbone.core import build_backbone
+        from neural_rx.data.temporal import TemporalTrainingDataGenerator
+        from neural_rx.receiver.training_render import TrainingRenderer
         p, e2e = build_backbone('nrx_large.cfg', 2, True, n_size_bwp_override=4)
         generator = TemporalTrainingDataGenerator(p, e2e)
         length, lanes, users = 7, 2, generator.num_scheduled_tx
@@ -56,8 +56,8 @@ class TrainingRoutingTests(unittest.TestCase):
             np.testing.assert_array_equal(generator.tx.pilot_pattern.pilots, pilots_before)
 
     def test_channel_only_context_matches_receiver_context_for_all_training_families(self):
-        from utils import Parameters, E2E_Model
-        from pilot_history_receiver.training_data import TrainingEpisodes
+        from neural_rx.backbone import Parameters, E2E_Model
+        from neural_rx.receiver.training_data import TrainingEpisodes
         recipe = json.loads((Path(__file__).resolve().parents[1]/"config/memory_training.json").read_text())
         parameters = Parameters(recipe["radio_config"], training=True, n_size_bwp_override=4)
         model = E2E_Model(parameters, training=True)
@@ -66,7 +66,8 @@ class TrainingRoutingTests(unittest.TestCase):
         streams = {name: 1000+i for i, name in enumerate(("channel", "payload", "noise", "schedule"))}
         for family in ("tdl", "umi", "uma"):
             for changed in (False, True):
-                regime = np.zeros((1, 3, 4), bool); regime[:, 1:, 0] = changed
+                regime = np.zeros((1, 3, 4), bool)
+                regime[:, 1:, 0] = changed
                 outputs = []
                 for context in (full, channels):
                     generator = context._generator(4, family, 0)
@@ -79,7 +80,8 @@ class TrainingRoutingTests(unittest.TestCase):
         execution = BatchedTrainingExecution(trainer)
         packet = dict(y=np.zeros([2, 4, 1]), ls=np.zeros([2, 4, 1]), bits=np.zeros([2, 4, 1]),
                       ue_ids=np.tile([[[0, 1]]], [2, 4, 1]), active=np.ones([2, 4, 2]),
-                      coded=np.zeros([2, 4, 1]), channel_targets=np.zeros([2, 4, 1]), no=np.ones([2, 4]), metadata={"paired_suffix_tbs":2})
+                      coded=np.zeros([2, 4, 1]), channel_targets=np.zeros([2, 4, 1]), no=np.ones([2, 4]),
+                      metadata={"paired_suffix_tbs":2})
         with mock.patch.object(execution, "describe", return_value=tf.zeros([2, 4, 2, 6, 9])):
             _, _, den = execution.prepare([packet])
         self.assertEqual(den, 8.)
@@ -107,9 +109,10 @@ class TrainingRoutingTests(unittest.TestCase):
                     observed = tf.gather(bank, plan["indices"][lane:lane+1, t])
                     actual = PilotHistory(tf.where(valid[..., None, None], observed, 0.),
                         plan["age"][lane:lane+1, t], plan["ports"][lane:lane+1, t], valid)
-                    for a, b in zip(actual, expected):
+                    for a, b in zip(actual, expected, strict=True):
                         np.testing.assert_array_equal(a, b)
-                    state = manager.scatter(state, ids[lane:lane+1, t], written[lane:lane+1, t], active[lane:lane+1, t], times[lane, t])
+                    state = manager.scatter(state, ids[lane:lane+1, t], written[lane:lane+1, t], active[lane:lane+1, t],
+                                            times[lane, t])
                     for user in range(2):
                         used = plan["indices"][lane, t, user][plan["valid"][lane, t, user]]
                         self.assertTrue(np.all(used//2 < lane*20+t))
@@ -127,12 +130,13 @@ class TrainingRoutingTests(unittest.TestCase):
 class FullHistoryTrainingTests(unittest.TestCase):
     def test_chunked_gradients_match_sequential_reference_with_both_losses(self):
         from test_memory_receiver import build_model, inputs, activate_physical_path
-        from pilot_history_receiver.training import per_user_bce, per_user_payload_loss
+        from neural_rx.receiver.training import per_user_bce, per_user_payload_loss
         tf.keras.utils.set_random_seed(205)
         tf32 = tf.config.experimental.tensor_float_32_execution_enabled()
         self.addCleanup(tf.config.experimental.enable_tensor_float_32_execution, tf32)
         tf.config.experimental.enable_tensor_float_32_execution(False)
-        model = build_model(); activate_physical_path(model, inputs())
+        model = build_model()
+        activate_physical_path(model, inputs())
         model.blend_output.assign(tf.random.normal(model.blend_output.shape, stddev=.1))
         memory_variables, backbone_variables = model.optimization_variables()
         variables = memory_variables+backbone_variables
@@ -146,11 +150,15 @@ class FullHistoryTrainingTests(unittest.TestCase):
         positions = layout.code_positions
         def gather(grid):
             return tf.gather(tf.reshape(grid, [tf.shape(grid)[0], 2, -1, grid.shape[-1]]), positions, axis=2)
-        mapping = lambda grid: tf.reshape(gather(grid), [tf.shape(grid)[0], 2, -1])
+        def mapping(grid):
+            return tf.reshape(gather(grid), [tf.shape(grid)[0], 2, -1])
         coded_length = len(positions)*4
-        payload = lambda llr: llr[..., :coded_length//2]+.3*tf.tanh(llr[..., coded_length//2:])
-        to_blocks = lambda x: tf.reshape(x, [tf.shape(x)[0], 2, -1, 4])
-        from_blocks = lambda x: tf.reshape(x, [tf.shape(x)[0], 2, coded_length])
+        def payload(llr):
+            return llr[..., :coded_length//2]+.3*tf.tanh(llr[..., coded_length//2:])
+        def to_blocks(x):
+            return tf.reshape(x, [tf.shape(x)[0], 2, -1, 4])
+        def from_blocks(x):
+            return tf.reshape(x, [tf.shape(x)[0], 2, coded_length])
         decoder = SimpleNamespace(evidence=lambda x: (to_blocks(x), to_blocks(.3*tf.tanh(x)), x,
                                                       to_blocks(x+.3*tf.tanh(x))),
             finish=lambda x,state: SimpleNamespace(logits=payload(from_blocks(x))+.1*payload(state)),
@@ -165,11 +173,13 @@ class FullHistoryTrainingTests(unittest.TestCase):
         for length, lanes in ((6, 2), (3, 1)):
             ids = np.tile([[[0, 1]]], [lanes, length, 1]).astype(np.int32)
             ids[:, 1::2] = ids[:, 1::2, ::-1]
-            active = np.ones_like(ids, np.float32); active[:, 1:3, 0] = 0
+            active = np.ones_like(ids, np.float32)
+            active[:, 1:3, 0] = 0
             y = rng.normal(size=[lanes, length, 12, 4, 8]).astype(np.float32)
             ls = rng.normal(size=[lanes, length, 2, 12, 4, 8]).astype(np.float32)
             coded = rng.randint(2, size=[lanes, length, 2, coded_length]).astype(np.float32)
-            bits = coded[..., :coded_length//2].copy(); noise = np.full([lanes, length], .1, np.float32)
+            bits = coded[..., :coded_length//2].copy()
+            noise = np.full([lanes, length], .1, np.float32)
             if lanes == 2:
                 for value in (y, ls, bits, coded):
                     value[1, -2:] = value[0, -2:]
@@ -201,15 +211,17 @@ class FullHistoryTrainingTests(unittest.TestCase):
                         total += weight*tf.reduce_sum(active*loss)/(den*lanes)
                     state = manager.scatter(state, packet["ue_ids"][:, t], observation, active, t)
         expected = tape.gradient(total, variables, unconnected_gradients=tf.UnconnectedGradients.ZERO)
-        with mock.patch('pilot_history_receiver.training_execution.prepare_cgnn_inputs', prepare), \
-             mock.patch('pilot_history_receiver.training_execution.OneLayerGridCodeMap', return_value=SimpleNamespace(grid_to_coded=mapping, gather_stream_grid=gather, num_data_symbols=len(positions), bits_per_symbol=4)), \
-             mock.patch('pilot_history_receiver.training_execution.DecoderAssistedTB', return_value=decoder):
+        with mock.patch('neural_rx.receiver.training_execution.prepare_cgnn_inputs', prepare), \
+             mock.patch('neural_rx.receiver.training_execution.OneLayerGridCodeMap',
+                        return_value=SimpleNamespace(grid_to_coded=mapping, gather_stream_grid=gather,
+                                                     num_data_symbols=len(positions), bits_per_symbol=4)), \
+             mock.patch('neural_rx.receiver.training_execution.DecoderAssistedTB', return_value=decoder):
             for batch in (1, 4, 16):
                 execution = BatchedTrainingExecution(trainer, batch)
                 actual, metrics, fingerprints, used_den = execution.run(1, packets)
                 self.assertEqual(used_den, den)
                 np.testing.assert_allclose(metrics[0], total, rtol=1e-5, atol=2e-6)
-                for a, b in zip(actual, expected):
+                for a, b in zip(actual, expected, strict=True):
                     np.testing.assert_allclose(a, b, rtol=3e-3, atol=3e-6)
                 self.assertGreater(metrics[8], 0.)
 

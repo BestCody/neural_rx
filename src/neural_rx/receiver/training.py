@@ -11,10 +11,10 @@ from pathlib import Path
 import numpy as np
 import tensorflow as tf
 
-from temporal_receiver_core import build_backbone, prepare_cgnn_inputs
-from temporal_benchmark_scoring import block_error_rate
-from artifact_io import atomic_json, file_sha256, sync_directory, validate_checkpoint_files
-from artifact_provenance import normalize_training_recipe, training_source_records, validate_training_binding
+from neural_rx.backbone.core import build_backbone, prepare_cgnn_inputs
+from neural_rx.benchmark.scoring import block_error_rate
+from neural_rx.provenance.artifacts import atomic_json, file_sha256, sync_directory, validate_checkpoint_files
+from neural_rx.provenance.sources import normalize_training_recipe, training_source_records, validate_training_binding
 from .pilot_history import MemoryPolicy
 from .pilot_layout import PilotLayout
 from .model import PilotHistoryReceiver, architecture_settings
@@ -23,7 +23,7 @@ from .training_execution import BatchedTrainingExecution
 from .training_options import DEFAULT_DETECTOR_BATCH_TBS, DEFAULT_DESCRIPTOR_CHUNK_TBS
 
 
-ROOT = Path(__file__).resolve().parents[2]
+from neural_rx.paths import ROOT
 
 
 def recipe_hash(recipe):
@@ -137,7 +137,7 @@ class MemoryTrainer(TrainingModel):
     def apply(self, gradients, learning_rate):
         clipped, norm = tf.clip_by_global_norm(gradients, self.recipe["gradient_clip_norm"])
         self.optimizer.learning_rate.assign(learning_rate)
-        self.optimizer.apply_gradients(zip(clipped, self.optimization_variables))
+        self.optimizer.apply_gradients(zip(clipped, self.optimization_variables, strict=True))
         self.step.assign_add(1)
         return norm
 
@@ -227,7 +227,7 @@ class MemoryTrainer(TrainingModel):
             for indices, values in ((local, local_fingerprints), (remote, result["fingerprints"])):
                 if len(indices) != len(values):
                     raise ValueError("Learner shard lost an episode fingerprint")
-                for index, value in zip(indices, values):
+                for index, value in zip(indices, values, strict=True):
                     fingerprints[index] = value
         if apply:
             self.apply(accumulated, tf.constant(learning_rate, tf.float32))
@@ -253,7 +253,7 @@ class MemoryTrainer(TrainingModel):
     @tf.function(reduce_retracing=True)
     def merge_gradients(self, local, local_metrics, remote, remote_metrics, local_weight):
         sizes = [int(np.prod(v.shape)) for v in self.optimization_variables]
-        gradients = tuple(a+tf.reshape(b, a.shape) for a, b in zip(local, tf.split(remote, sizes)))
+        gradients = tuple(a+tf.reshape(b, a.shape) for a, b in zip(local, tf.split(remote, sizes), strict=True))
         for gradient in gradients:
             tf.debugging.assert_all_finite(gradient, "Nonfinite combined training gradient")
         norm = tf.linalg.global_norm(gradients)

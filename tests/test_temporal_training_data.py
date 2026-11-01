@@ -6,7 +6,7 @@ import unittest
 
 import numpy as np
 
-from temporal_training_data import TemporalTrainingDataGenerator
+from neural_rx.data.temporal import TemporalTrainingDataGenerator
 
 
 def make_scheduler(seed: int):

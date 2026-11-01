@@ -32,7 +32,7 @@ def _worker(connection, recipe, seed, gpu, batch_tbs, descriptor_tbs, memory_mib
 
         @tf.function(input_signature=[tf.TensorSpec([sum(sizes)], tf.float32)])
         def assign(flat):
-            for variable, value in zip(variables, tf.split(flat, sizes)):
+            for variable, value in zip(variables, tf.split(flat, sizes), strict=True):
                 variable.assign(tf.reshape(value, variable.shape))
 
         @tf.function(reduce_retracing=True)
@@ -81,7 +81,8 @@ class GradientReplica:
             self.process.start()
             child.close()
             result = self._receive()
-            if result["kind"] != "ready" or result["shapes"] != [tuple(v.shape) for v in trainer.optimization_variables]:
+            if (result["kind"] != "ready"
+                    or result["shapes"] != [tuple(v.shape) for v in trainer.optimization_variables]):
                 raise ValueError("Learner replica has a different parameter layout")
         except BaseException:
             self.close()

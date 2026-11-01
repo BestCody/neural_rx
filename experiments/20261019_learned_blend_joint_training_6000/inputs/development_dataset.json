@@ -1,0 +1,35 @@
+{
+  "identity": {
+    "packages": {
+      "numpy": "1.26.4",
+      "sionna": "0.18.0",
+      "tensorflow": "2.15.1"
+    },
+    "radio": {
+      "advancing_slot_pilots": true,
+      "bits_per_symbol": 4,
+      "maximum_active_ues": 2,
+      "mcs_index": 14,
+      "n_size_bwp": 132,
+      "noise_axis": "ebno_db",
+      "receive_antennas": 4
+    },
+    "schema": "temporal_benchmark_episode_v2",
+    "sources": {
+      "config/nrx_large.cfg": "9cd550576d8fd7fb643164a1a4f078c91929cb62977e7aaffef0ecf8c15c36e6",
+      "scripts/geometry_mumimo_data.py": "764b6940ef2c8bcb1525cbb341bc3add4ee0410873bb7263e37d52e07d0878a7",
+      "scripts/temporal_benchmark_scenarios.py": "1737b4c57f62aaa4bb33909bce93aa42a94c8bc0d3d0793081cc91345e249f28",
+      "scripts/temporal_generalization_protocol.py": "0fa25713ea54e2497de7c45b86fa0c75d597d1a511c59f69cd7073c76d651cb5",
+      "scripts/temporal_receiver_core.py": "e435b483159822d8a3cca25eb7093697db5cb5b65e96648fefe03c7358380e01",
+      "scripts/temporal_training_data.py": "14796931025e1ade60534422178ed95582b6c1658b7a57c238aeb296e7039ab0",
+      "utils/__init__.py": "3de504ecd4e7eeddb7e7e5e8418a4359af7eac48229b46650235204745f7b1fa",
+      "utils/channel_models.py": "4352cef58f873573622503c7d84d8dba77795f23dea0a2d5834d433e5423203d",
+      "utils/e2e_model.py": "bbfcbeceadd8d744e3c06e07a50d8522a4a0b2d81787b884ed4f060e5839907c",
+      "utils/neural_rx.py": "0f9760faa0cb13fa79b3081162e8c6f23e2b2dd31226af3d26c5e9b18a2e4f74",
+      "utils/parameters.py": "896e8cf0918e94270a399de6eca4ea4cdb845edd3e8ff03b3193dfc19e230e40",
+      "utils/utils.py": "5fb8f1e95fa5b021aaf46c1869d799bee72cbb4167fd05efb9b4443197937a22"
+    }
+  },
+  "purpose": "Fixed development bank retained from the parent campaign; no confirmation episodes.",
+  "manifest_sha256": "31f31e573b677daebd8dcc72afb2e9c6c5824930511ea25657f02c640ff9b8bd"
+}

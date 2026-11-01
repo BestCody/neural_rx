@@ -8,8 +8,9 @@ from pathlib import Path
 import numpy as np
 import tensorflow as tf
 
-from utils import E2E_Model, Parameters, load_weights
-from artifact_io import file_sha256
+from neural_rx.backbone import E2E_Model, Parameters, load_weights
+from neural_rx.provenance.artifacts import file_sha256
+from neural_rx.paths import ROOT
 
 
 def model_checksum(model) -> str:
@@ -37,7 +38,7 @@ def build_backbone(
         num_tx_eval=num_tx_eval,
         n_size_bwp_override=n_size_bwp_override,
     )
-    root = Path(__file__).resolve().parent.parent
+    root = ROOT
     checkpoint = (root / "models/pretrained" / f"{parameters.label}_weights" if checkpoint is None
                   else Path(checkpoint).expanduser().resolve())
     if checkpoint_sha256 is not None and file_sha256(checkpoint) != checkpoint_sha256:

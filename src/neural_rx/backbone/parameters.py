@@ -18,6 +18,7 @@ from sionna.channel.tr38901 import PanelArray, UMi
 from sionna.mimo import StreamManagement
 from sionna.channel import OFDMChannel
 from .channel_models import DoubleTDLChannel
+from neural_rx.paths import ROOT
 
 class Parameters:
     def __init__(self, config_name, training=False,
@@ -28,7 +29,7 @@ class Parameters:
         assert isinstance(training, bool), "training must be bool."
         assert isinstance(config_name, str), "config_name must be str."
 
-        fn = Path(__file__).resolve().parent.parent / "config" / Path(config_name).name
+        fn = ROOT / "config" / Path(config_name).name
         if fn.exists():
             config = configparser.RawConfigParser()
             config.read(str(fn))

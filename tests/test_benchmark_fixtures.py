@@ -1,6 +1,6 @@
 import numpy as np
 
-from temporal_benchmark_runtime import BenchmarkEpisode
+from neural_rx.benchmark.runtime import BenchmarkEpisode
 
 
 class ZeroAdapter:
@@ -84,8 +84,8 @@ class SyntheticScenarioBank:
 
 
 def synthetic_candidate_manifest(protocol):
-    from temporal_benchmark_frozen import make_manifest
-    from temporal_generalization_protocol import seal_payload
+    from neural_rx.benchmark.frozen import make_manifest
+    from neural_rx.benchmark.generalization_protocol import seal_payload
     manifest = make_manifest(protocol, "frozen_cold_k2")[0]
     manifest["role"] = "candidate"
     manifest["inference"]["persistent_memory"] = True

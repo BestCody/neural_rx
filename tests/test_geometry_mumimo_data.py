@@ -8,12 +8,12 @@ from unittest.mock import patch
 import numpy as np
 import tensorflow as tf
 
-from geometry_mumimo_data import (
+from neural_rx.data.geometry import (
     GeometryAwareMUMIMOGenerator,
     azimuth_geometry,
 )
-from verification.radio import exact_contributions, received_to_grid
-from utils import E2E_Model, Parameters
+from neural_rx.verification.radio import exact_contributions, received_to_grid
+from neural_rx.backbone import E2E_Model, Parameters
 
 
 def seeds(base):
@@ -211,7 +211,7 @@ class GeometryMUMIMODataTest(unittest.TestCase):
         streams = seeds(35_700_000)
         generator = self.make_generator(35_700_000, min_doppler_hz=0.0, max_doppler_hz=100.0)
         batch = generator.sample_batch(1,3,4.0,include_ls=True)
-        from pilot_history_receiver.training_render import TrainingRenderer
+        from neural_rx.receiver.training_render import TrainingRenderer
         rendered = TrainingRenderer(generator)(batch["h"],batch["active"],batch["ue_ids"],
             batch["slot_number"],batch["ebno_db"],streams["payload"],streams["noise"])
         np.testing.assert_array_equal(batch["bits"],rendered["bits"])

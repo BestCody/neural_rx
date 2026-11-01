@@ -6,8 +6,8 @@ import json
 import numpy as np
 import tensorflow as tf
 
-from temporal_receiver_core import prepare_cgnn_inputs
-from receiver_decoding import OneLayerGridCodeMap, DecoderAssistedTB
+from neural_rx.backbone.core import prepare_cgnn_inputs
+from neural_rx.decoding import OneLayerGridCodeMap, DecoderAssistedTB
 from .training_options import DEFAULT_DETECTOR_BATCH_TBS, DEFAULT_DESCRIPTOR_CHUNK_TBS
 from .pilot_history import PilotHistory
 
@@ -25,7 +25,8 @@ def routing_plan(ids, active, capacity, expiry, history_tbs, times=None):
     if type(history_tbs) is not int or history_tbs < 1:
         raise ValueError("History length must be a positive integer")
     times = np.broadcast_to(np.arange(length, dtype=np.int32), (batch, length)) if times is None else np.asarray(times)
-    if times.shape != (batch, length) or not np.issubdtype(times.dtype, np.integer) or np.any(times < 0) or np.any(times >= np.iinfo(np.int32).max) or np.any(np.diff(times, axis=1) <= 0):
+    if (times.shape != (batch, length) or not np.issubdtype(times.dtype, np.integer) or np.any(times < 0)
+            or np.any(times >= np.iinfo(np.int32).max) or np.any(np.diff(times, axis=1) <= 0)):
         raise ValueError("Record timestamps must increase within each episode")
     shape = (batch, length, users, history_tbs)
     indices, age, ports = (np.zeros(shape, np.int32) for _ in range(3))
@@ -131,7 +132,8 @@ class BatchedTrainingExecution:
                 raise ValueError("Each base episode needs one history or a paired history")
             if not np.all(ids == ids[:1]) or not np.all(active == active[:1]):
                 raise ValueError("Paired histories must use identical schedules")
-            if "time_index" in packet and not np.all(np.asarray(packet["time_index"]) == np.asarray(packet["time_index"])[:1]):
+            if "time_index" in packet and not np.all(
+                    np.asarray(packet["time_index"]) == np.asarray(packet["time_index"])[:1]):
                 raise ValueError("Paired histories must use identical timestamps")
             for key in TARGETS:
                 if tuple(packet[key].shape[:2]) != tuple(ids.shape[:2]):
@@ -186,9 +188,10 @@ class BatchedTrainingExecution:
                 both_inputs = [value if i == 1 else tf.concat([value, value], 0)
                                for i, value in enumerate(inputs)]
                 reset = model.empty_history(observation)
-                both_history = PilotHistory(*(tf.concat([a, b], 0) for a, b in zip(history, reset)))
+                both_history = PilotHistory(*(tf.concat([a, b], 0) for a, b in zip(history, reset, strict=True)))
                 output, llr, corrected, posterior, _, estimate = model.decode(both_inputs, tf.concat([noise, noise], 0),
-                    tf.concat([ue_ids, ue_ids], 0), both_history, decoder, mapping, tf.concat([observation, observation], 0))
+                    tf.concat([ue_ids, ue_ids], 0), both_history, decoder, mapping,
+                    tf.concat([observation, observation], 0))
                 labels = tf.concat([coded, coded], 0)
                 coded_losses = tf.split((per_user_bce(labels, llr)+per_user_bce(labels, posterior)
                                          +per_user_bce(labels, corrected))/3., 2, axis=0)
@@ -204,7 +207,7 @@ class BatchedTrainingExecution:
             grads = tape.gradient(loss, variables,
                                   unconnected_gradients=tf.UnconnectedGradients.ZERO)
             tf.debugging.assert_all_finite(loss, "Nonfinite joint training loss")
-            accumulated = tuple(a+g for a, g in zip(accumulated, grads))
+            accumulated = tuple(a+g for a, g in zip(accumulated, grads, strict=True))
             return accumulated, totals+tf.stack([loss, pc, pp, rc, rp, ph, rh])
 
         self.gradient_functions[width] = gradients

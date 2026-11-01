@@ -6,7 +6,7 @@ import json
 import os
 from pathlib import Path
 import re
-from artifact_io import atomic_json, validate_checkpoint_files
+from neural_rx.provenance.artifacts import atomic_json, validate_checkpoint_files
 
 
 def recover_latest(output, *, lock_held=False):

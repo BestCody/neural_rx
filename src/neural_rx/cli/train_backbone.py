@@ -15,10 +15,9 @@ import argparse
 import fcntl
 import os
 from pathlib import Path
-import sys
 
 
-ROOT = Path(__file__).resolve().parent.parent
+from neural_rx.paths import ROOT
 
 
 def training_paths(label, output_dir, initial_weights=None):
@@ -51,8 +50,7 @@ def main():
     tf.get_logger().setLevel('ERROR')
     for gpu in tf.config.list_physical_devices('GPU'):
         tf.config.experimental.set_memory_growth(gpu, True)
-    sys.path.insert(0, str(ROOT))
-    from utils import E2E_Model, training_loop, Parameters, load_weights
+    from neural_rx.backbone import E2E_Model, training_loop, Parameters, load_weights
     parameters = Parameters(args.config_name, training=True)
     label = str(parameters.label)
     initial, destination = training_paths(label, args.output_dir, args.initial_weights)

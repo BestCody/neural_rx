@@ -10,4 +10,6 @@
 
 from .e2e_model import E2E_Model
 from .parameters import Parameters
-from .utils import load_weights, training_loop
+from .training import load_weights, training_loop
+
+__all__ = ["E2E_Model", "Parameters", "load_weights", "training_loop"]

@@ -6,40 +6,28 @@ from pathlib import Path
 
 import numpy as np
 
-from temporal_benchmark_candidate import (artifact_record,
+from neural_rx.benchmark.candidate import (artifact_record,
                                          pretrained_checkpoint, resolve_manifest_artifacts, validate_manifest)
-from temporal_benchmark_protocol import load_benchmark_protocol, resolved_condition_settings
-from temporal_benchmark_io import DECODED_LATENCY_DEFINITION
-from temporal_benchmark_scoring import crc_diagnostics, pooled_tbler, TBLER_DEFINITION
-from temporal_generalization_protocol import seal_payload, verify_payload
-from artifact_provenance import evaluation_source_records, validate_evaluation_sources
-from artifact_io import atomic_json, file_sha256, validate_checkpoint_files
+from neural_rx.benchmark.protocol import load_benchmark_protocol, resolved_condition_settings
+from neural_rx.benchmark.arrays import DECODED_LATENCY_DEFINITION
+from neural_rx.benchmark.scoring import crc_diagnostics, pooled_tbler, TBLER_DEFINITION
+from neural_rx.benchmark.generalization_protocol import seal_payload, verify_payload
+from neural_rx.provenance.sources import evaluation_source_records, validate_evaluation_sources
+from neural_rx.provenance.artifacts import atomic_json, file_sha256, validate_checkpoint_files
 
-ROOT = Path(__file__).resolve().parent.parent
+from neural_rx.paths import ROOT
 FROZEN = ("frozen_cold_k8", "frozen_cold_k2")
+DEFAULT_PROTOCOL = ROOT/"config/temporal_benchmark_v2.json"
 
 
 
-def protocol_and_plan(phase, width, episodes=None, anchors=None, rt_bank=None):
+def protocol_and_plan(phase, width, episodes=None, anchors=None, protocol_path=DEFAULT_PROTOCOL):
     if width != 132 and phase != "smoke":
         raise ValueError("Full experiments require the declared 132-PRB deployment")
-    protocol = copy.deepcopy(load_benchmark_protocol(ROOT/"config/temporal_benchmark_v1.json"))
+    protocol = copy.deepcopy(load_benchmark_protocol(protocol_path))
     protocol["protocol"] = "pretrained_nrx_experiment_v1"
     protocol["radio"]["n_size_bwp"] = width
     phase_settings = protocol["evaluation_phases"][phase]
-    if rt_bank is not None:
-        if phase in ("calibration", "development", "confirmation") and rt_bank.config["split"] != phase:
-            raise ValueError("The RT channel split does not match the evaluation phase")
-        name = rt_bank.config["name"]
-        protocol["conditions"] = {name: dict(provider="ray_traced", receiver_inputs=[],
-            channel_bank_sha256=rt_bank.sha256, ue_pool_size=len(rt_bank.config["users"]))}
-        for key in ("condition_order", "core_conditions", "stationary_conditions", "development_conditions"):
-            protocol[key] = [name]
-        protocol["report_conditions"], protocol["stress_conditions"] = [], []
-        protocol["execution"]["latency"]["condition"] = name
-        if len(rt_bank.config["users"]) < protocol["radio"]["maximum_active_ues"]:
-            raise ValueError("The channel bank has fewer UEs than the declared active receiver configuration")
-        protocol["rt_channel_bank"] = rt_bank.manifest
     if phase in ("smoke", "latency"):
         conditions = [protocol["execution"]["latency"]["condition"]]
     elif phase == "development":
@@ -52,21 +40,25 @@ def protocol_and_plan(phase, width, episodes=None, anchors=None, rt_bank=None):
     count = episodes if episodes is not None else phase_settings["episodes"]
     if count < 1:
         raise ValueError("Episode count must be positive")
-    if rt_bank is not None and count > len(rt_bank.records):
-        raise ValueError("Export more RT episodes or request fewer evaluation episodes")
+    for name in conditions:
+        condition = protocol["conditions"][name]
+        if condition["provider"] == "ray_traced":
+            condition["channel_bank_sha256"] = condition["channel_banks"][phase]["sha256"]
     refs = ["frozen_cold_k8"]
     candidates = ["candidate_persistent"] if phase == "development" else ["candidate_persistent", "candidate_reset"]
     execution = protocol["execution"]
     execution.update(candidate_methods=candidates, accuracy_reference_methods=refs,
                      latency_only_reference_methods=["frozen_cold_k3"],
                      persistent_methods=["candidate_persistent"],
-                     accuracy_episode_batch_size=1 if phase in ("smoke", "latency") else execution["accuracy_episode_batch_size"])
+                     accuracy_episode_batch_size=(1 if phase in ("smoke", "latency")
+                                                  else execution["accuracy_episode_batch_size"]))
     protocol["methods"] = candidates + refs + ["frozen_cold_k3"]
     protocol["training"] = {"reference_policy": "frozen_no_additional_training", "selection_data": "development_only"}
     first = phase_settings["scoring_start_tb"]
     protocol["stages"] = {"development": dict(num_tbs=tbs, episodes_per_condition=count,
         condition_names=conditions, scoring_window=[first,tbs],
-        snr_points=[f"point_{i}" for i in range(len(phase_settings["snr_db"]))] if phase == "calibration" else ["anchor"])}
+        snr_points=([f"point_{i}" for i in range(len(phase_settings["snr_db"]))] if phase == "calibration"
+                    else ["anchor"]))}
     protocol["calibration"] = dict(baseline="frozen_cold_k8", additional_training_updates=0, target_tbler=.1)
     protocol["experiment"] = {"phase": phase, "scoring_start_tb": first,
                                "latency_definition": DECODED_LATENCY_DEFINITION}
@@ -91,6 +83,29 @@ def protocol_and_plan(phase, width, episodes=None, anchors=None, rt_bank=None):
     names = [f"point_{i}" for i in range(len(jobs[0]["snr_db"]))] if phase == "calibration" else ["anchor"]
     return protocol, {"stage": "development", "jobs": jobs, "episodes_per_condition": count,
                       "snr_point_names": names, "protocol_sha256": protocol["protocol_sha256"]}
+
+
+def load_ray_traced_banks(protocol, plan):
+    from neural_rx.rt.bank import RTChannelBank
+    phase = protocol["experiment"]["phase"]
+    banks = {}
+    for job in plan["jobs"]:
+        if job["provider"] != "ray_traced":
+            continue
+        settings = job["provider_settings"]
+        bank = RTChannelBank(ROOT/settings["channel_banks"][phase]["path"])
+        if bank.sha256 != settings["channel_bank_sha256"]:
+            raise ValueError("The exported ray-traced paths differ from the declared channel bank")
+        if bank.config["split"] != phase:
+            raise ValueError("The RT channel split does not match the evaluation phase")
+        if len(bank.config["users"]) != settings["ue_pool_size"]:
+            raise ValueError("The channel bank UE count differs from the declared condition")
+        if len(bank.config["users"]) < protocol["radio"]["maximum_active_ues"]:
+            raise ValueError("The channel bank has fewer UEs than the declared active receiver configuration")
+        if job["episode_count"] > len(bank.records):
+            raise ValueError("Export more RT episodes or request fewer evaluation episodes")
+        banks[bank.sha256] = bank
+    return banks
 
 
 def load_receiver_checkpoint_export(checkpoint):
@@ -133,9 +148,10 @@ def make_manifest(protocol, role, checkpoint=None):
     manifest = seal_payload({"manifest": "temporal_benchmark_frozen_v2", "schema_version": 2,
         "role": role, "radio": protocol["radio"], "training": training, "inference": inference,
         "benchmark_protocol_sha256": protocol["protocol_sha256"],
-        "checkpoints": [dict(records[0], training_seed=seed)], "support_artifacts": records[1:]}, field="manifest_sha256")
+        "checkpoints": [dict(records[0], training_seed=seed)], "support_artifacts": records[1:]},
+        field="manifest_sha256")
     validate_manifest(manifest, protocol)
-    return manifest, {r["sha256"]: str(p) for r,p in zip(records,paths)}, seed
+    return manifest, {r["sha256"]: str(p) for r,p in zip(records,paths, strict=True)}, seed
 
 
 def verified_result(directory):
@@ -162,10 +178,10 @@ def verified_result(directory):
 
 
 def make_benchmark_adapter(*, manifest, artifact_map, **kwargs):
-    from temporal_benchmark_adapters import ColdNeuralRxBenchmarkAdapter
+    from neural_rx.benchmark.adapters import ColdNeuralRxBenchmarkAdapter
 
     if manifest["role"] == "candidate":
-        from pilot_history_receiver.benchmark_adapter import PilotHistoryBenchmarkAdapter
+        from neural_rx.receiver.benchmark_adapter import PilotHistoryBenchmarkAdapter
 
         adapter = PilotHistoryBenchmarkAdapter
     else:
@@ -181,7 +197,7 @@ def rates(arrays, methods, first):
 
 
 def development_report(arrays, methods, protocol):
-    from temporal_benchmark_scoring import paired_summary, method_summary, late_drift_summary, adaptation_summary
+    from neural_rx.benchmark.scoring import paired_summary, method_summary, late_drift_summary, adaptation_summary
     runs = [arrays]
     rng = np.random.RandomState(protocol["statistics"]["bootstrap_seed"])
     draws = int(protocol["statistics"]["bootstrap_samples"])
@@ -201,12 +217,14 @@ def development_report(arrays, methods, protocol):
         adaptation=adaptation_summary(runs,protocol,"development",reference="frozen_cold_k8"),
         cold_k8_accuracy_target_met=bool(beats_k8), memory_benefit_demonstrated=memory_benefit,
         accuracy_criteria_met=bool(beats_k8 and memory_benefit) if memory_benefit is not None else None,
-        eligibility_scope=f"{protocol['experiment']['phase']} evidence at one training seed; final accuracy requires improvement over frozen Cold K8 and the same weights reset; trained-weight latency remains required")
+        eligibility_scope=(f"{protocol['experiment']['phase']} evidence at one training seed; "
+                           "final accuracy requires improvement over frozen Cold K8 and the same weights reset; "
+                           "trained-weight latency remains required"))
 
 
 def calibrate_reference(arrays, protocol, plan, provider, output, reference_cache, tf):
-    from temporal_benchmark_reference import evaluate_frozen_references
-    from temporal_benchmark_plan import calibrate_condition
+    from neural_rx.benchmark.reference import evaluate_frozen_references
+    from neural_rx.benchmark.plan import calibrate_condition
 
     first = protocol["experiment"]["scoring_start_tb"] - 1
     lower, upper = protocol["evaluation_phases"]["calibration"]["snr_bounds_db"]
@@ -266,21 +284,18 @@ def calibrate_reference(arrays, protocol, plan, provider, output, reference_cach
 def run_experiment(args):
     import tensorflow as tf
     import sionna as sn
-    from temporal_benchmark_episodes import CachedScenarioBank, scenario_identity
-    from temporal_benchmark_scenarios import TemporalBenchmarkScenarioBank
-    from temporal_benchmark_runtime import evaluate_method_set, _measure_latency
-    from temporal_benchmark_reference import evaluate_frozen_references
-    from utils import E2E_Model, Parameters
+    from neural_rx.benchmark.episodes import (CachedScenarioBank, RoutedScenarioBank, ray_traced_identity,
+                                             scenario_identity)
+    from neural_rx.benchmark.scenarios import TemporalBenchmarkScenarioBank
+    from neural_rx.benchmark.runtime import evaluate_method_set, _measure_latency
+    from neural_rx.benchmark.reference import evaluate_frozen_references
+    from neural_rx.backbone import E2E_Model, Parameters
     for gpu in tf.config.list_physical_devices("GPU"):
         tf.config.experimental.set_memory_growth(gpu, True)
     tf.config.experimental.enable_op_determinism()
     tf.keras.utils.set_random_seed(20260930)
     sn.config.seed = 20260930
     phase, width = args.experiment_phase, args.experiment_prbs
-    rt_bank = None
-    if getattr(args, "rt_channel_bank", None) is not None:
-        from rt_channel_bank import RTChannelBank
-        rt_bank = RTChannelBank(args.rt_channel_bank)
     anchors = None
     if phase in ("development", "confirmation"):
         if args.experiment_anchors is None:
@@ -291,7 +306,8 @@ def run_experiment(args):
             raise ValueError("Calibration reference differs")
         anchors = artifact["conditions"]
     protocol, plan = protocol_and_plan(phase, width, args.experiment_episodes, anchors,
-                                     rt_bank=rt_bank)
+                                     protocol_path=args.benchmark_protocol)
+    rt_banks = load_ray_traced_banks(protocol, plan)
     if anchors is not None:
         unbracketed = [job["condition"] for job in plan["jobs"]
                        if not anchors[job["condition"]].get("target_bracketed", False)]
@@ -302,16 +318,24 @@ def run_experiment(args):
     output.mkdir(parents=True, exist_ok=True)
     p = Parameters("nrx_large.cfg", training=False, num_tx_eval=2, n_size_bwp_override=width)
     e2e = E2E_Model(p, training=False, mcs_arr_eval_idx=0)
-    provider = CachedScenarioBank(TemporalBenchmarkScenarioBank(p, e2e, tf, rt_bank=rt_bank), args.episode_cache, protocol,
+    scenarios = TemporalBenchmarkScenarioBank(p, e2e, tf, rt_banks=rt_banks)
+    provider = CachedScenarioBank(scenarios, args.episode_cache, protocol,
                                   identity, readonly=args.episode_cache_readonly)
+    if rt_banks:
+        provider = RoutedScenarioBank(provider, CachedScenarioBank(
+            scenarios, args.rt_episode_cache, protocol,
+            dict(identity, ray_traced=ray_traced_identity(rt_banks.values()))))
     identity = provider.identity
     if phase in ("development", "confirmation"):
         if artifact["source_identity"]["radio"] != identity["radio"]:
             raise ValueError("Calibration radio configuration differs")
-        if artifact["source_identity"].get("rt_scenario_sha256") != identity.get("rt_scenario_sha256"):
-            raise ValueError("Calibration ray-traced scenario differs")
-        if rt_bank is not None and artifact["source_identity"]["rt_channel_seed"] == identity["rt_channel_seed"]:
-            raise ValueError("Calibration and accuracy require independently seeded RT channel banks")
+        calibrated = artifact["source_identity"].get("ray_traced", {}).get("banks", {}).values()
+        for bank in identity.get("ray_traced", {}).get("banks", {}).values():
+            matches = [b for b in calibrated if b["scenario_sha256"] == bank["scenario_sha256"]]
+            if not matches:
+                raise ValueError("Calibration ray-traced scenario differs")
+            if any(b["seed"] == bank["seed"] for b in matches):
+                raise ValueError("Calibration and accuracy require independently seeded RT channel banks")
         protocol["calibration"]["source_manifest_sha256"] = artifact["manifest_sha256"]
         protocol = seal_payload(protocol, field="protocol_sha256")
         plan["protocol_sha256"] = protocol["protocol_sha256"]
@@ -366,7 +390,8 @@ def run_experiment(args):
         checks.update(preflight)
     np.savez_compressed(output/"errors.npz", **all_arrays)
     scored = rates(all_arrays, tuple(m for group in groups for m in group), protocol["experiment"]["scoring_start_tb"])
-    result = {"phase": phase, "rates": scored, "tbler_definition": TBLER_DEFINITION, "preflight": checks, "manifests": manifests,
+    result = {"phase": phase, "rates": scored, "tbler_definition": TBLER_DEFINITION,
+              "preflight": checks, "manifests": manifests,
               "protocol_sha256": protocol["protocol_sha256"], "episode_identity": identity,
               "checkpoint": str(args.experiment_checkpoint.resolve()) if args.experiment_checkpoint else None,
               "receiver": "pilot-history-memory", "scoring_start_tb": protocol["experiment"]["scoring_start_tb"]}
@@ -382,7 +407,8 @@ def run_experiment(args):
         result["calibration_extension_sha256"] = extension_hashes
         result["unbracketed_conditions"] = [name for name, values in conditions.items()
                                              if not values["target_bracketed"]]
-        artifact = seal_payload({"conditions": conditions, "tbler_definition": TBLER_DEFINITION, "prbs": width, "source_identity": identity,
+        artifact = seal_payload({"conditions": conditions, "tbler_definition": TBLER_DEFINITION, "prbs": width,
+                                 "source_identity": identity,
                                  "teacher_sha256": manifests["frozen_cold_k8"]["checkpoints"][0]["sha256"],
                                  "runtime_sources": protocol["runtime_sources"]}, field="manifest_sha256")
         atomic_json(output/"anchors.json", artifact)

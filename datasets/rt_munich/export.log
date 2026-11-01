@@ -1,0 +1,46 @@
+{"exported_episode": 1, "path_slots": 48}
+{"exported_episode": 2, "path_slots": 48}
+{"exported_episode": 3, "path_slots": 48}
+{"exported_episode": 4, "path_slots": 48}
+{"exported_episode": 5, "path_slots": 48}
+{"exported_episode": 6, "path_slots": 48}
+{"exported_episode": 7, "path_slots": 48}
+{"exported_episode": 8, "path_slots": 48}
+{"channel_bank": "/home/h3lou/neural_rx/datasets/rt_munich/calibration", "bank_sha256": "598636d11b2a5b1c38983f2c6bef68f4e3824619f78273006f6fb8f036173e6b"}
+{"exported_episode": 1, "path_slots": 48}
+{"exported_episode": 2, "path_slots": 48}
+{"exported_episode": 3, "path_slots": 48}
+{"exported_episode": 4, "path_slots": 48}
+{"exported_episode": 5, "path_slots": 48}
+{"exported_episode": 6, "path_slots": 48}
+{"exported_episode": 7, "path_slots": 48}
+{"exported_episode": 8, "path_slots": 48}
+{"exported_episode": 9, "path_slots": 48}
+{"exported_episode": 10, "path_slots": 48}
+{"exported_episode": 11, "path_slots": 48}
+{"exported_episode": 12, "path_slots": 48}
+{"exported_episode": 13, "path_slots": 48}
+{"exported_episode": 14, "path_slots": 48}
+{"exported_episode": 15, "path_slots": 48}
+{"exported_episode": 16, "path_slots": 48}
+{"exported_episode": 17, "path_slots": 48}
+{"exported_episode": 18, "path_slots": 48}
+{"exported_episode": 19, "path_slots": 48}
+{"exported_episode": 20, "path_slots": 48}
+{"exported_episode": 21, "path_slots": 48}
+{"exported_episode": 22, "path_slots": 48}
+{"exported_episode": 23, "path_slots": 48}
+{"exported_episode": 24, "path_slots": 48}
+{"exported_episode": 25, "path_slots": 48}
+{"exported_episode": 26, "path_slots": 48}
+{"exported_episode": 27, "path_slots": 48}
+{"exported_episode": 28, "path_slots": 48}
+{"exported_episode": 29, "path_slots": 48}
+{"exported_episode": 30, "path_slots": 48}
+{"exported_episode": 31, "path_slots": 48}
+{"exported_episode": 32, "path_slots": 48}
+{"channel_bank": "/home/h3lou/neural_rx/datasets/rt_munich/confirmation", "bank_sha256": "6da51eaf3d6246783f3c7bbcd321ad6a4cf7463f3508143da557fad780e854ff"}
+
+real	0m9.440s
+user	0m12.789s
+sys	0m1.554s

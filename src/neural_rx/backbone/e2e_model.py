@@ -13,7 +13,7 @@ import tensorflow as tf
 from tensorflow.keras import Model
 from sionna.channel import gen_single_sector_topology
 from sionna.utils import BinarySource, ebnodb2no, expand_to_rank
-from .neural_rx import NeuralPUSCHReceiver
+from .cgnn import NeuralPUSCHReceiver
 
 
 class E2E_Model(Model):
@@ -95,7 +95,8 @@ class E2E_Model(Model):
                                 self._sys_parameters.max_num_tx)
 
         if mcs_ue_mask is None:
-            assert isinstance(mcs_arr_eval_idx, int), "Pre-defined MCS UE mask only works if mcs_arr_eval_idx is an integer"
+            assert isinstance(mcs_arr_eval_idx, int), \
+                "Pre-defined MCS UE mask only works if mcs_arr_eval_idx is an integer"
             mcs_ue_mask = tf.one_hot(mcs_arr_eval_idx,
                                      depth=len(self._sys_parameters.mcs_index))
             mcs_ue_mask = expand_to_rank(mcs_ue_mask, 3, axis=0)

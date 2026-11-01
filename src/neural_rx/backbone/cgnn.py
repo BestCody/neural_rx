@@ -375,10 +375,10 @@ class CGNNOFDM(Model):
                  training,
                  num_it=5,
                  d_s=32,
-                 num_units_init=[64],
-                 num_units_agg=[[64]],
-                 num_units_state=[[64]],
-                 num_units_readout=[64],
+                 num_units_init=(64,),
+                 num_units_agg=((64,),),
+                 num_units_state=((64,),),
+                 num_units_readout=(64,),
                  layer_demappers=None,
                  layer_type_dense="dense",
                  layer_type_conv="sepconv",
@@ -522,14 +522,14 @@ class CGNNOFDM(Model):
         h_hat_init = tf.cast(h_hat_init, self._nrx_dtype)
         active_tx = tf.cast(active_tx, self._nrx_dtype)
 
-        llrs_, h_hats_ = self._cgnn([y, pe, h_hat_init, active_tx, mcs_ue_mask])
+        all_llrs, h_hats_ = self._cgnn([y, pe, h_hat_init, active_tx, mcs_ue_mask])
 
         indices = mcs_arr_eval
 
         llrs = []
 
         h_hats = []
-        for llrs_, h_hat_ in zip(llrs_, h_hats_):
+        for llrs_, h_hat_ in zip(all_llrs, h_hats_, strict=True):
 
             h_hat_ = tf.cast(h_hat_, tf.float32)
 
@@ -674,7 +674,7 @@ class NeuralPUSCHReceiver(Layer):
 
         return h
 
-    def call(self, inputs, mcs_arr_eval=[0], mcs_ue_mask_eval=None):
+    def call(self, inputs, mcs_arr_eval=(0,), mcs_ue_mask_eval=None):
 
         if self._training:
             y, active_tx, b, h, mcs_ue_mask  = inputs

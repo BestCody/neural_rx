@@ -1,0 +1,5 @@
+{
+  "checkpoint": "models/learned_blend_joint_20261019/checkpoint_005000",
+  "development_result": "experiments/20261019_learned_blend_joint_training_6000/results/development_005000/results.json",
+  "core_tbler": 0.15583333333333332
+}

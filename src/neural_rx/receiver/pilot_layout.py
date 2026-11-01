@@ -70,7 +70,7 @@ class PilotLayout:
         self.joint_indices = joint.T.astype(np.int32)
         self.joint_grid = inverse.astype(np.int32)
         self.data_counts = np.stack([np.bincount(row, weights=mask.reshape(-1), minlength=self.count)
-            for row, mask in zip(self.grid_indices, self.data_mask)]).astype(np.float32)
+            for row, mask in zip(self.grid_indices, self.data_mask, strict=True)]).astype(np.float32)
         self.group_sizes = np.stack([np.bincount(row, minlength=self.count)
                                      for row in self.grid_indices]).astype(np.int32)
         if np.any(self.group_sizes == 0):
@@ -198,7 +198,8 @@ class PilotLayout:
             (self.centers-self.coordinates)*np.array([symbol_seconds*1000, spacing/1e6]),
             self.scales*np.array([symbol_seconds*1000, spacing/1e6])], -1).astype(np.float32)
         tf_positions = np.flatnonzero(self.data_mask[0].T.reshape(-1))
-        self.code_positions = ((tf_positions % self.frequency)*self.symbols+tf_positions//self.frequency).astype(np.int32)
+        self.code_positions = ((tf_positions % self.frequency)*self.symbols
+                               +tf_positions//self.frequency).astype(np.int32)
         self.code_cells = self.joint_grid[self.code_positions]
         self.code_phi = self.phi[:, self.code_positions].transpose(1, 0, 2).copy()
         self.cell_positions = [np.flatnonzero(self.code_cells == c).astype(np.int32)

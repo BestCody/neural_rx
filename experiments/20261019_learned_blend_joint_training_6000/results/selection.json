@@ -1,0 +1,28 @@
+{
+  "checkpoint": "models/learned_blend_joint_20261019/checkpoint_005000",
+  "requested_updates": 6000,
+  "pooled_persistent_tbler": {
+    "core_tbler": 0.15583333333333332,
+    "core_errors": 1870,
+    "core_blocks": 12000,
+    "per_condition_tbler": {
+      "historical_tdl_b100": 0.08365885416666667,
+      "historical_tdl_c300": 0.09537760416666667,
+      "natural_umi": 0.1708984375,
+      "natural_uma": 0.16471354166666666,
+      "controlled_topology_change": 0.03515625,
+      "schedule_gap_reentry": 0.2625718390804598,
+      "close_los": 0.09440104166666667,
+      "near_far": 0.056640625
+    }
+  },
+  "cold_k8_accuracy_target_met": false,
+  "memory_benefit_demonstrated": true,
+  "accuracy_criteria_met": false,
+  "latency_target_met": true,
+  "development_result": "experiments/20261019_learned_blend_joint_training_6000/results/development_005000/results.json",
+  "latency_result": "experiments/20261019_learned_blend_joint_training_6000/results/latency_005000/results.json",
+  "confirmation_result": "experiments/20261019_learned_blend_joint_training_6000/results/confirmation_005000/results.json",
+  "anchors": "experiments/20261019_learned_blend_joint_training_6000/inputs/anchors.json",
+  "scope": "lowest pooled persistent TBLER over the declared primary conditions on the fixed development bank; retain earlier checkpoint on ties; no automatic baseline promotion"
+}

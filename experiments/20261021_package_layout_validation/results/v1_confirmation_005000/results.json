@@ -1,0 +1,1264 @@
+{
+  "phase": "confirmation",
+  "rates": {
+    "candidate_persistent": [
+      [
+        0.078125
+      ],
+      [
+        0.06901041666666667
+      ],
+      [
+        0.14485677083333334
+      ],
+      [
+        0.20247395833333334
+      ],
+      [
+        0.07454427083333333
+      ],
+      [
+        0.21743810548977396
+      ],
+      [
+        0.09635416666666667
+      ],
+      [
+        0.036458333333333336
+      ]
+    ],
+    "candidate_reset": [
+      [
+        0.126953125
+      ],
+      [
+        0.08170572916666667
+      ],
+      [
+        0.16471354166666666
+      ],
+      [
+        0.20930989583333334
+      ],
+      [
+        0.07845052083333333
+      ],
+      [
+        0.23358449946178686
+      ],
+      [
+        0.1240234375
+      ],
+      [
+        0.055013020833333336
+      ]
+    ],
+    "frozen_cold_k8": [
+      [
+        0.15266927083333334
+      ],
+      [
+        0.15299479166666666
+      ],
+      [
+        0.14029947916666666
+      ],
+      [
+        0.23046875
+      ],
+      [
+        0.07161458333333333
+      ],
+      [
+        0.22317904556871188
+      ],
+      [
+        0.08235677083333333
+      ],
+      [
+        0.026692708333333332
+      ]
+    ]
+  },
+  "tbler_definition": "failed_active_user_blocks / evaluated_active_user_blocks",
+  "preflight": {
+    "candidate_artifacts_unchanged": true,
+    "candidate_deterministic_replay": true,
+    "candidate_finite_outputs": true,
+    "no_future_inputs": true,
+    "persistent_and_reset_paired": true,
+    "receiver_inputs_observable": true,
+    "reset_state_is_empty": true,
+    "frozen_reference_artifacts_unchanged": true,
+    "frozen_reference_deterministic_replay": true,
+    "frozen_reference_finite_outputs": true,
+    "frozen_references_paired": true
+  },
+  "manifests": {
+    "candidate": {
+      "manifest": "temporal_benchmark_frozen_v2",
+      "schema_version": 2,
+      "role": "candidate",
+      "radio": {
+        "receive_antennas": 4,
+        "maximum_active_ues": 2,
+        "bits_per_symbol": 4,
+        "mcs_index": 14,
+        "n_size_bwp": 132,
+        "noise_axis": "ebno_db",
+        "advancing_slot_pilots": true
+      },
+      "training": {
+        "additional_updates": 5000,
+        "binding": {
+          "recipe": {
+            "protocol": "cnn_memory_training",
+            "schema_version": 5,
+            "radio_config": "nrx_large.cfg",
+            "learning_rate": 0.0001,
+            "minimum_learning_rate": 1e-06,
+            "plateau_patience": 2,
+            "plateau_factor": 0.5,
+            "coded_loss_weight": 1.0,
+            "payload_loss_weight": 1.0,
+            "reset_weight": 0.5,
+            "learning_rate_warmup": 32,
+            "gradient_clip_norm": 1.0,
+            "effective_examples": 8,
+            "episode_tbs": [
+              8,
+              16,
+              32,
+              64
+            ],
+            "episode_probabilities": [
+              0.25,
+              0.35,
+              0.25,
+              0.15
+            ],
+            "cold_tbs": 4,
+            "cold_fraction": 0.125,
+            "paired_history_fraction": 0.25,
+            "paired_suffix_tbs": 4,
+            "channel_families": [
+              "tdl",
+              "umi",
+              "uma"
+            ],
+            "channel_probabilities": [
+              0.3333333333333333,
+              0.3333333333333333,
+              0.3333333333333333
+            ],
+            "doppler_strata_hz": [
+              [
+                0.0,
+                50.0
+              ],
+              [
+                50.0,
+                175.0
+              ],
+              [
+                175.0,
+                400.0
+              ]
+            ],
+            "tdl_profiles": [
+              "A",
+              "B",
+              "C"
+            ],
+            "delay_spread_s": [
+              3e-08,
+              5e-07
+            ],
+            "schedule_gap_tbs": [
+              1,
+              4,
+              7,
+              8,
+              9,
+              12
+            ],
+            "schedule_reorder_probability": 0.25,
+            "power_imbalance_probability": 0.5,
+            "power_gap_db": [
+              0.0,
+              15.0
+            ],
+            "noise_schedule": {
+              "core_range_db": [
+                0.0,
+                6.0
+              ],
+              "range_db": [
+                -2.0,
+                10.0
+              ],
+              "core_probability": 0.75,
+              "change_probability": 0.5,
+              "max_change_db": 6.0
+            },
+            "prbs": [
+              12,
+              48,
+              132
+            ],
+            "prb_probabilities": [
+              0.5,
+              0.25,
+              0.25
+            ],
+            "checkpoint_every": 64,
+            "development_interval": 1000,
+            "memory_capacity": 4,
+            "expiry_tbs": 8,
+            "seed": 2026101901,
+            "latency_scope": "prepared_full_grid_ls_to_decoded_payload",
+            "initializer_checkpoint": "models/learned_blend/initial_receiver.weights.h5",
+            "initializer_sha256": "2139a18e2dd16662a915716b590740760275e2b57c8a0e50ff655c581a8fc501",
+            "channel_loss_weight": 0.1,
+            "schedule_probability": 0.3,
+            "channel_change_probability": 0.2,
+            "schedule_switch_probability_range": [
+              0.0,
+              0.5
+            ],
+            "schedule_gap_probability_range": [
+              0.02,
+              0.15
+            ],
+            "weak_link_noise_probability": 0.5,
+            "initializer_parent_updates": 17000
+          },
+          "recipe_sha256": "22b1434841085210e030c4508ec01824b6af95ffce2e59cad60fe193c20f3913",
+          "architecture": {
+            "cgnn_rounds": 2,
+            "state_features": 56,
+            "memory": "pilot_filter_learned_blend",
+            "blend_features": "corrected_endpoints_residual_fit_v1",
+            "blend_hidden": 8,
+            "history_tbs": 7,
+            "filter_hidden": 16,
+            "error_hidden": 16,
+            "neighbor_radius": 1,
+            "ldpc_iterations": 18,
+            "ldpc_first_iterations": 8
+          },
+          "seed": 2026101901,
+          "execution": {
+            "version": "pilot_filter_learned_blend_joint_v1",
+            "detector_batch_tbs": 8,
+            "descriptor_chunk_tbs": 32,
+            "tf32_enabled": true
+          },
+          "sources": {
+            "config/nrx_large.cfg": "9cd550576d8fd7fb643164a1a4f078c91929cb62977e7aaffef0ecf8c15c36e6",
+            "scripts/artifact_io.py": "7178aa3914388538a337f98901aa4908dea3c9a63a55e472498b0bbf5ebab16a",
+            "scripts/artifact_provenance.py": "08dab0577c7d1eeb0596e1d5835f454471ca6574e4e3db10df9e3bd32861037e",
+            "scripts/cnn_autoencoder/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "scripts/cnn_autoencoder/channel_memory.py": "206d6cc25f7535a8a35ee578e46391533c691e6ce886750cd50d90bb5609053b",
+            "scripts/cnn_autoencoder/checkpoints.py": "6a5d91da6cb9e84d0c215065e59841912a46d909ef3b6eed7a1f2fb864aba078",
+            "scripts/cnn_autoencoder/decoder_correction.py": "f87722f8a900c4ed455c52bc7d2f01ab53f251beae349cf8245d630a4bda5d7a",
+            "scripts/cnn_autoencoder/memory.py": "04defd825319c52224ba333f13fdd413d486f265f9c1beb5512786f9633bfa5f",
+            "scripts/cnn_autoencoder/model.py": "46541a29fbf2c616e5a546ec4e26a3a5b0f015a0617e7c2bffe940b7bfcf8bca",
+            "scripts/cnn_autoencoder/native_ops/__init__.py": "c4afc3aff9afd30ff7bc209045ed1931359f535182a377d98a4c65637207404b",
+            "scripts/cnn_autoencoder/native_ops/channel_uncertainty.cc": "302b25a2c8b1e54e3e3c44f485d3409345c4b61c515586f0dd5e43b5fb5f99c4",
+            "scripts/cnn_autoencoder/native_ops/channel_uncertainty.cu.cc": "a7fb38aa00be09859b388050984f91d84f9ec95f49d0e3c989d2db759c850aa2",
+            "scripts/cnn_autoencoder/native_ops/memory_append.cc": "f913a200a257b4d082b29c37e93bc8d0c49d542700747277677a350dbf8e3814",
+            "scripts/cnn_autoencoder/native_ops/memory_append.cu.cc": "54f8a62aedc01d4697f686b1d39f1efcda854de5964343d138c4dbcc99a1571b",
+            "scripts/cnn_autoencoder/native_ops/pair_correction.cc": "012f2dda05e713c74c4daf7363f5cc826f131cb6f59440e3d107823f118398d9",
+            "scripts/cnn_autoencoder/native_ops/pair_correction.cu.cc": "2c0f5254a4df650522a8096ec0956ac78e04d3c903cec6263b30c5f898c83912",
+            "scripts/cnn_autoencoder/native_ops/pair_prepare.cc": "24463d3ae70827295e76f0b58d3cc6e15ad25a926afa730837026bf4e8a9ac1c",
+            "scripts/cnn_autoencoder/native_ops/pair_prepare.cu.cc": "d25d84cdb637b9a57a121e8030ad4179a7b6249002ab8f8a826ae442c5939b81",
+            "scripts/cnn_autoencoder/native_ops/pair_scores.cc": "8f2307ddfb2b1b78e3a3378539962c5b0b09074b3aa2076f10fb15fa6fc6bc1b",
+            "scripts/cnn_autoencoder/pilot_layout.py": "e24f1fd3cf72e8510da9b5cf3fe2bf92ac1582aebd08170c0510408fcffbf4f9",
+            "scripts/cnn_autoencoder/training.py": "1cfa89f83b0817236b85ed50808704f8f65fcf322087913beb701a5a19d07a0c",
+            "scripts/cnn_autoencoder/training_data.py": "a6f1968f746c258eac41f4cbd7132ceae462f4f4fb1281aabc8d833eb45cfcad",
+            "scripts/cnn_autoencoder/training_execution.py": "3c92def10b3c76c80f2d9703ae70c52e42313243be19e2542dab92f3e07cf71f",
+            "scripts/cnn_autoencoder/training_options.py": "3a5af1f1f044efe8c0e0761c9a2ed2e58dbb61c16345a9918af661d89425013b",
+            "scripts/cnn_autoencoder/training_parallel.py": "28b677a06dd7501da443191b380b3480fc54526429b353df9b3a4069862d3de0",
+            "scripts/cnn_autoencoder/training_prefetch.py": "3a9008f8ef9f1251051ddaf13c364d89f5876a327764ee4a50bf6e6272883602",
+            "scripts/cnn_autoencoder/training_render.py": "44d18cbd27bed0383f1c1517b927aed9d1e19d683dd9bee22729a666f599f755",
+            "scripts/cnn_autoencoder/training_transport.py": "0441550b68d74459c15b16aa1515491a5c4eb9baac83fe4fd9fd615dc464a3d9",
+            "scripts/geometry_mumimo_data.py": "764b6940ef2c8bcb1525cbb341bc3add4ee0410873bb7263e37d52e07d0878a7",
+            "scripts/receiver_decoding.py": "baec63199b1b34434287c3f39fac8888ae1480c5498285d0f81df1eb57eb7b6e",
+            "scripts/temporal_benchmark_scoring.py": "cb346d7e59a38686b1de92afef597f2f4c322f35dd0f13b3b6688c189ff201ca",
+            "scripts/temporal_generalization_protocol.py": "0fa25713ea54e2497de7c45b86fa0c75d597d1a511c59f69cd7073c76d651cb5",
+            "scripts/temporal_receiver_core.py": "e435b483159822d8a3cca25eb7093697db5cb5b65e96648fefe03c7358380e01",
+            "scripts/temporal_training_data.py": "14796931025e1ade60534422178ed95582b6c1658b7a57c238aeb296e7039ab0",
+            "scripts/train_cnn_autoencoder.py": "9203f70437f4a60102100f6d5f77dbfa8b707e2754ace7e352a36fe99e4ba188",
+            "utils/__init__.py": "3de504ecd4e7eeddb7e7e5e8418a4359af7eac48229b46650235204745f7b1fa",
+            "utils/channel_models.py": "4352cef58f873573622503c7d84d8dba77795f23dea0a2d5834d433e5423203d",
+            "utils/e2e_model.py": "bbfcbeceadd8d744e3c06e07a50d8522a4a0b2d81787b884ed4f060e5839907c",
+            "utils/neural_rx.py": "0f9760faa0cb13fa79b3081162e8c6f23e2b2dd31226af3d26c5e9b18a2e4f74",
+            "utils/parameters.py": "896e8cf0918e94270a399de6eca4ea4cdb845edd3e8ff03b3193dfc19e230e40",
+            "utils/utils.py": "5fb8f1e95fa5b021aaf46c1869d799bee72cbb4167fd05efb9b4443197937a22"
+          }
+        }
+      },
+      "inference": {
+        "iterations": 2,
+        "persistent_memory": true
+      },
+      "benchmark_protocol_sha256": "ae6bedfeebe8cf1be654adc3c21d90ec205a91584000b26bed0fbd5ab66cd907",
+      "checkpoints": [
+        {
+          "name": "receiver.weights.h5",
+          "sha256": "bbe4e4d99b500fe03b5980bced1bec4c64586d7e94ca91832f336ff83a5e2044",
+          "bytes": 1976040,
+          "training_seed": 2026101901
+        }
+      ],
+      "support_artifacts": [
+        {
+          "name": "nrx_large.cfg",
+          "sha256": "9cd550576d8fd7fb643164a1a4f078c91929cb62977e7aaffef0ecf8c15c36e6",
+          "bytes": 2374
+        },
+        {
+          "name": "cnn_autoencoder_finalist.json",
+          "sha256": "616dd023075884ab4e533c4d1464061ae5df3ef624ed0a7081009c8f14ca25a0",
+          "bytes": 455
+        },
+        {
+          "name": "manifest.json",
+          "sha256": "56cdbc1d41254d1107f197b79611872961c341950769f9e2e99efe797ddf424c",
+          "bytes": 8910
+        }
+      ],
+      "manifest_sha256": "d6b6b28325b0bcf2664b97c688b838b469b0c7f73c9b294e0d4fa53e58bcaeea"
+    },
+    "frozen_cold_k8": {
+      "manifest": "temporal_benchmark_frozen_v2",
+      "schema_version": 2,
+      "role": "frozen_cold_k8",
+      "radio": {
+        "receive_antennas": 4,
+        "maximum_active_ues": 2,
+        "bits_per_symbol": 4,
+        "mcs_index": 14,
+        "n_size_bwp": 132,
+        "noise_axis": "ebno_db",
+        "advancing_slot_pilots": true
+      },
+      "training": {
+        "additional_updates": 0,
+        "provenance": "shipped_neural_rx"
+      },
+      "inference": {
+        "iterations": 8,
+        "persistent_memory": false
+      },
+      "benchmark_protocol_sha256": "ae6bedfeebe8cf1be654adc3c21d90ec205a91584000b26bed0fbd5ab66cd907",
+      "checkpoints": [
+        {
+          "name": "nrx_large_weights",
+          "sha256": "0e6aa52dc89725bc982710c4a14a2c617295118d7153da1d512e276d62a06592",
+          "bytes": 1754101,
+          "training_seed": 0
+        }
+      ],
+      "support_artifacts": [
+        {
+          "name": "nrx_large.cfg",
+          "sha256": "9cd550576d8fd7fb643164a1a4f078c91929cb62977e7aaffef0ecf8c15c36e6",
+          "bytes": 2374
+        }
+      ],
+      "manifest_sha256": "e942f8bb960dca74fb2b841eab09f5de0c4a497de500cadb7e2763f2c53bd0b2"
+    }
+  },
+  "protocol_sha256": "ae6bedfeebe8cf1be654adc3c21d90ec205a91584000b26bed0fbd5ab66cd907",
+  "episode_identity": {
+    "packages": {
+      "numpy": "1.26.4",
+      "sionna": "0.18.0",
+      "tensorflow": "2.15.1"
+    },
+    "radio": {
+      "advancing_slot_pilots": true,
+      "bits_per_symbol": 4,
+      "maximum_active_ues": 2,
+      "mcs_index": 14,
+      "n_size_bwp": 132,
+      "noise_axis": "ebno_db",
+      "receive_antennas": 4
+    },
+    "schema": "temporal_benchmark_episode_v2",
+    "sources": {
+      "config/nrx_large.cfg": "9cd550576d8fd7fb643164a1a4f078c91929cb62977e7aaffef0ecf8c15c36e6",
+      "src/neural_rx/backbone/__init__.py": "6531b635e0744fc258c93aab5073ef4411c54715977ffadaab092b43a25ea786",
+      "src/neural_rx/backbone/cgnn.py": "423c0e004b60e805cbeabb89a525231417faa1e6a6a27fb7c84098119e489b44",
+      "src/neural_rx/backbone/channel_models.py": "24e439b900a580fba391cdaa64001568206aab8b14d95ff9c018714201af089a",
+      "src/neural_rx/backbone/core.py": "1108681c0c775aef3f0570fbd70f9c1738885d0a18346e6873268ea1f4fba88f",
+      "src/neural_rx/backbone/e2e_model.py": "86c66837e3cf17d5aaacae5ba2cf427dec03a0b86ed6080fa70814a19da9f618",
+      "src/neural_rx/backbone/parameters.py": "209720d521074feb7a8d9f75dffdf3c26d326bc76d880314cd3ad373d87b8583",
+      "src/neural_rx/backbone/training.py": "b12da25bffd0450e7e10cbe8c45202adaa6453218e3c73f139fbfd3319bfa4c4",
+      "src/neural_rx/benchmark/generalization_protocol.py": "e996d51034af3e7d898d3fdbd57fd71bdbc2ad513652b03f2b6d30019ba0d2c8",
+      "src/neural_rx/benchmark/scenarios.py": "6c31d258b24d56f379c359d6a4cdc930436133299eeaa2446dd9e5c33af81bab",
+      "src/neural_rx/data/geometry.py": "9deba52aa7cd82e33b3da1e93aafd5411699da7882f9a3139e60dc44daeac0b0",
+      "src/neural_rx/data/temporal.py": "fd4426469b9c8b408d7939729be85b56654bb2e8f0e173ba554bb122f1dc42d8"
+    }
+  },
+  "checkpoint": "/home/h3lou/neural_rx/models/learned_blend_joint_20261019/checkpoint_005000",
+  "receiver": "pilot-history-memory",
+  "scoring_start_tb": 17,
+  "crc_diagnostics": {
+    "candidate_persistent": {
+      "undetected_payload_errors": 0,
+      "crc_failures_with_correct_payload": 0
+    },
+    "candidate_reset": {
+      "undetected_payload_errors": 0,
+      "crc_failures_with_correct_payload": 0
+    },
+    "frozen_cold_k8": {
+      "undetected_payload_errors": 0,
+      "crc_failures_with_correct_payload": 0
+    }
+  },
+  "bank_sha256": "e45e7e86e19fc1bf505e1aac4b0e7b3eeb184d61c0db2cb1482f9f064effc558",
+  "summary": {
+    "candidate_persistent": {
+      "core_tbler": 0.15846038490377407,
+      "core_errors": 1902,
+      "core_blocks": 12003,
+      "per_condition_tbler": {
+        "historical_tdl_b100": 0.078125,
+        "historical_tdl_c300": 0.06901041666666667,
+        "natural_umi": 0.14485677083333334,
+        "natural_uma": 0.20247395833333334,
+        "controlled_topology_change": 0.07454427083333333,
+        "schedule_gap_reentry": 0.21743810548977396,
+        "close_los": 0.09635416666666667,
+        "near_far": 0.036458333333333336
+      }
+    },
+    "candidate_reset": {
+      "core_tbler": 0.17004082312755145,
+      "core_errors": 2041,
+      "core_blocks": 12003,
+      "per_condition_tbler": {
+        "historical_tdl_b100": 0.126953125,
+        "historical_tdl_c300": 0.08170572916666667,
+        "natural_umi": 0.16471354166666666,
+        "natural_uma": 0.20930989583333334,
+        "controlled_topology_change": 0.07845052083333333,
+        "schedule_gap_reentry": 0.23358449946178686,
+        "close_los": 0.1240234375,
+        "near_far": 0.055013020833333336
+      }
+    },
+    "frozen_cold_k8": {
+      "core_tbler": 0.16504207281512956,
+      "core_errors": 1981,
+      "core_blocks": 12003,
+      "per_condition_tbler": {
+        "historical_tdl_b100": 0.15266927083333334,
+        "historical_tdl_c300": 0.15299479166666666,
+        "natural_umi": 0.14029947916666666,
+        "natural_uma": 0.23046875,
+        "controlled_topology_change": 0.07161458333333333,
+        "schedule_gap_reentry": 0.22317904556871188,
+        "close_los": 0.08235677083333333,
+        "near_far": 0.026692708333333332
+      }
+    }
+  },
+  "comparisons": {
+    "candidate_reset": {
+      "left": "candidate_persistent",
+      "right": "candidate_reset",
+      "difference": -0.01158043822377739,
+      "difference_percentage_points": -1.158043822377739,
+      "bootstrap_valid_samples": 10000,
+      "ci95": [
+        -0.02120249047658036,
+        -0.005079513117035662
+      ],
+      "condition_differences": {
+        "natural_umi": -0.019856770833333332,
+        "natural_uma": -0.0068359375,
+        "controlled_topology_change": -0.00390625,
+        "schedule_gap_reentry": -0.016146393972012917
+      },
+      "worst_condition_difference": -0.00390625,
+      "worst_condition_ci95": [
+        -0.007161458333333333,
+        0.0
+      ]
+    },
+    "frozen_cold_k8": {
+      "left": "candidate_persistent",
+      "right": "frozen_cold_k8",
+      "difference": -0.006581687911355495,
+      "difference_percentage_points": -0.6581687911355495,
+      "bootstrap_valid_samples": 10000,
+      "ci95": [
+        -0.01748706693072498,
+        0.0019115691489361702
+      ],
+      "condition_differences": {
+        "natural_umi": 0.004557291666666667,
+        "natural_uma": -0.027994791666666668,
+        "controlled_topology_change": 0.0029296875,
+        "schedule_gap_reentry": -0.0057409400789379264
+      },
+      "worst_condition_difference": 0.004557291666666667,
+      "worst_condition_ci95": [
+        0.0016276041666666667,
+        0.010920690633309103
+      ]
+    }
+  },
+  "windows": {
+    "warmup": {
+      "candidate_persistent": [
+        [
+          0.0546875
+        ],
+        [
+          0.07421875
+        ],
+        [
+          0.119140625
+        ],
+        [
+          0.208984375
+        ],
+        [
+          0.068359375
+        ],
+        [
+          0.21428571428571427
+        ],
+        [
+          0.09765625
+        ],
+        [
+          0.05078125
+        ]
+      ],
+      "candidate_reset": [
+        [
+          0.09375
+        ],
+        [
+          0.091796875
+        ],
+        [
+          0.134765625
+        ],
+        [
+          0.21484375
+        ],
+        [
+          0.0859375
+        ],
+        [
+          0.22294372294372294
+        ],
+        [
+          0.119140625
+        ],
+        [
+          0.0625
+        ]
+      ],
+      "frozen_cold_k8": [
+        [
+          0.11328125
+        ],
+        [
+          0.171875
+        ],
+        [
+          0.1171875
+        ],
+        [
+          0.234375
+        ],
+        [
+          0.07421875
+        ],
+        [
+          0.22943722943722944
+        ],
+        [
+          0.07421875
+        ],
+        [
+          0.033203125
+        ]
+      ]
+    },
+    "mature": {
+      "candidate_persistent": [
+        [
+          0.0771484375
+        ],
+        [
+          0.0615234375
+        ],
+        [
+          0.1396484375
+        ],
+        [
+          0.21484375
+        ],
+        [
+          0.080078125
+        ],
+        [
+          0.21664887940234792
+        ],
+        [
+          0.08984375
+        ],
+        [
+          0.046875
+        ]
+      ],
+      "candidate_reset": [
+        [
+          0.1171875
+        ],
+        [
+          0.07421875
+        ],
+        [
+          0.1611328125
+        ],
+        [
+          0.21875
+        ],
+        [
+          0.087890625
+        ],
+        [
+          0.22732123799359658
+        ],
+        [
+          0.1220703125
+        ],
+        [
+          0.064453125
+        ]
+      ],
+      "frozen_cold_k8": [
+        [
+          0.1435546875
+        ],
+        [
+          0.142578125
+        ],
+        [
+          0.138671875
+        ],
+        [
+          0.234375
+        ],
+        [
+          0.0751953125
+        ],
+        [
+          0.22732123799359658
+        ],
+        [
+          0.078125
+        ],
+        [
+          0.0341796875
+        ]
+      ]
+    },
+    "late": {
+      "candidate_persistent": [
+        [
+          0.0849609375
+        ],
+        [
+          0.08203125
+        ],
+        [
+          0.130859375
+        ],
+        [
+          0.1884765625
+        ],
+        [
+          0.0712890625
+        ],
+        [
+          0.19323144104803494
+        ],
+        [
+          0.107421875
+        ],
+        [
+          0.025390625
+        ]
+      ],
+      "candidate_reset": [
+        [
+          0.1494140625
+        ],
+        [
+          0.09375
+        ],
+        [
+          0.154296875
+        ],
+        [
+          0.19140625
+        ],
+        [
+          0.076171875
+        ],
+        [
+          0.21069868995633187
+        ],
+        [
+          0.125
+        ],
+        [
+          0.046875
+        ]
+      ],
+      "frozen_cold_k8": [
+        [
+          0.1650390625
+        ],
+        [
+          0.1640625
+        ],
+        [
+          0.12109375
+        ],
+        [
+          0.22265625
+        ],
+        [
+          0.0712890625
+        ],
+        [
+          0.19868995633187772
+        ],
+        [
+          0.0908203125
+        ],
+        [
+          0.015625
+        ]
+      ]
+    },
+    "pre_change": {
+      "candidate_persistent": [
+        [
+          0.08203125
+        ],
+        [
+          0.04296875
+        ],
+        [
+          0.14453125
+        ],
+        [
+          0.216796875
+        ],
+        [
+          0.0703125
+        ],
+        [
+          0.21063829787234042
+        ],
+        [
+          0.08984375
+        ],
+        [
+          0.046875
+        ]
+      ],
+      "candidate_reset": [
+        [
+          0.111328125
+        ],
+        [
+          0.05078125
+        ],
+        [
+          0.166015625
+        ],
+        [
+          0.21875
+        ],
+        [
+          0.08203125
+        ],
+        [
+          0.225531914893617
+        ],
+        [
+          0.125
+        ],
+        [
+          0.064453125
+        ]
+      ],
+      "frozen_cold_k8": [
+        [
+          0.140625
+        ],
+        [
+          0.107421875
+        ],
+        [
+          0.142578125
+        ],
+        [
+          0.234375
+        ],
+        [
+          0.0703125
+        ],
+        [
+          0.225531914893617
+        ],
+        [
+          0.078125
+        ],
+        [
+          0.037109375
+        ]
+      ]
+    },
+    "immediate_post_change": {
+      "candidate_persistent": [
+        [
+          0.078125
+        ],
+        [
+          0.0703125
+        ],
+        [
+          0.173828125
+        ],
+        [
+          0.205078125
+        ],
+        [
+          0.0703125
+        ],
+        [
+          0.2786177105831533
+        ],
+        [
+          0.087890625
+        ],
+        [
+          0.04296875
+        ]
+      ],
+      "candidate_reset": [
+        [
+          0.1171875
+        ],
+        [
+          0.087890625
+        ],
+        [
+          0.18359375
+        ],
+        [
+          0.21875
+        ],
+        [
+          0.068359375
+        ],
+        [
+          0.3002159827213823
+        ],
+        [
+          0.125
+        ],
+        [
+          0.060546875
+        ]
+      ],
+      "frozen_cold_k8": [
+        [
+          0.154296875
+        ],
+        [
+          0.1796875
+        ],
+        [
+          0.166015625
+        ],
+        [
+          0.234375
+        ],
+        [
+          0.064453125
+        ],
+        [
+          0.2958963282937365
+        ],
+        [
+          0.078125
+        ],
+        [
+          0.03125
+        ]
+      ]
+    },
+    "late_post_change": {
+      "candidate_persistent": [
+        [
+          0.08203125
+        ],
+        [
+          0.083984375
+        ],
+        [
+          0.126953125
+        ],
+        [
+          0.1875
+        ],
+        [
+          0.064453125
+        ],
+        [
+          0.20305676855895197
+        ],
+        [
+          0.109375
+        ],
+        [
+          0.01953125
+        ]
+      ],
+      "candidate_reset": [
+        [
+          0.15234375
+        ],
+        [
+          0.09765625
+        ],
+        [
+          0.1484375
+        ],
+        [
+          0.1875
+        ],
+        [
+          0.072265625
+        ],
+        [
+          0.21397379912663755
+        ],
+        [
+          0.125
+        ],
+        [
+          0.046875
+        ]
+      ],
+      "frozen_cold_k8": [
+        [
+          0.166015625
+        ],
+        [
+          0.1640625
+        ],
+        [
+          0.119140625
+        ],
+        [
+          0.220703125
+        ],
+        [
+          0.064453125
+        ],
+        [
+          0.2205240174672489
+        ],
+        [
+          0.09375
+        ],
+        [
+          0.015625
+        ]
+      ]
+    },
+    "tb1": {
+      "candidate_persistent": [
+        [
+          0.140625
+        ],
+        [
+          0.0625
+        ],
+        [
+          0.125
+        ],
+        [
+          0.203125
+        ],
+        [
+          0.09375
+        ],
+        [
+          0.234375
+        ],
+        [
+          0.125
+        ],
+        [
+          0.0625
+        ]
+      ],
+      "candidate_reset": [
+        [
+          0.140625
+        ],
+        [
+          0.0625
+        ],
+        [
+          0.125
+        ],
+        [
+          0.203125
+        ],
+        [
+          0.09375
+        ],
+        [
+          0.234375
+        ],
+        [
+          0.125
+        ],
+        [
+          0.0625
+        ]
+      ],
+      "frozen_cold_k8": [
+        [
+          0.171875
+        ],
+        [
+          0.125
+        ],
+        [
+          0.125
+        ],
+        [
+          0.21875
+        ],
+        [
+          0.078125
+        ],
+        [
+          0.234375
+        ],
+        [
+          0.078125
+        ],
+        [
+          0.046875
+        ]
+      ]
+    },
+    "whole_episode": {
+      "candidate_persistent": [
+        [
+          0.07421875
+        ],
+        [
+          0.07275390625
+        ],
+        [
+          0.138916015625
+        ],
+        [
+          0.203369140625
+        ],
+        [
+          0.0751953125
+        ],
+        [
+          0.22006472491909385
+        ],
+        [
+          0.095703125
+        ],
+        [
+          0.0400390625
+        ]
+      ],
+      "candidate_reset": [
+        [
+          0.121337890625
+        ],
+        [
+          0.08544921875
+        ],
+        [
+          0.158203125
+        ],
+        [
+          0.210693359375
+        ],
+        [
+          0.08251953125
+        ],
+        [
+          0.23408845738942827
+        ],
+        [
+          0.12255859375
+        ],
+        [
+          0.05712890625
+        ]
+      ],
+      "frozen_cold_k8": [
+        [
+          0.146728515625
+        ],
+        [
+          0.156494140625
+        ],
+        [
+          0.135498046875
+        ],
+        [
+          0.2314453125
+        ],
+        [
+          0.072998046875
+        ],
+        [
+          0.22680690399137002
+        ],
+        [
+          0.080810546875
+        ],
+        [
+          0.028564453125
+        ]
+      ]
+    }
+  },
+  "late_drift": {
+    "definition": "late minus mature persistent-vs-candidate_reset TBLER gap",
+    "difference": -0.00048828125,
+    "difference_percentage_points": -0.048828125,
+    "bootstrap_valid_samples": 10000,
+    "ci95": [
+      -0.00439453125,
+      0.00244140625
+    ]
+  },
+  "adaptation": {
+    "definition": "candidate minus frozen_cold_k8 TBLER",
+    "per_tb_gap": [
+      0.015625,
+      0.0,
+      -0.015625,
+      -0.015625,
+      -0.015625,
+      -0.015625,
+      0.0,
+      0.0,
+      0.0,
+      0.03125,
+      0.0,
+      0.0,
+      0.0,
+      0.015625,
+      0.0,
+      0.0,
+      0.0,
+      0.015625,
+      0.0,
+      0.015625,
+      0.015625,
+      0.015625,
+      0.015625,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.03125,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.015625,
+      0.0,
+      0.0,
+      0.015625,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      -0.015625,
+      0.0,
+      0.0,
+      0.0,
+      0.015625,
+      0.0,
+      0.0,
+      0.0
+    ],
+    "immediate_mean_gap": 0.005859375,
+    "late_mean_gap": 0.0,
+    "post_change_excess_area": 0.0625,
+    "schedule_reentry": {
+      "definition": "candidate minus frozen_cold_k8 TBLER after UE re-entry",
+      "event_count": 543,
+      "samples_per_lag": [
+        543,
+        439,
+        374,
+        332
+      ],
+      "per_lag_gap": [
+        0.007366482504604052,
+        -0.011389521640091117,
+        -0.008021390374331552,
+        0.0
+      ],
+      "excess_area": -0.012044429509818617
+    }
+  },
+  "cold_k8_accuracy_target_met": false,
+  "memory_benefit_demonstrated": true,
+  "accuracy_criteria_met": false,
+  "eligibility_scope": "confirmation evidence at one training seed; final accuracy requires improvement over frozen Cold K8 and the same weights reset; trained-weight latency remains required",
+  "raw_sha256": "632fa873f5b7a2a8d29355a1bfed9444a651a9692cf976db3e2cbee6deeebc55",
+  "result_sha256": "4dfbfa21ce65a3f42b547432a4fe74c52fb734ae7c3c24c6428fa42149866ff5"
+}

@@ -3,7 +3,7 @@ from __future__ import annotations
 import numpy as np
 import tensorflow as tf
 
-from temporal_training_data import TemporalTrainingDataGenerator
+from neural_rx.data.temporal import TemporalTrainingDataGenerator
 
 
 class RayTracedGenerator(TemporalTrainingDataGenerator):

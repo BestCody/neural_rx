@@ -11,9 +11,9 @@ from unittest import mock
 import numpy as np
 import tensorflow as tf
 
-from pilot_history_receiver.training import MemoryTrainer
-from pilot_history_receiver.training_parallel import GradientReplica, partition_episodes
-from pilot_history_receiver.training_transport import SharedArrayStore
+from neural_rx.receiver.training import MemoryTrainer
+from neural_rx.receiver.training_parallel import GradientReplica, partition_episodes
+from neural_rx.receiver.training_transport import SharedArrayStore
 
 
 class ParallelUpdateTests(unittest.TestCase):
@@ -41,7 +41,7 @@ class ParallelUpdateTests(unittest.TestCase):
         trainer.model.blend_output.assign(tf.random.stateless_normal(trainer.model.blend_output.shape,[317,9],stddev=.1))
         packets = [trainer.episodes.sample(1, index, 4) for index in range(8)]
         expected, gradients = trainer.update(packets, apply=False)
-        gradient_map = {id(v): g for v, g in zip(trainer.optimization_variables, gradients)}
+        gradient_map = {id(v): g for v, g in zip(trainer.optimization_variables, gradients, strict=True)}
         for query in (trainer.model.channel_memory.filter, trainer.model.channel_memory.error):
             self.assertGreater(float(tf.linalg.global_norm([gradient_map[id(v)]
                 for v in query.trainable_variables])), 0.)
@@ -57,7 +57,7 @@ class ParallelUpdateTests(unittest.TestCase):
         for key in ('loss', 'persistent_coded_bce', 'persistent_payload_loss', 'reset_coded_bce', 'reset_payload_loss',
                     'persistent_channel_nll', 'reset_channel_nll'):
             np.testing.assert_allclose(actual[key], expected[key], rtol=1e-5, atol=2e-6)
-        for a, b in zip(distributed, gradients):
+        for a, b in zip(distributed, gradients, strict=True):
             np.testing.assert_allclose(a, b, rtol=3e-3, atol=3e-6)
 
     def test_partition_keeps_paired_episodes_whole_and_covers_update_once(self):

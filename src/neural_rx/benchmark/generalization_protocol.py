@@ -7,7 +7,7 @@ import hashlib
 import math
 from dataclasses import dataclass
 
-from artifact_io import canonical_json
+from neural_rx.provenance.artifacts import canonical_json
 
 
 TDL_MODELS = ("A", "B", "C", "D", "E", "A30", "B100", "C300")
