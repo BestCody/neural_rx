@@ -1,0 +1,22 @@
+{
+ "candidate_persistent": {
+  "median_ms": 41.273524053394794,
+  "samples": 128
+ },
+ "candidate_reset": {
+  "median_ms": 41.15782491862774,
+  "samples": 128
+ },
+ "frozen_cold_k2": {
+  "median_ms": 40.590357733890414,
+  "samples": 128
+ },
+ "frozen_cold_k3": {
+  "median_ms": 43.08620560914278,
+  "samples": 128
+ },
+ "frozen_cold_k8": {
+  "median_ms": 53.049149457365274,
+  "samples": 128
+ }
+}

@@ -1,0 +1,26 @@
+{
+ "baseline_lslin_lmmse": {
+  "3.0": {
+   "failures": 32,
+   "blocks": 84,
+   "tbler": 0.38095238095238093,
+   "seconds": 22.0
+  }
+ },
+ "baseline_perf_csi_kbest": {
+  "3.0": {
+   "failures": 1,
+   "blocks": 84,
+   "tbler": 0.011904761904761904,
+   "seconds": 27.8
+  }
+ },
+ "baseline_lmmse_kbest": {
+  "3.0": {
+   "failures": 3,
+   "blocks": 84,
+   "tbler": 0.03571428571428571,
+   "seconds": 34.3
+  }
+ }
+}

@@ -1,0 +1,482 @@
+% BibTeX entries live here; this block writes them to build/references.bib at compile time.
+\begin{filecontents*}[overwrite]{references.bib}
+@inproceedings{cammerer2023,
+  title={A Neural Receiver for {5G NR} Multi-user {MIMO}},
+  author={Cammerer, Sebastian and A{\"i}t Aoudia, Fay{\c{c}}al and Hoydis, Jakob and Oeldemann, Andreas and Roessler, Andreas and Mayer, Timo and Keller, Alexander},
+  booktitle={Proc. IEEE Globecom Workshops},
+  pages={329--334},
+  year={2023}
+}
+@article{wiesmayr2024,
+  title={Design of a Standard-Compliant Real-Time Neural Receiver for {5G NR}},
+  author={Wiesmayr, Reinhard and Cammerer, Sebastian and A{\"i}t Aoudia, Fay{\c{c}}al and Hoydis, Jakob and Zakrzewski, Jakub and Keller, Alexander},
+  journal={arXiv preprint arXiv:2409.02912},
+  year={2024}
+}
+@article{hoydis2022,
+  title={Sionna: An Open-Source Library for Next-Generation Physical Layer Research},
+  author={Hoydis, Jakob and Cammerer, Sebastian and A{\"i}t Aoudia, Fay{\c{c}}al and Vem, Avinash and Binder, Nikolaus and Marcus, Guillermo and Keller, Alexander},
+  journal={arXiv preprint arXiv:2203.11854},
+  year={2022}
+}
+@techreport{tr38901,
+  title={Study on Channel Model for Frequencies from 0.5 to 100 {GHz}},
+  author={{ETSI}},
+  number={3GPP TR 38.901, Release 16.1},
+  institution={ETSI},
+  year={2020}
+}
+@inproceedings{hoydis2023,
+  title={Sionna {RT}: Differentiable Ray Tracing for Radio Propagation Modeling},
+  author={Hoydis, Jakob and A{\"i}t Aoudia, Fay{\c{c}}al and Cammerer, Sebastian and Nimier-David, Merlin and Binder, Nikolaus and Marcus, Guillermo and Keller, Alexander},
+  booktitle={Proc. IEEE Globecom Workshops},
+  pages={317--321},
+  year={2023}
+}
+\end{filecontents*}
+\documentclass[letterpaper]{article} % DO NOT CHANGE THIS
+\usepackage[submission]{aaai2027}  % DO NOT CHANGE THIS
+% The serif, sans-serif, and monospaced fonts are loaded automatically by
+% aaai2027.sty (newtxtext, helvet, courier). DO NOT add \usepackage{times},
+% \usepackage{helvet}, \usepackage{courier}, or any other font package.
+\usepackage[hyphens]{url}  % DO NOT CHANGE THIS
+\usepackage{graphicx} % DO NOT CHANGE THIS
+\urlstyle{rm} % DO NOT CHANGE THIS
+\def\UrlFont{\rm}  % DO NOT CHANGE THIS
+\usepackage{natbib}  % DO NOT CHANGE THIS AND DO NOT ADD ANY OPTIONS TO IT
+\usepackage{caption} % DO NOT CHANGE THIS AND DO NOT ADD ANY OPTIONS TO IT
+\frenchspacing  % DO NOT CHANGE THIS
+%
+% These are recommended to typeset algorithms but not required. See the subsubsection on algorithms. Remove them if you don't have algorithms in your paper.
+\usepackage{algorithm}
+\usepackage{algorithmic}
+
+%
+% These are recommended to typeset listings but not required. See the subsubsection on listing. Remove this block if you don't have listings in your paper.
+\usepackage{newfloat}
+\usepackage{listings}
+\DeclareCaptionStyle{ruled}{labelfont=normalfont,labelsep=colon,strut=off} % DO NOT CHANGE THIS
+\lstset{%
+	basicstyle={\footnotesize\ttfamily},% footnotesize acceptable for monospace
+	numbers=left,numberstyle=\footnotesize,xleftmargin=2em,% show line numbers, remove this entire line if you don't want the numbers.
+	aboveskip=0pt,belowskip=0pt,%
+	showstringspaces=false,tabsize=2,breaklines=true}
+\floatstyle{ruled}
+\newfloat{listing}{tb}{lst}{}
+\floatname{listing}{Listing}
+
+%
+% Recommended for better-looking tables
+\usepackage{booktabs}
+\usepackage{amsmath}
+\usepackage{amssymb}
+
+%
+% Keep the \pdfinfo as shown here. There's no need
+% for you to add the /Title and /Author tags.
+\pdfinfo{
+/TemplateVersion (2027.1)
+}
+
+% DISALLOWED PACKAGES
+% \usepackage{authblk} -- This package is specifically forbidden
+% \usepackage{balance} -- This package is specifically forbidden
+% \usepackage{CJK} -- This package is specifically forbidden
+% \usepackage{float} -- This package is specifically forbidden
+% \usepackage{flushend} -- This package is specifically forbidden
+% \usepackage{fullpage} -- This package is specifically forbidden
+% \usepackage{geometry} -- This package is specifically forbidden
+% \usepackage{hyperref} -- This package is specifically forbidden
+% \usepackage{navigator} -- This package is specifically forbidden
+% (or any other package that embeds links such as navigator or hyperref)
+% \usepackage{indentfirst} -- This package is specifically forbidden
+% \usepackage{layout} -- This package is specifically forbidden
+% \usepackage{multicol} -- This package is specifically forbidden
+% \usepackage{nameref} -- This package is specifically forbidden
+% \usepackage{savetrees} -- This package is specifically forbidden
+% \usepackage{setspace} -- This package is specifically forbidden
+% \usepackage{stfloats} -- This package is specifically forbidden
+% \usepackage{tabu} -- This package is specifically forbidden
+% \usepackage{titlesec} -- This package is specifically forbidden
+% \usepackage{tocbibind} -- This package is specifically forbidden
+% \usepackage{ulem} -- This package is specifically forbidden
+% \usepackage{wrapfig} -- This package is specifically forbidden
+% DISALLOWED COMMANDS
+% \nocopyright -- Your paper will not be published if you use this command
+% \addtolength -- This command may not be used
+% \balance -- This command may not be used
+% \baselinestretch -- Your paper will not be published if you use this command
+% \clearpage -- No page breaks of any kind may be used for the final version of your paper
+% \columnsep -- This command may not be used
+% \newpage -- No page breaks of any kind may be used for the final version of your paper
+% \pagebreak -- No page breaks of any kind may be used for the final version of your paper
+% \pagestyle -- This command may not be used
+% \tiny -- This is not an acceptable font size.
+% \vspace{- -- No negative value may be used in proximity of a caption, figure, table, section, subsection, subsubsection, or reference
+% \vskip{- -- No negative value may be used to alter spacing above or below a caption, figure, table, section, subsection, subsubsection, or reference
+
+\setcounter{secnumdepth}{0} %May be changed to 1 or 2 if section numbers are desired.
+
+% The file aaai2027.sty is the style file for AAAI Press
+% proceedings, working notes, and technical reports.
+%
+
+% Title
+
+% Your title must be in mixed case, not sentence case.
+% That means all verbs (including short verbs like be, is, using,and go),
+% nouns, adverbs, adjectives should be capitalized, including both words in hyphenated terms, while
+% articles, conjunctions, and prepositions are lower case unless they
+% directly follow a colon or long dash
+\title{A Neural Receiver with Per-UE Pilot Memory for 5G NR Multi-user MIMO}
+\author{
+    Anonymous Authors
+}
+\affiliations{
+    Anonymous Affiliation
+}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+% TODO: abstract, once the paper's direction is decided.
+Abstract to be written.
+\end{abstract}
+
+\section{Introduction}
+% TODO: introduction, once the paper's direction is decided.
+
+\section{Receiver Design}
+
+\subsection{System Model}
+We consider multi-user multiple-input multiple-output (MU-MIMO) uplink transmission from $U=2$ user equipments (UEs) to a base station (BS) with $B=4$ antennas, denoted $U\times B\equiv 2\times 4$, over the 5G NR physical uplink shared channel (PUSCH). Each slot carries one transport block (TB) per scheduled UE on an orthogonal frequency division multiplexing (OFDM) resource grid with $S$ subcarriers and $T=14$ OFDM symbols. The received signal on subcarrier $s$ and OFDM symbol $t$ is
+\begin{equation}
+\mathbf{y}_{s,t}=\sum_{u=1}^{U}\mathbf{h}_{s,t,u}\,x_{s,t,u}+\mathbf{n}_{s,t},
+\end{equation}
+where $\mathbf{h}_{s,t,u}\in\mathbb{C}^{B}$ is the effective channel of UE $u$ after beamforming, $x_{s,t,u}$ is its modulated symbol or pilot, and $\mathbf{n}_{s,t}\sim\mathcal{CN}(\mathbf{0},N_0\mathbf{I})$. Demodulation reference signal (DMRS) positions are fixed, but the DMRS sequence depends on the slot number.
+
+\subsection{Neural Receiver}
+We build on the convolutional and graph neural network (CGNN) neural receiver (NRX) of \citet{cammerer2023} and \citet{wiesmayr2024}. A least squares (LS) channel estimate initializes the \texttt{StateInit} layer, $N_{\mathrm{it}}$ \texttt{CGNNit} blocks update the state of each UE, and \texttt{ReadoutLLRs} outputs log-likelihood ratios (LLRs). This NRX processes each slot independently. We call the version with $N_{\mathrm{it}}=8$ the \emph{Large NRX}.
+
+Each CGNN iteration adds latency~\cite{wiesmayr2024}. The proposed NRX, shown in Fig.~\ref{fig:architecture}, therefore uses $N_{\mathrm{it}}=2$ and aims to recover performance with a pilot memory, a channel filter, and one iteration of iterative detection and decoding (IDD). It has $1.35\cdot 10^{5}$ active weights, of which only 643 are new, compared with $4.3\cdot 10^{5}$ for the Large NRX.
+
+\begin{figure*}[t]
+\centering
+\includegraphics[width=\textwidth]{figures/receiver_architecture.pdf}
+\caption{Proposed NRX for 5G NR PUSCH.}
+\label{fig:architecture}
+\end{figure*}
+
+\subsection{Pilot Memory}
+The channel of a UE evolves over consecutive slots, but a slot-wise NRX discards all earlier pilots. Intuitively, earlier pilots show how the channel is changing, which the two DMRS symbols of a slot can only partly capture on fast channels. We therefore store the LS estimates of each UE's DMRS, together with $N_0$, for up to seven previous TBs. Entries older than eight TBs (4\,ms) are ignored, as they are likely outdated. A UE returning after a scheduling gap thus resumes from its recent entries, if any.
+
+The memory is written from pilots only. Decoded bits and cyclic redundancy check (CRC) outcomes never enter it, so a decoding failure cannot corrupt later slots. It is also the only state kept across slots, and all weights stay frozen during operation. As in \citet{wiesmayr2024}, we do not assume training on-the-fly.
+
+\subsection{Channel Filter}
+A small learned filter refines the current LS estimate $\mathbf{h}_0\in\mathbb{C}^{B}$ of a DMRS position using nearby estimates $\mathbf{h}_j$, $j\in\mathcal{J}$, from the current TB and the memory. It fits a local first-order channel model,
+\begin{equation}
+\begin{aligned}
+\hat{\mathbf{h}}_{s,t,u}&=\sum_{r=0}^{2}\phi_r(s,t)\,\boldsymbol{\theta}_r,\\
+\boldsymbol{\theta}_r&=\delta_{r,0}\mathbf{h}_0+\sum_{j\in\mathcal{J}}\beta_{j,r}\left(\mathbf{h}_j-\mathbf{h}_0\right),
+\end{aligned}
+\end{equation}
+where $\phi_0=1$, $\phi_1$ and $\phi_2$ are normalized offsets in time and frequency, and $\delta_{r,0}$ is the Kronecker delta. The first-order terms capture how the channel varies around each DMRS position. We learn the combination because the best weighting depends on the noise level, the Doppler shift, and the age of each entry, and learning it requires no channel statistics. A multilayer perceptron (MLP) with 16 hidden units computes the coefficients $\beta_{j,r}$ from the correlation, power, noise level, age, and position of each $\mathbf{h}_j$. The filter can fall back to the current estimate when the memory does not help. The refined estimate $\hat{\mathbf{h}}_{s,t,u}$ replaces the LS estimate at the input of \texttt{StateInit}. A second MLP with 16 hidden units estimates its error covariance $\boldsymbol{\Sigma}_{s,t,u}$, which tells the next stage how far to trust the estimate. Together, the two MLPs use 554 weights.
+
+\subsection{Iterative Detection and Decoding}
+With only two CGNN iterations, the NRX LLRs are less reliable, whereas the decoder has information about the code that the NRX does not use. IDD feeds this information back to detection. We perform one IDD iteration by splitting low-density parity-check (LDPC) belief propagation (BP) decoding into two stages. Let $L$ denote the NRX LLR of a coded bit. After eight BP iterations, we evaluate all 256 pairs $\mathbf{x}=[x_1,x_2]^{\mathsf{T}}$ of 16-QAM symbols of the two UEs on each data resource element, which is feasible for two UEs, with the score
+\begin{equation}
+\log\Lambda(\mathbf{x})=-\log\det\mathbf{C}(\mathbf{x})-\mathbf{e}(\mathbf{x})^{\mathsf{H}}\mathbf{C}(\mathbf{x})^{-1}\mathbf{e}(\mathbf{x}),
+\end{equation}
+where $\mathbf{e}(\mathbf{x})=\mathbf{y}_{s,t}-\sum_u\hat{\mathbf{h}}_{s,t,u}x_u$ and $\mathbf{C}(\mathbf{x})=N_0\mathbf{I}+\sum_u|x_u|^2\boldsymbol{\Sigma}_{s,t,u}$. Here, $\mathbf{C}(\mathbf{x})$ accounts for channel estimation errors, whose effect grows with the symbol energy. Marginalizing these scores gives an a posteriori probability (APP) LLR $P$. Repeating this with the extrinsic LLRs of the first BP stage as symbol priors gives a second APP LLR $Q$. With a learned strength $\sigma\in(0,1)$ and the correction $\Delta=\sigma(Q-P)$, the input to the remaining BP iterations is
+\begin{equation}
+J=(1-a)(L+\Delta)+a(P+\Delta),
+\end{equation}
+where the per-bit LLR combining weight $a\in[0,1]$ comes from an MLP with eight hidden units. We learn this weight because $L$ and $P$ rely on different models, and neither is expected to be best for every bit. BP then continues for ten iterations from $J$ and the retained decoder state, which avoids repeating the first eight iterations, for a total of 18 iterations. This stage uses 89 weights, and none of its outputs enter the memory.
+
+\subsection{Training}
+We train all weights end-to-end, starting from weights derived from the pre-trained NRX. We use simulated TB sequences rather than independent slots, so that the filter learns how the channel evolves. We apply $5\cdot 10^{3}$ updates of the ADAM optimizer with a learning rate of $10^{-4}$. Sequences of 8 to 64 TBs use 3GPP tapped delay line (TDL), urban microcell (UMi), and urban macrocell (UMa) channels with Doppler shifts up to 400\,Hz. They include near-far UEs, as well as scheduling gaps and channel changes, so that the receiver learns to handle missing or outdated entries. The loss has three terms. The first is the binary cross-entropy on $L$, the first-stage posterior, and $J$, so that each stage produces reliable LLRs. The second acts on the decoded payload LLRs, because a TB fails if any of its bits is wrong: it averages their binary cross-entropy and a normalized log-sum-exp of the per-bit errors, which approximates a TB error. The third is the Gaussian negative log-likelihood of the true channel given $\hat{\mathbf{h}}_{s,t,u}$ and $\boldsymbol{\Sigma}_{s,t,u}$, with a weight of 0.1, which trains both the estimate and its covariance. Each TB is decoded with memory and with no memory, at a loss ratio of $1:0.5$, so that the receiver also works with no memory. We select the checkpoint on a separate development dataset.
+
+\section{Evaluation}
+
+\subsection{Simulation Setup}
+We evaluate all receivers with Sionna~\cite{hoydis2022} in the $2\times 4$ configuration of \citet{wiesmayr2024}: dual-polarized BS antennas with 3GPP TR 38.901 patterns~\cite{tr38901}, two single-polarized omnidirectional antennas per UE with beamforming $\mathbf{v}=[1,1]^{\mathsf{T}}/\sqrt{2}$, 132 physical resource blocks with 30\,kHz subcarrier spacing at 2.14\,GHz, modulation and coding scheme (MCS) index $i=14$ (16-QAM), and DMRS type A with one additional position.
+
+To reveal the effect of memory, we simulate sequences of 64 consecutive slots (32\,ms) over continuously evolving channels. We use 32 sequences for each of three conditions, all with a new random drop of outdoor UEs per sequence, Doppler shifts up to 400\,Hz, and no path loss or shadow fading:
+\begin{itemize}
+\item \emph{UMi}: the 3GPP model with the same UE drop for the entire sequence.
+\item \emph{Channel change}: UMi, with both UEs switching to a newly drawn channel at TB 33.
+\item \emph{Scheduling gaps}: UMi with a pool of four UEs. In every TB, a scheduled UE is replaced with probability 0.25, the DMRS ports are redrawn with probability 0.25, and a UE pauses for up to four TBs with a starting probability of 0.05.
+\end{itemize}
+
+\begin{figure*}[t]
+\centering
+\includegraphics[width=\textwidth]{figures/tbler_vs_snr.pdf}
+\caption{TBLER vs.\ SNR for $U\times B\equiv 2\times 4$ MU-MIMO and MCS index $i=14$.}
+\label{fig:tbler}
+\end{figure*}
+
+We compare the proposed NRX with:
+\begin{itemize}
+\item \emph{LS + LMMSE}: LS channel estimation with linear interpolation and linear minimum mean square error (LMMSE) detection.
+\item \emph{LMMSE + K-Best}: LMMSE channel estimation and K-Best detection with list size $k=64$. Covariance matrices are computed per condition.
+\item \emph{Perf.-CSI + K-Best}: K-Best detection with perfect channel state information (CSI).
+\item \emph{Large NRX}: the NRX of \citet{wiesmayr2024}, pre-trained on UMi channels and evaluated with $N_{\mathrm{it}}\in\{2,3,8\}$.
+\item \emph{Proposed NRX, no memory}: identical weights, with the memory emptied before every TB.
+\end{itemize}
+The K-Best detectors use one stream when only one UE is scheduled. Both proposed versions use 18 BP iterations, and all other receivers use 20. We restored the LS + LMMSE and K-Best receivers from the code release of \citet{wiesmayr2024} and checked them on its Double-TDL channel: at 3\,dB, we obtain a transport block error rate (TBLER) of 0.389, 0.0067, and 0.033 versus the stored 0.389, 0.0072, and 0.040 for LS + LMMSE, Perf.-CSI + K-Best, and LMMSE + K-Best, respectively.
+
+We compute TBLER over TBs 17 to 64, after the memory has filled. All receivers decode identical channels, payloads, and noise realizations. As in the code release, SNR denotes the rate-adjusted SNR, i.e., $E_b/N_0$.
+
+\subsection{TBLER Performance}
+Fig.~\ref{fig:tbler} shows TBLER vs.\ SNR on one evaluation dataset. We call the SNR needed for a TBLER of 10\% the required SNR. For the proposed NRX, it is 6.94\,dB for UMi, 6.61\,dB for channel change, and 8.05\,dB for scheduling gaps. This is close to the Large NRX with $N_{\mathrm{it}}=8$: the proposed NRX is 0.09\,dB behind for UMi, 0.28\,dB ahead for channel change, and 0.10\,dB behind for scheduling gaps. At the same $N_{\mathrm{it}}=2$, the Large NRX requires 1.13\,dB, 1.48\,dB, and 1.53\,dB more for UMi, channel change, and scheduling gaps, respectively.
+
+The proposed NRX outperforms LS + LMMSE by at least 2.05\,dB. It matches LMMSE + K-Best within 0.08\,dB for UMi and channel change, and is 0.25\,dB ahead for scheduling gaps. Perf.-CSI + K-Best remains ahead by 0.34\,dB to 1.52\,dB.
+
+Unlike the waterfall curves for Double-TDL channels~\cite{wiesmayr2024}, TBLER flattens at high SNR for all receivers, including Perf.-CSI + K-Best. The main reason is UEs with low channel power. With a fixed beamformer and no power control, the mean effective channel power of a UE ranges from $-28.4$\,dB to 9.1\,dB across sequences, while SNR is defined independently of it. Counting each UE once per sequence, the proposed NRX has, at the highest SNR of each condition, a TBLER of 0.630 for the 8 UEs below $-10$\,dB, 0.026 for the 102 UEs between $-10$\,dB and 0\,dB, and 0.0003 for the 146 UEs above 0\,dB. Perf.-CSI + K-Best has 0.473, 0.019, and 0. Because the curves are shallow, small differences in required SNR correspond to few TBs.
+
+\subsection{Benefit of the Pilot Memory}
+Comparing the proposed NRX with its no-memory version isolates the memory, as the weights are identical. The memory reduces the required SNR by 0.40\,dB for UMi, 0.34\,dB for channel change, and 0.33\,dB for scheduling gaps. Across all SNR points and conditions, it corrects 1{,}653 TBs that fail with no memory, while 44 TBs fail only with memory and 25{,}860 fail either way.
+
+These averages hide a strong dependence on channel speed. Fig.~\ref{fig:doppler} shows the memory gain for UMi, grouped by Doppler shift. To remove the effect of low channel power, we evaluate TBLER against the effective SNR, i.e., the SNR plus the effective channel power of the UE in dB. The gain at a TBLER of 10\% is 0.06\,dB for 0--50\,Hz, 0.20\,dB for 50--175\,Hz, and 1.25\,dB for 175--400\,Hz. On slow channels, the proposed NRX with no memory already matches Perf.-CSI + K-Best, so the memory has little to add. Each group contains about 10 sequences, so these values are indicative.
+
+\begin{figure}[!ht]
+\centering
+\includegraphics[width=\columnwidth]{figures/memory_gain_vs_doppler.pdf}
+\caption{Memory gain at a TBLER of 10\% vs.\ Doppler shift for UMi.}
+\label{fig:doppler}
+\end{figure}
+
+We confirm this on two further independent evaluation datasets, called the first and second dataset, at a fixed SNR per condition, calibrated towards a TBLER of 10\% for the Large NRX on separate data. Pooled over the three conditions, the proposed NRX reaches a TBLER of 14.33\% and 13.64\%, compared with 15.65\% and 15.14\% with no memory and 14.25\% and 14.15\% for the Large NRX.
+
+We also evaluate closely spaced line-of-sight (LOS) UEs, at most $5^\circ$ apart in azimuth, near-far UEs with a received power gap of 6 or 12\,dB, and, on the first dataset only, channels ray-traced with Sionna RT~\cite{hoydis2023} in the Munich scene of \citet{wiesmayr2024}. The memory lowers TBLER in all of these cases, except for closely spaced LOS UEs on the second dataset, where it is unchanged. For the ray-traced channels, TBLER is 34.21\% for the proposed NRX, 35.32\% with no memory, and 41.57\% for the Large NRX.
+
+Pooled over the three conditions, the memory reduces TBLER by 1.32 and 1.50 percentage points on the two datasets. The Large NRX is 0.08 percentage points ahead on the first dataset and 0.51 behind on the second, so we do not claim a lower TBLER than the Large NRX, which remains ahead for UMi, channel change, closely spaced LOS UEs, and near-far UEs on the first dataset.
+
+\subsection{Latency}
+Fig.~\ref{fig:tradeoff} shows the required SNR and median latency for UMi. We time 128 TBs at an SNR of 3\,dB, one TB at a time, in TensorFlow on an NVIDIA A40 GPU. The measurement includes the memory, CGNN, LDPC decoding, CRC, and host-device transfers, but not the initial LS estimation and interpolation. These values are not comparable with the real-time budget of 1\,ms in \citet{wiesmayr2024}, which covers neural network inference with TensorRT on an NVIDIA A100 GPU, and our implementation is not real-time capable.
+
+\begin{figure}[!ht]
+\centering
+\includegraphics[width=\columnwidth]{figures/snr_latency_tradeoff.pdf}
+\caption{SNR performance and median latency vs.\ number of NRX iterations for UMi.}
+\label{fig:tradeoff}
+\end{figure}
+
+The proposed NRX has a median latency of 41.27\,ms (41.16\,ms with no memory), compared with 40.59\,ms, 43.09\,ms, and 53.05\,ms for the Large NRX with $N_{\mathrm{it}}=2$, 3, and 8, respectively. This is 0.68\,ms more than $N_{\mathrm{it}}=2$ and 22\% less than $N_{\mathrm{it}}=8$, at a comparable required SNR.
+
+All results stem from one training seed and from simulations.
+
+% The workshop connection and the Discussion are intentionally not started yet.
+
+\bibliography{references}
+
+% Optional appendix: follows the references and is outside the workshop page limit.
+% \appendix
+% \section{Receiver Architecture Details}
+
+% Reproducibility checklist from the AAAI-27 kit. Not printed: the workshop page does not
+% say it is required. To include it, change \iffalse to \iftrue.
+\iffalse
+\setlength{\leftmargini}{20pt}
+\makeatletter\def\@listi{\leftmargin\leftmargini \topsep .5em \parsep .5em \itemsep .5em}
+\def\@listii{\leftmargin\leftmarginii \labelwidth\leftmarginii \advance\labelwidth-\labelsep \topsep .4em \parsep .4em \itemsep .4em}
+\def\@listiii{\leftmargin\leftmarginiii \labelwidth\leftmarginiii \advance\labelwidth-\labelsep \topsep .4em \parsep .4em \itemsep .4em}\makeatother
+
+\setcounter{secnumdepth}{0}
+\renewcommand\thesubsection{\arabic{subsection}}
+\renewcommand\labelenumi{\thesubsection.\arabic{enumi}}
+
+\newcounter{checksubsection}
+\newcounter{checkitem}[checksubsection]
+
+\newcommand{\checksubsection}[1]{%
+  \refstepcounter{checksubsection}%
+  \paragraph{\arabic{checksubsection}. #1}%
+  \setcounter{checkitem}{0}%
+}
+
+\newcommand{\checkitem}{%
+  \refstepcounter{checkitem}%
+  \item[\arabic{checksubsection}.\arabic{checkitem}.]%
+}
+\newcommand{\question}[2]{\normalcolor\checkitem #1 #2 \color{blue}}
+\newcommand{\ifyespoints}[1]{\makebox[0pt][l]{\hspace{-15pt}\normalcolor #1}}
+
+\section*{Reproducibility Checklist}
+
+\vspace{1em}
+\hrule
+\vspace{1em}
+
+\textbf{Instructions for Authors:}
+
+This document outlines key aspects for assessing reproducibility. Please provide your input by editing this \texttt{.tex} file directly.
+
+For each question (that applies), replace the ``Type your response here'' text with your answer.
+
+\vspace{1em}
+\noindent
+\textbf{Example:} If a question appears as
+%
+\begin{center}
+\noindent
+\begin{minipage}{.9\linewidth}
+\ttfamily\raggedright
+\string\question \{Proofs of all novel claims are included\} \{(yes/partial/no)\} \\
+Type your response here
+\end{minipage}
+\end{center}
+you would change it to:
+\begin{center}
+\noindent
+\begin{minipage}{.9\linewidth}
+\ttfamily\raggedright
+\string\question \{Proofs of all novel claims are included\} \{(yes/partial/no)\} \\
+yes
+\end{minipage}
+\end{center}
+%
+Please make sure to:
+\begin{itemize}\setlength{\itemsep}{.1em}
+\item Replace ONLY the ``Type your response here'' text and nothing else.
+\item Use one of the options listed for that question (e.g., \textbf{yes}, \textbf{no}, \textbf{partial}, or \textbf{NA}).
+\item \textbf{Not} modify any other part of the \texttt{\string\question} command or any other lines in this document.\\
+\end{itemize}
+
+You can \texttt{\string\input} this .tex file right before \texttt{\string\end\{document\}} of your main file or compile it as a stand-alone document. Check the instructions on your conference's website to see if you will be asked to provide this checklist with your paper or separately.
+
+\vspace{1em}
+\hrule
+\vspace{1em}
+
+% The questions start here
+
+\checksubsection{General Paper Structure}
+\begin{itemize}
+
+\question{Includes a conceptual outline and/or pseudocode description of AI methods introduced}{(yes/partial/no/NA)}
+Type your response here
+
+\question{Clearly delineates statements that are opinions, hypothesis, and speculation from objective facts and results}{(yes/no)}
+Type your response here
+
+\question{Provides well-marked pedagogical references for less-familiar readers to gain background necessary to replicate the paper}{(yes/no)}
+Type your response here
+
+\end{itemize}
+\checksubsection{Theoretical Contributions}
+\begin{itemize}
+
+\question{Does this paper make theoretical contributions?}{(yes/no)}
+Type your response here
+
+	\ifyespoints{\vspace{1.2em}If yes, please address the following points:}
+        \begin{itemize}
+	
+	\question{All assumptions and restrictions are stated clearly and formally}{(yes/partial/no)}
+	Type your response here
+
+	\question{All novel claims are stated formally (e.g., in theorem statements)}{(yes/partial/no)}
+	Type your response here
+
+	\question{Proofs of all novel claims are included}{(yes/partial/no)}
+	Type your response here
+
+	\question{Proof sketches or intuitions are given for complex and/or novel results}{(yes/partial/no)}
+	Type your response here
+
+	\question{Appropriate citations to theoretical tools used are given}{(yes/partial/no)}
+	Type your response here
+
+	\question{All theoretical claims are demonstrated empirically to hold}{(yes/partial/no/NA)}
+	Type your response here
+
+	\question{All experimental code used to eliminate or disprove claims is included}{(yes/no/NA)}
+	Type your response here
+	
+	\end{itemize}
+\end{itemize}
+
+\checksubsection{Dataset Usage}
+\begin{itemize}
+
+\question{Does this paper rely on one or more datasets?}{(yes/no)}
+Type your response here
+
+\ifyespoints{If yes, please address the following points:}
+\begin{itemize}
+
+	\question{A motivation is given for why the experiments are conducted on the selected datasets}{(yes/partial/no/NA)}
+	Type your response here
+
+	\question{All novel datasets introduced in this paper are included in a data appendix}{(yes/partial/no/NA)}
+	Type your response here
+
+	\question{All novel datasets introduced in this paper will be made publicly available upon publication of the paper with a license that allows free usage for research purposes}{(yes/partial/no/NA)}
+	Type your response here
+
+	\question{All datasets drawn from the existing literature (potentially including authors' own previously published work) are accompanied by appropriate citations}{(yes/no/NA)}
+	Type your response here
+
+	\question{All datasets drawn from the existing literature (potentially including authors' own previously published work) are publicly available}{(yes/partial/no/NA)}
+	Type your response here
+
+	\question{All datasets that are not publicly available are described in detail, with explanation why publicly available alternatives are not scientifically satisficing}{(yes/partial/no/NA)}
+	Type your response here
+
+\end{itemize}
+\end{itemize}
+
+\checksubsection{Computational Experiments}
+\begin{itemize}
+
+\question{Does this paper include computational experiments?}{(yes/no)}
+Type your response here
+
+\ifyespoints{If yes, please address the following points:}
+\begin{itemize}
+
+	\question{This paper states the number and range of values tried per (hyper-) parameter during development of the paper, along with the criterion used for selecting the final parameter setting}{(yes/partial/no/NA)}
+	Type your response here
+
+	\question{Any code required for pre-processing data is included in the appendix}{(yes/partial/no)}
+	Type your response here
+
+	\question{All source code required for conducting and analyzing the experiments is included in a code appendix}{(yes/partial/no)}
+	Type your response here
+
+	\question{All source code required for conducting and analyzing the experiments will be made publicly available upon publication of the paper with a license that allows free usage for research purposes}{(yes/partial/no)}
+	Type your response here
+        
+	\question{All source code implementing new methods have comments detailing the implementation, with references to the paper where each step comes from}{(yes/partial/no)}
+	Type your response here
+
+	\question{If an algorithm depends on randomness, then the method used for setting seeds is described in a way sufficient to allow replication of results}{(yes/partial/no/NA)}
+	Type your response here
+
+	\question{This paper specifies the computing infrastructure used for running experiments (hardware and software), including GPU/CPU models; amount of memory; operating system; names and versions of relevant software libraries and frameworks}{(yes/partial/no)}
+	Type your response here
+
+	\question{This paper formally describes evaluation metrics used and explains the motivation for choosing these metrics}{(yes/partial/no)}
+	Type your response here
+
+	\question{This paper states the number of algorithm runs used to compute each reported result}{(yes/no)}
+	Type your response here
+
+	\question{Analysis of experiments goes beyond single-dimensional summaries of performance (e.g., average; median) to include measures of variation, confidence, or other distributional information}{(yes/no)}
+	Type your response here
+
+	\question{The significance of any improvement or decrease in performance is judged using appropriate statistical tests (e.g., Wilcoxon signed-rank)}{(yes/partial/no)}
+	Type your response here
+
+	\question{This paper lists all final (hyper-)parameters used for each model/algorithm in the paper’s experiments}{(yes/partial/no/NA)}
+	Type your response here
+
+
+\end{itemize}
+\end{itemize}
+\fi
+
+\end{document}
