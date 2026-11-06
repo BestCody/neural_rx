@@ -54,7 +54,7 @@ def architecture():
 
     top, bottom, bus = .118, .025, .19
     middle = top+.025
-    chain = [(.18, .075, "StateInit", PURPLE, False), (.275, .08, "CGNNit x2", PURPLE, False),
+    chain = [(.18, .075, "StateInit", PURPLE, False), (.275, .08, "CGNNIt x2", PURPLE, False),
              (.375, .07, "Readout", PURPLE, False), (.465, .075, "LDPC (8)", GREEN, False),
              (.56, .09, "IDD", PURPLE, True), (.67, .08, "LDPC (10)", GREEN, False), (.77, .125, "CRC", GREEN, False)]
     for x, width, label, color, new in chain:
