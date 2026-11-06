@@ -3,7 +3,9 @@ import glob, json, math, os, re, subprocess
 import numpy as np
 SW = 'experiments/20261104_tbler_sweep/results'
 text = re.sub(r'\s+', ' ', subprocess.run(['pdftotext', 'paper/build/main.pdf', '-'], capture_output=True, text=True).stdout)
-tex = open('paper/main.tex', encoding='utf8').read()
+# main.tex pulls the sections in with \input{name}; expand them to check the full text.
+tex = re.sub(r'\\input\{([^}]+)\}', lambda m: open(f'paper/{m.group(1)}.tex', encoding='utf8').read(),
+             open('paper/main.tex', encoding='utf8').read())
 bad = 0
 
 def curve(cond, method):

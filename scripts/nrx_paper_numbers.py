@@ -186,7 +186,9 @@ def flatten(value):
 
 def check(tex, numbers, allowed):
     """Every decimal number in the evaluation section must round from a collected result or be a listed constant."""
-    text = Path(tex).read_text()
+    # main.tex pulls the sections in with \input{name}; expand them to check the full text.
+    text = re.sub(r"\\input\{([^}]+)\}", lambda m: (Path(tex).parent/f"{m.group(1)}.tex").read_text(),
+                  Path(tex).read_text())
     section = text[text.index(r"\section{Evaluation}"):text.index(r"\bibliography{references}")]
     section = re.sub(r"(?m)%.*$", "", section)
     values = list(flatten(numbers))

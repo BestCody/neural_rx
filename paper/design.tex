@@ -1,0 +1,53 @@
+\section{Receiver Design}
+
+\subsection{System Model}
+We consider multi-user multiple-input multiple-output (MU-MIMO) uplink transmission from $U$ user equipments (UEs) to a base station (BS) with $B$ antennas over the 5G NR physical uplink shared channel (PUSCH)~\cite{dahlman2020}. Each slot carries one transport block (TB) per scheduled UE on an orthogonal frequency division multiplexing (OFDM) resource grid with $S$ subcarriers and $T=14$ OFDM symbols. The received signal on subcarrier $s$ and OFDM symbol $t$ is
+\begin{equation}
+\mathbf{y}_{s,t}=\sum_{u=1}^{U}\mathbf{h}_{s,t,u}\,x_{s,t,u}+\mathbf{n}_{s,t},
+\end{equation}
+where $\mathbf{h}_{s,t,u}\in\mathbb{C}^{B}$ is the effective channel of UE $u$ after beamforming, $x_{s,t,u}$ is its modulated symbol or pilot, and $\mathbf{n}_{s,t}\sim\mathcal{CN}(\mathbf{0},N_0\mathbf{I})$ is complex Gaussian noise with power spectral density $N_0$. Demodulation reference signal (DMRS) positions are fixed, but the DMRS sequence depends on the slot number. The receiver computes log-likelihood ratio (LLR) estimates for each coded bit $b$ of each UE. We define the LLRs as logits, i.e.,
+\begin{equation}
+\ell=\ln\frac{\Pr(b=1\,|\,\mathbf{Y})}{\Pr(b=0\,|\,\mathbf{Y})},
+\end{equation}
+where $\mathbf{Y}$ collects all $\mathbf{y}_{s,t}$ of the slot. The LLR estimates are fed to the channel decoder.
+
+\subsection{Neural Receiver}
+We build on the neural receiver (NRX) of \citet{cammerer2023} and \citet{wiesmayr2024}, which combines convolutional and graph neural network (CGNN) layers. A least squares (LS) channel estimate initializes the \texttt{StateInit} layer, $N_{\mathrm{it}}$ \texttt{CGNNIt} blocks update the state of each UE, and \texttt{ReadoutLLRs} outputs the LLRs. This NRX processes each slot independently. We call the version with $N_{\mathrm{it}}=8$ the \emph{Large NRX}.
+
+Each CGNN iteration adds latency~\cite{wiesmayr2024}. The proposed NRX, shown in Fig.~\ref{fig:architecture}, therefore uses $N_{\mathrm{it}}=2$ and compensates for the fewer iterations with a pilot memory, a channel filter, and iterative detection and decoding (IDD). It has $1.4\cdot 10^{5}$ weights, of which only 643 are new, compared with $4.4\cdot 10^{5}$ for the Large NRX.
+
+\begin{figure*}[t]
+\centering
+\includegraphics[width=\textwidth]{figures/receiver_architecture.pdf}
+\caption{Proposed NRX for 5G NR PUSCH.}
+\label{fig:architecture}
+\end{figure*}
+
+\subsection{Pilot Memory}
+The channel of a UE evolves over consecutive slots, but an NRX that processes each slot independently discards all earlier pilots. Earlier pilots carry information on how the channel changes over time, which the few DMRS symbols of a single slot capture only partially on fast-varying channels. We therefore store the LS channel estimates at each UE's DMRS positions, together with $N_0$, for up to seven previous TBs. Entries older than eight slots (4\,ms at 30\,kHz subcarrier spacing) are ignored, as they are likely outdated. A UE returning after a scheduling gap thus resumes from its recent entries, if any.
+
+The memory is written from pilots only. Decoded bits and cyclic redundancy check (CRC) outcomes never enter it, so a decoding failure cannot corrupt later slots. It is also the only state kept across slots, and all weights stay frozen during operation. As in \citet{wiesmayr2024}, we do not assume training on-the-fly.
+
+\subsection{Channel Filter}
+A small learned filter refines the current LS estimate $\mathbf{h}_0\in\mathbb{C}^{B}$ of a DMRS position using nearby estimates $\mathbf{h}_j$, $j\in\mathcal{N}$, from the current TB and the memory. It fits a local first-order channel model,
+\begin{equation}
+\begin{aligned}
+\hat{\mathbf{h}}_{s,t,u}&=\sum_{r=0}^{2}\phi_r(s,t)\,\boldsymbol{\theta}_r,\\
+\boldsymbol{\theta}_r&=\delta_{r,0}\mathbf{h}_0+\sum_{j\in\mathcal{N}}\beta_{j,r}\left(\mathbf{h}_j-\mathbf{h}_0\right),
+\end{aligned}
+\end{equation}
+where $\phi_0=1$, $\phi_1$ and $\phi_2$ are normalized offsets in time and frequency relative to the DMRS position of $\mathbf{h}_0$, and $\delta_{r,0}$ is the Kronecker delta. The first-order terms capture how the channel varies around each DMRS position. The best weighting depends on the noise level, the Doppler shift, and the age of each entry; a learned weighting adapts to these factors without requiring channel statistics. A multilayer perceptron (MLP) with one hidden layer of 16 units computes the coefficients $\beta_{j,r}$ from the correlation of each $\mathbf{h}_j$ with $\mathbf{h}_0$ and from its power, noise level, age, and position. The filter can fall back to the current estimate when the memory does not help. The refined estimate $\hat{\mathbf{h}}_{s,t,u}$ replaces the LS estimate at the input of \texttt{StateInit}. A second MLP with one hidden layer of 16 units estimates its error covariance $\boldsymbol{\Sigma}_{s,t,u}$, which quantifies the reliability of the estimate for the subsequent processing.
+
+\subsection{Iterative Detection and Decoding}
+With only two CGNN iterations, the NRX LLRs are less reliable, whereas the decoder has information about the code that the NRX does not use. IDD~\cite{hochwald2003} feeds this information back to detection. We perform one IDD iteration by splitting low-density parity-check (LDPC) belief propagation (BP) decoding~\cite{richardson2018} into two stages. Let $L$ denote the NRX LLR of a coded bit. After eight BP iterations, we evaluate, for $U=2$ UEs, all 256 pairs $\mathbf{x}=[x_1,x_2]^{\mathsf{T}}$ of 16-QAM symbols on each data resource element, which is feasible for this small number of UEs, with the Gaussian log-likelihood, up to a constant,
+\begin{equation}
+\ln\Lambda(\mathbf{x})=-\ln\det\mathbf{C}(\mathbf{x})-\mathbf{e}(\mathbf{x})^{\mathsf{H}}\mathbf{C}(\mathbf{x})^{-1}\mathbf{e}(\mathbf{x}),
+\end{equation}
+where $\mathbf{e}(\mathbf{x})=\mathbf{y}_{s,t}-\sum_u\hat{\mathbf{h}}_{s,t,u}x_u$ and $\mathbf{C}(\mathbf{x})=N_0\mathbf{I}+\sum_u|x_u|^2\boldsymbol{\Sigma}_{s,t,u}$. Here, $\mathbf{C}(\mathbf{x})$ accounts for channel estimation errors, whose effect grows with the symbol energy. Marginalizing these likelihoods gives an a posteriori probability (APP) LLR $P$. Repeating this with the extrinsic LLRs of the first BP stage as symbol priors gives a second APP LLR $Q$. With a learned scaling factor $\sigma\in(0,1)$ and the correction $\Delta=\sigma(Q-P)$, the input to the remaining BP iterations is
+\begin{equation}
+J=(1-a)(L+\Delta)+a(P+\Delta),
+\end{equation}
+where the per-bit LLR combining weight $a\in[0,1]$ comes from an MLP with one hidden layer of eight units. As $L$ and $P$ rely on different models, neither can be expected to be the better choice for every bit. BP then continues for ten iterations from $J$ and the retained BP messages, which avoids repeating the first eight iterations, for a total of 18 iterations. None of the IDD outputs enter the memory.
+
+\subsection{Training}
+We train all weights end-to-end, starting from the pre-trained Large NRX. Training uses simulated TB sequences rather than independent slots, which allows the filter to learn how the channel evolves. We perform $5\cdot 10^{3}$ training steps with the ADAM optimizer~\cite{kingma2015} and a learning rate of $10^{-4}$. Sequences of 8 to 64 slots use 3GPP tapped delay line (TDL), urban microcell (UMi), and urban macrocell (UMa) channels~\cite{tr38901} with Doppler shifts up to 400\,Hz. They include near-far UEs, as well as scheduling gaps and channel changes, which expose the receiver to missing and outdated memory entries. The loss has three terms. The first is the binary cross-entropy on $L$, on the posterior LLRs after the first BP stage, and on $J$, to obtain reliable LLRs at every stage. The second acts on the decoded payload LLRs. Since a TB fails if any of its bits is wrong, it averages their binary cross-entropy and a normalized log-sum-exp of $-(2b-1)\ell$ over the payload bits $b$ and their LLRs $\ell$, a smooth maximum that approximates a TB error. The third, weighted by 0.1, is the Gaussian negative log-likelihood of the true channel given $\hat{\mathbf{h}}_{s,t,u}$ and $\boldsymbol{\Sigma}_{s,t,u}$, and trains both the estimate and its covariance. To keep the receiver functional with no memory, each TB is decoded both with memory and with no memory, and the two losses are weighted $1:0.5$. We select the checkpoint on a separate validation dataset.
