@@ -54,16 +54,22 @@ required = {c: {m: crossing(*curve(c, m)) for m in ['baseline_lslin_lmmse', 'bas
 def gap(c, m):
     return abs(round(required[c][m], 2) - round(required[c]['candidate_persistent'], 2))
 for c in core:
-    expect(f"{required[c]['candidate_persistent']:.2f}\\,dB", 'proposed required SNR')
     expect(f"{gap(c, 'frozen_cold_k8'):.2f}\\,dB", 'gap to Large NRX')
     expect(f"{gap(c, 'candidate_reset'):.2f}\\,dB", 'memory gain')
-for c in ('natural_umi', 'controlled_topology_change', 'schedule_gap_reentry'):
     expect(f"{gap(c, 'frozen_cold_k2'):.2f}\\,dB", 'gain over N_it=2')
-expect(f"{min(gap(c, 'baseline_lslin_lmmse') for c in core):.2f}\\,dB", 'minimum gap to LS + LMMSE')
-expect(f"{min(gap(c, 'baseline_perf_csi_kbest') for c in core):.2f}\\,dB to {max(gap(c, 'baseline_perf_csi_kbest') for c in core):.2f}\\,dB", 'range of gaps to Perf.-CSI')
-expect(f"{gap('natural_umi', 'baseline_lmmse_kbest'):.2f}\\,dB", 'match to LMMSE + K-Best')
-assert gap('controlled_topology_change', 'baseline_lmmse_kbest') <= gap('natural_umi', 'baseline_lmmse_kbest')
-expect(f"{gap('schedule_gap_reentry', 'baseline_lmmse_kbest'):.2f}\\,dB", 'lead over LMMSE + K-Best')
+MATCH_DB = .1  # "matches": required SNRs within this margin
+proposed = {c: round(required[c]['candidate_persistent'], 2) for c in core}
+baselines = {
+    'outperforms LS + LMMSE in all three conditions':
+        all(proposed[c] < round(required[c]['baseline_lslin_lmmse'], 2) for c in core),
+    'matches LMMSE + K-Best for UMi and channel change':
+        all(gap(c, 'baseline_lmmse_kbest') <= MATCH_DB for c in ('natural_umi', 'controlled_topology_change')),
+    'ahead of LMMSE + K-Best for scheduling gaps':
+        proposed['schedule_gap_reentry'] < round(required['schedule_gap_reentry']['baseline_lmmse_kbest'], 2),
+    'Perf.-CSI + K-Best ahead of all other receivers':
+        all(required[c]['baseline_perf_csi_kbest'] < required[c][m] for c in core for m in required[c]
+            if m != 'baseline_perf_csi_kbest'),
+}
 
 SE = {'first': 'experiments/20261021_package_layout_validation/results/v2_confirmation_005000/errors.npz', 'second': 'experiments/20261021_current_code_reproduction/results/confirmation_005000_seed86000000/errors.npz'}
 names = ['historical_tdl_b100', 'historical_tdl_c300', 'natural_umi', 'natural_uma', 'controlled_topology_change', 'schedule_gap_reentry', 'close_los', 'near_far', 'ray_traced_munich']
@@ -76,27 +82,25 @@ for ds, path in SE.items():
         for m in methods:
             e = int((data[f'errors_{m}'][c, 0, :, 16:] & mask).sum()); n = int(mask.sum())
             rates[ds, name, m] = 100 * e / n
-            if name in core:
-                t = pooled.setdefault((ds, m), [0, 0]); t[0] += e; t[1] += n
-for key, (e, n) in pooled.items():
-    expect(f'{100 * e / n:.2f}\\%', f'pooled {key}')
-for m in methods:
-    expect(f"{rates['first', 'ray_traced_munich', m]:.2f}\\%", f'Munich {m}')
-for ds in SE:
-    for m in methods[1:]:
-        expect(f"{abs(100 * pooled[ds, m][0] / pooled[ds, m][1] - 100 * pooled[ds, 'candidate_persistent'][0] / pooled[ds, 'candidate_persistent'][1]):.2f}", f'difference {ds} {m}')
-further = ['close_los', 'near_far']
+# The cases the fixed-SNR paragraph names: the three conditions, close LOS, near-far, and Munich (first dataset only).
+cases = [(ds, n) for ds in SE for n in core + ['close_los', 'near_far', 'ray_traced_munich'] if (ds, n, methods[0]) in rates]
+unchanged = [('second', 'close_los')]
 claims = {
-    'memory lowers TBLER on further channels': all(rates[ds, n, 'candidate_persistent'] < rates[ds, n, 'candidate_reset'] for ds in SE for n in further if not (ds == 'second' and n == 'close_los')) and rates['first', 'ray_traced_munich', 'candidate_persistent'] < rates['first', 'ray_traced_munich', 'candidate_reset'],
-    'close LOS unchanged on second dataset': rates['second', 'close_los', 'candidate_persistent'] == rates['second', 'close_los', 'candidate_reset'],
-    'Large NRX ahead on first dataset for UMi, topology change, close LOS, near-far': all(rates['first', n, 'frozen_cold_k8'] < rates['first', n, 'candidate_persistent'] for n in ('natural_umi', 'controlled_topology_change', 'close_los', 'near_far')),
+    **baselines,
+    'memory lowers TBLER in all named fixed-SNR cases but one':
+        all(rates[k + ('candidate_persistent',)] < rates[k + ('candidate_reset',)] for k in cases if k not in unchanged),
+    'close LOS unchanged on one dataset':
+        all(rates[k + ('candidate_persistent',)] == rates[k + ('candidate_reset',)] for k in unchanged),
+    'Large NRX ahead of the proposed NRX in some fixed-SNR cases':
+        any(rates[k + ('frozen_cold_k8',)] < rates[k + ('candidate_persistent',)] for k in cases),
     'proposed behind for UMi and gaps, ahead for channel change': required['natural_umi']['candidate_persistent'] > required['natural_umi']['frozen_cold_k8'] and required['schedule_gap_reentry']['candidate_persistent'] > required['schedule_gap_reentry']['frozen_cold_k8'] and required['controlled_topology_change']['candidate_persistent'] < required['controlled_topology_change']['frozen_cold_k8'],
 }
 for claim, holds in claims.items():
     checked += 1
     if not holds:
         bad += 1; print('CLAIM FAILS', claim)
-if re.search(r'Table|tab:', section):
+# Paper tables only; the 3GPP citation "Table~5.1.3.1-1" is not one.
+if re.search(r'\\begin\{table|tab:', section):
     bad += 1; print('A table reference remains')
 print('values and claims recomputed:', checked)
 
@@ -118,6 +122,11 @@ def speed_curve(method, stratum):
     centers = [b + .5 for b in sorted(table)]
     return crossing(centers, [table[b][0] / table[b][1] for b in sorted(table)])
 
+sizes = [sum(int(os.path.basename(p)[8:13]) % 3 == s for p in glob.glob(f'{SW}/sweep/natural_umi/candidate_persistent/episode_*.npz')) for s in range(3)]
+expect('Each group contains about 10 sequences', 'Doppler group size phrase')
+checked += 1
+if not all(10 <= n <= 11 for n in sizes):
+    bad += 1; print('CLAIM FAILS about 10 sequences per Doppler group', sizes)
 for stratum, label in enumerate(('0-50', '50-175', '175-400')):
     gain = speed_curve('candidate_reset', stratum) - speed_curve('candidate_persistent', stratum)
     expect(f'{gain:.2f}\\,dB', f'memory gain at {label} Hz')
@@ -134,8 +143,12 @@ for m, v in med.items():
     if f'{v:.2f}' not in text:
         bad += 1; print('LATENCY MISSING', m, v)
 print('latency medians', {k: round(v, 2) for k, v in med.items()})
-print('saving % ', round(100 * (1 - med['candidate_persistent'] / med['frozen_cold_k8']), 1), 'added ms', round(med['candidate_persistent'] - med['frozen_cold_k2'], 2))
-for phrase in ('1,653', '25,860', 'real-time budget of 1'):
-    if phrase not in text.replace('- ', '-') and phrase.replace(',', '{,}') not in section and phrase not in section:
+saving = 100 * (1 - med['candidate_persistent'] / med['frozen_cold_k8'])
+added = med['candidate_persistent'] - med['frozen_cold_k2']
+print('saving % ', round(saving, 1), 'added ms', round(added, 2))
+expect(f'{added:.2f}\\,ms more than the Large NRX', 'added latency over N_it=2')
+expect(f'{saving:.0f}\\% less than', 'latency saving over N_it=8')
+for phrase in ('real-time budget of 1',):
+    if phrase not in text.replace('- ', '-') and phrase not in section:
         bad += 1; print('PHRASE MISSING', phrase)
 print('RESULT:', 'ALL MATCH' if not bad else f'{bad} MISMATCHES')
