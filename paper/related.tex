@@ -1,1 +1,114 @@
-% Related work: not started yet.
+\section{Related Work}
+Neural receivers for 5G NR obtain their accuracy from iterative inference over
+the resource grid, yet the uplink latency budget limits how many iterations can
+run. Prior work addresses this tension by making each slot cheaper to process
+or by adapting the receiver to its environment, while a separate line of work
+exploits the temporal correlation of the channel. Uncertainty-aware detection
+and iterative decoding complete the picture, as they determine how much a
+receiver can gain from better channel evidence.
+
+Fully learned receivers replace channel estimation, equalization and demapping
+with a single network that processes one slot~\cite{honkala2021deeprx}. The
+convolutional graph neural network (CGNN) receiver of \citet{cammerer2023neural} extends this to 5G NR multi-user MIMO through
+an unrolled iterative algorithm, in which each learned iteration exchanges
+messages between users and updates a per-user state. Its latency grows with
+depth: on an NVIDIA A100 with TensorRT, each iteration adds about 350~$\mu$s to
+a fixed 270~$\mu$s, so a 1~ms budget admits two iterations instead of
+eight~\cite{wiesmayr2025realtime}. The reported SNR loss of this cut is below
+0.7~dB on a two-user 16-QAM test channel and larger at 64-QAM; on our
+evaluation sequences it reaches 1.13--1.53~dB at 10\% TBLER.
+% TODO: name the exact conditions behind 1.13--1.53 dB.
+
+Several remedies recover part of this loss. Site-specific finetuning lets a
+two-iteration receiver outperform an untuned eight-iteration receiver on
+single-user over-the-air recordings at two indoor sites~\cite{baytekin2026site},
+but it requires recorded site data and degrades performance on the original
+training distribution~\cite{wiesmayr2025realtime}. Other work reduces per-slot
+compute or model size through dynamic depth and expert
+selection~\cite{yang2022dynamic,vanbolderik2024layerskip,vanbolderik2024mean},
+low-rank adapters~\cite{vanbolderik2026loren}, weight
+quantization~\cite{yellapragada2026qat}, factorized or shallow
+attention~\cite{yellapragada2026axial,kawai2025unified,fan2025choose}, lighter or
+phase-equivariant blocks~\cite{gupta2025lowcomplexity,gansekoele2025rpe}, and
+model-driven hybrids~\cite{honkala2026eqdeeprx,abdollahpour2025mdx}. Some of these
+levers cost accuracy, for example 0.73--0.80~dB for 4-bit
+weights~\cite{yellapragada2026qat}, and their costs are reported in units that
+cannot be compared directly: FLOPs~\cite{abdollahpour2025mdx,yellapragada2026axial,honkala2026eqdeeprx},
+active layers~\cite{vanbolderik2024mean}, modelled
+energy~\cite{gupta2025lowcomplexity}, synthesized power and
+area~\cite{vanbolderik2024layerskip,vanbolderik2026loren}, and measured
+latency~\cite{wiesmayr2025realtime,kawai2025unified}. Yet all of these methods
+process each slot from scratch, a statelessness that \citet{kawai2025unified} name as a limitation, calling for temporal
+context across resource grids.
+
+Pooling pilots across time is an established way to improve channel estimates.
+Two-dimensional Wiener filtering weights pilots by their time--frequency
+correlation~\cite{hoeher1997wiener}, Kalman tracking propagates an estimate and
+its error covariance between blocks~\cite{komninakis2002kalman}, and 5G NR
+Release~17 standardizes joint estimation over several PUSCH slots as DMRS
+bundling~\cite{3gpp38830,3gpp38214}, with gains that depend on the number of
+bundled slots. These gains require a channel that stays correlated over the
+window and a UE whose transmit phase stays continuous. Under isotropic
+scattering, the correlation of samples one 0.5~ms slot apart falls from 0.99 at
+a Doppler of 50~Hz to 0.64 at 400~Hz~\cite{jakes1974microwave}. Learned
+predictors exploit the same temporal structure with recurrent, state-space and
+transformer models over past channel
+estimates~\cite{mattu2022deep,mohsin2025continual,luo2025cpmamba,lagona2026transformer,gizzini2021talstm},
+and a hypernetwork can set the parameters of a Kalman
+tracker~\cite{pratik2021hkf}. These works, however, target channel prediction or
+tracking; none conditions a neural multi-user receiver on stored pilot history.
+
+Within learned receivers, earlier slots enter mainly through the weights.
+Online schemes retrain on decoder-recovered labels, on symbol decisions, or when
+a pilot-based drift test
+fires~\cite{fischer2022adaptive,finish2022symbol,uzlaner2024asynchronous}, or
+track a posterior over the weights~\cite{gusakov2026online}. They pay in label
+delay, at least 0.46~s per batch in \citet{fischer2022adaptive}; in compute that
+grows at least quadratically with the number of weights~\cite{gusakov2026online};
+and in error propagation when decisions serve as labels or
+references~\cite{fischer2022adaptive,fan2025defined}. Long-term statistics such
+as time-averaged channel covariances~\cite{liu2026universal,wiesmayr2026impact}
+remain valid across scheduling gaps but adapt slowly after a user change and do
+not supply the instantaneous channel. Closest to our setting, \citet{kunde2025transformers} show that a fixed-weight softmax-attention
+layer over past pilot pairs can represent the symbol posterior and, empirically,
+outperforms detectors that treat an LMMSE channel estimate as exact; their
+theory, however, is asymptotic, and their experiments are single-user and
+uncoded.
+
+A detector that treats its channel estimate as exact produces overconfident
+log-likelihood ratios (LLRs). \citet{goutay2021ml} learn the
+covariance of the channel-estimation error and use it twice: in the equalizer
+that separates the users, and in the noise variance that sets the confidence of
+each LLR. Combined with a learned demapper, their receiver gains 1~dB at a coded
+BER of $10^{-3}$ at 0--15~km/h and 3~dB at $10^{-2}$ at 30--45~km/h.
+Iterative detection and decoding (IDD) adds decoder feedback at run time.
+DUIDD~\cite{wiesmayr2022duidd} learns the parameters of a fixed number of
+detection--decoding rounds: it normalizes the signal by a
+noise-plus-channel-error covariance assumed independent of the transmitted
+symbols, learns how to mix a posteriori LLRs with extrinsic ones, which exclude
+the decoder's prior, and keeps decoder messages between rounds. It gains
+0.6--1.2~dB at 1\% BLER over classical IDD with the same decoding budget.
+Learned detectors complicate this feedback: an approximate GNN posterior keeps
+part of the decoder's prior even after it is subtracted, so the prior is counted
+twice and the loop can become unstable. \citet{zhou2023ext} counter
+this by training on synthetic priors with extrinsic targets and by clipping
+decoder LLRs, and \citet{clausius2025joint} observe a similar
+mismatch. In these works, however, the error covariance covers only the current
+slot's pilots, and whether a neural receiver's LLRs stay extrinsic under decoder
+feedback has not been examined.
+% TODO: keep the last clause only if our evaluation includes the extrinsic check.
+
+Despite these advances, no prior 5G NR multi-user MIMO neural receiver carries
+pilot-derived channel evidence across slots to recover the accuracy lost to
+fewer iterations. In contrast, our receiver keeps its weights fixed and stores
+least-squares DMRS estimates from up to seven earlier transport blocks per UE.
+It therefore needs no labels and cannot propagate decision errors. Like DMRS
+bundling, it assumes phase continuity across stored slots; it ignores entries
+older than eight slots, weights the rest by age, and falls back to the current
+estimate when the memory does not help. A channel filter trained with a Gaussian
+negative log-likelihood supplies an error covariance for this multi-slot
+estimate, which enters a symbol-dependent joint-symbol likelihood in one IDD
+round with retained decoder state. The approach is complementary to intra-slot
+cost reduction and to weight adaptation. Because our timings come from a
+non-real-time implementation, we report savings as iteration counts rather than
+as latency.
