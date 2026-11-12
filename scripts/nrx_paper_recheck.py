@@ -59,6 +59,14 @@ for c in core:
     expect(f"{gap(c, 'frozen_cold_k8'):.2f}\\,dB", 'gap to Large NRX')
     expect(f"{gap(c, 'candidate_reset'):.2f}\\,dB", 'memory gain')
     expect(f"{gap(c, 'frozen_cold_k2'):.2f}\\,dB", 'gain over N_it=2')
+# Related Work quotes the loss of cutting the Large NRX from N_it=8 to 2, smallest and largest over the conditions.
+cut = {c: abs(round(required[c]['frozen_cold_k2'], 2) - round(required[c]['frozen_cold_k8'], 2)) for c in core}
+phrase = (f"ranges from {min(cut.values()):.2f}~dB for channel change to "
+          f"{max(cut.values()):.2f}~dB for scheduling gaps")
+checked += 1
+if (min(cut, key=cut.get), max(cut, key=cut.get)) != ('controlled_topology_change', 'schedule_gap_reentry') \
+        or phrase not in re.sub(r'\s+', ' ', tex):
+    bad += 1; print('MISSING iteration-cut loss in Related Work', cut)
 MATCH_DB = .1  # "matches": required SNRs within this margin
 proposed = {c: round(required[c]['candidate_persistent'], 2) for c in core}
 baselines = {

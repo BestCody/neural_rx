@@ -16,8 +16,8 @@ depth: on an NVIDIA A100 with TensorRT, each iteration adds about 350~$\mu$s to
 a fixed 270~$\mu$s, so a 1~ms budget admits two iterations instead of
 eight~\cite{wiesmayr2025realtime}. The reported SNR loss of this cut is below
 0.7~dB on a two-user 16-QAM test channel and larger at 64-QAM; on our
-evaluation sequences it reaches 1.13--1.53~dB at 10\% TBLER.
-% TODO: name the exact conditions behind 1.13--1.53 dB.
+evaluation sequences, it ranges from 1.20~dB for channel change to 1.63~dB for
+scheduling gaps at 10\% TBLER.
 
 Several remedies recover part of this loss. Site-specific finetuning lets a
 two-iteration receiver outperform an untuned eight-iteration receiver on
@@ -94,9 +94,7 @@ twice and the loop can become unstable. \citet{zhou2023ext} counter
 this by training on synthetic priors with extrinsic targets and by clipping
 decoder LLRs, and \citet{clausius2025joint} observe a similar
 mismatch. In these works, however, the error covariance covers only the current
-slot's pilots, and whether a neural receiver's LLRs stay extrinsic under decoder
-feedback has not been examined.
-% TODO: keep the last clause only if our evaluation includes the extrinsic check.
+slot's pilots.
 
 Despite these advances, no prior 5G NR multi-user MIMO neural receiver carries
 pilot-derived channel evidence across slots to recover the accuracy lost to
@@ -110,5 +108,5 @@ negative log-likelihood supplies an error covariance for this multi-slot
 estimate, which enters a symbol-dependent joint-symbol likelihood in one IDD
 round with retained decoder state. The approach is complementary to intra-slot
 cost reduction and to weight adaptation. Because our timings come from a
-non-real-time implementation, we report savings as iteration counts rather than
-as latency.
+non-real-time implementation, we compare latency only among our own receivers,
+not with the 1~ms budget.
