@@ -9,7 +9,7 @@ receiver can gain from better channel evidence.
 
 Fully learned receivers replace channel estimation, equalization and demapping
 with a single network that processes one slot~\cite{honkala2021deeprx}. The
-convolutional graph neural network (CGNN) receiver of \citet{cammerer2023neural} extends this to 5G NR multi-user MIMO through
+CGNN receiver of \citet{cammerer2023neural} extends this to 5G NR multi-user MIMO through
 an unrolled iterative algorithm, in which each learned iteration exchanges
 messages between users and updates a per-user state. Its latency grows with
 depth: on an NVIDIA A100 with TensorRT, each iteration adds about 350~$\mu$s to
@@ -76,12 +76,12 @@ theory, however, is asymptotic, and their experiments are single-user and
 uncoded.
 
 A detector that treats its channel estimate as exact produces overconfident
-log-likelihood ratios (LLRs). \citet{goutay2021ml} learn the
+LLRs. \citet{goutay2021ml} learn the
 covariance of the channel-estimation error and use it twice: in the equalizer
 that separates the users, and in the noise variance that sets the confidence of
 each LLR. Combined with a learned demapper, their receiver gains 1~dB at a coded
 BER of $10^{-3}$ at 0--15~km/h and 3~dB at $10^{-2}$ at 30--45~km/h.
-Iterative detection and decoding (IDD) adds decoder feedback at run time.
+IDD adds decoder feedback at run time.
 DUIDD~\cite{wiesmayr2022duidd} learns the parameters of a fixed number of
 detection--decoding rounds: it normalizes the signal by a
 noise-plus-channel-error covariance assumed independent of the transmitted
@@ -96,17 +96,23 @@ decoder LLRs, and \citet{clausius2025joint} observe a similar
 mismatch. In these works, however, the error covariance covers only the current
 slot's pilots.
 
+% Fig. 1 belongs to the Receiver Design. It is defined here because a full-width figure appears at the top of
+% the next page, which is where the Receiver Design starts.
+\begin{figure*}[t]
+\centering
+\includegraphics[width=\textwidth]{figures/receiver_architecture.pdf}
+\caption{Proposed NRX for 5G NR PUSCH.}
+\label{fig:architecture}
+\end{figure*}
+
 Despite these advances, no prior 5G NR multi-user MIMO neural receiver carries
 pilot-derived channel evidence across slots to recover the accuracy lost to
-fewer iterations. In contrast, our receiver keeps its weights fixed and stores
-least-squares DMRS estimates from up to seven earlier transport blocks per UE.
-It therefore needs no labels and cannot propagate decision errors. Like DMRS
-bundling, it assumes phase continuity across stored slots; it ignores entries
-older than eight slots, weights the rest by age, and falls back to the current
-estimate when the memory does not help. A channel filter trained with a Gaussian
-negative log-likelihood supplies an error covariance for this multi-slot
-estimate, which enters a symbol-dependent joint-symbol likelihood in one IDD
-round with retained decoder state. The approach is complementary to intra-slot
-cost reduction and to weight adaptation. Because our timings come from a
+fewer iterations. Unlike online adaptation, our receiver keeps its weights fixed
+and stores only pilot-based estimates, so it needs no labels and cannot
+propagate decision errors. Like DMRS bundling, it assumes phase continuity
+across the stored slots. Unlike the uncertainty-aware detectors above, its
+error covariance covers a multi-slot estimate and enters a symbol-dependent
+likelihood during IDD. The approach is complementary to intra-slot cost
+reduction and to weight adaptation. Because our timings come from a
 non-real-time implementation, we compare latency only among our own receivers,
 not with the 1~ms budget.
