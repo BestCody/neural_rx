@@ -141,11 +141,11 @@ for stratum, label in enumerate(('0-50', '50-175', '175-400')):
     gain = speed_curve('candidate_reset', stratum) - speed_curve('candidate_persistent', stratum)
     expect(f'{gain:.2f}\\,dB', f'memory gain at {label} Hz')
     print('memory gain', label, 'Hz', round(gain, 3))
-gap = speed_curve('candidate_reset', 0) - speed_curve('baseline_perf_csi_kbest', 0)
+slow_gap = speed_curve('candidate_reset', 0) - speed_curve('baseline_perf_csi_kbest', 0)
 checked += 1
-if gap > .1:
-    bad += 1; print('CLAIM FAILS no memory matches Perf.-CSI on slow channels', gap)
-print('slow channels: no memory minus Perf.-CSI', round(gap, 3))
+if slow_gap > .1:
+    bad += 1; print('CLAIM FAILS no memory matches Perf.-CSI on slow channels', slow_gap)
+print('slow channels: no memory minus Perf.-CSI', round(slow_gap, 3))
 
 with np.load(f'{SW}/latency.npz') as data:
     med = {k[len('latency_ms_'):]: float(np.median(data[k])) for k in data.files if k.startswith('latency_ms_')}
@@ -161,4 +161,38 @@ expect(f'{saving:.0f}\\% less than', 'latency saving over N_it=8')
 for phrase in ('real-time budget of 1',):
     if phrase not in text.replace('- ', '-') and phrase not in section:
         bad += 1; print('PHRASE MISSING', phrase)
+
+# Abstract and introduction: the summary numbers quoted there, each as the exact phrase in each place it appears.
+parts = {'abstract': (r'\begin{abstract}', r'\end{abstract}'),
+         'introduction': (r'\section{Introduction}', r'\section{Related Work}')}
+parts = {name: re.sub(r'\s+', ' ', tex[tex.index(start):tex.index(end)]) for name, (start, end) in parts.items()}
+def span(values):
+    return f"{min(values):.2f}--{max(values):.2f}\\,dB"
+k8 = {c: gap(c, 'frozen_cold_k8') for c in core}
+fast = speed_curve('candidate_reset', 2) - speed_curve('candidate_persistent', 2)
+for where, string in (
+        (('abstract', 'introduction'), span(cut.values())),
+        (('abstract', 'introduction'), span([gap(c, 'candidate_reset') for c in core])),
+        (('abstract',), f"within {max(k8['natural_umi'], k8['schedule_gap_reentry']):.2f}\\,dB of the eight-iteration "
+                        f"NRX in two of three conditions and {k8['controlled_topology_change']:.2f}\\,dB better in the third"),
+        (('abstract',), f"rising to {fast:.2f}\\,dB at Doppler shifts of 175--400"),
+        (('introduction',), f"{k8['natural_umi']:.2f}\\,dB and {k8['schedule_gap_reentry']:.2f}\\,dB behind the "
+                            f"eight-iteration NRX"),
+        (('introduction',), f"{k8['controlled_topology_change']:.2f}\\,dB ahead after a channel change"),
+        (('introduction',), f"{span([gap(c, 'frozen_cold_k2') for c in core])} ahead of the same NRX with two iterations"),
+        (('introduction',), f"{saving:.0f}\\% lower than that of the eight-iteration NRX"),
+):
+    for name in where:
+        checked += 1
+        if string not in parts[name]:
+            bad += 1; print('MISSING in', name, string)
+for claim, holds in {
+        'memory lowers the required SNR in all three conditions':
+            all(required[c]['candidate_persistent'] < required[c]['candidate_reset'] for c in core),
+        'proposed NRX ahead of the Large NRX with N_it=2 in all three conditions':
+            all(required[c]['candidate_persistent'] < required[c]['frozen_cold_k2'] for c in core),
+}.items():
+    checked += 1
+    if not holds:
+        bad += 1; print('CLAIM FAILS', claim)
 print('RESULT:', 'ALL MATCH' if not bad else f'{bad} MISMATCHES')

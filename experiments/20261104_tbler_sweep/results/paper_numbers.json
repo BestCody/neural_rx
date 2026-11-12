@@ -842,6 +842,11 @@
    "schedule_gap_reentry/frozen_cold_k8": -0.1,
    "schedule_gap_reentry/candidate_reset": 0.33
   },
+  "iteration_cut_db": {
+   "natural_umi": 1.22,
+   "controlled_topology_change": 1.2,
+   "schedule_gap_reentry": 1.63
+  },
   "latency_saving_vs_large_percent": 22.1975762560234,
   "latency_added_vs_nit2_ms": 0.6831663195043802,
   "rescue_ratio": 37.56818181818182

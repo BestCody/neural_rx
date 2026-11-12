@@ -135,7 +135,11 @@ def derived(numbers):
             if snr[condition][method] is not None:
                 values[f"{condition}/{method}"] = round(round(snr[condition][method], 2)-round(proposed, 2), 2)
     latency = numbers["latency_median_ms"]
+    # Loss of cutting the Large NRX from N_it=8 to 2, quoted in the abstract, introduction, and related work.
+    cut = {condition: round(round(snr[condition]["frozen_cold_k2"], 2)-round(snr[condition]["frozen_cold_k8"], 2), 2)
+           for condition in CORE}
     return {"snr_gap_db": values,
+            "iteration_cut_db": cut,
             "latency_saving_vs_large_percent": 100*(1-latency["candidate_persistent"]/latency["frozen_cold_k8"]),
             "latency_added_vs_nit2_ms": latency["candidate_persistent"]-latency["frozen_cold_k2"],
             "rescue_ratio": numbers["memory_effect"]["rescued"]/numbers["memory_effect"]["broke"]}
@@ -185,11 +189,13 @@ def flatten(value):
 
 
 def check(tex, numbers, allowed):
-    """Every decimal number in the evaluation section must round from a collected result or be a listed constant."""
+    """Every decimal number in the abstract, introduction, evaluation, and conclusion must round from a collected
+    result or be a listed constant. Related work quotes other papers' numbers, so it is not checked here."""
     # main.tex pulls the sections in with \input{name}; expand them to check the full text.
     text = re.sub(r"\\input\{([^}]+)\}", lambda m: (Path(tex).parent/f"{m.group(1)}.tex").read_text(),
                   Path(tex).read_text())
-    section = text[text.index(r"\section{Evaluation}"):text.index(r"\bibliography{references}")]
+    section = (text[text.index(r"\begin{abstract}"):text.index(r"\section{Related Work}")]
+               + text[text.index(r"\section{Evaluation}"):text.index(r"\bibliography{references}")])
     section = re.sub(r"(?m)%.*$", "", section)
     values = list(flatten(numbers))
     values += [100*v for v in values]+[abs(v) for v in values]
