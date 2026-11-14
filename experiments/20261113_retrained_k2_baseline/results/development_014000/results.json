@@ -1,0 +1,35 @@
+{
+  "phase": "development",
+  "checkpoint": "/home/h3lou/neural_rx/models/retrained_k2_baseline_20261113/checkpoint_014000",
+  "update": 14000,
+  "method": "retrained two-iteration Large NRX (benchmark frozen_cold_k2 adapter, retrained weights)",
+  "weights_sha256": "64a8f558cbe14d626a8cba6ce391958847e4d16d72242eb2292bb2eb4fb4bbc0",
+  "bank_sha256": "b5c5138541830a847d3553a4aca03301b6823b3a1e052ea11af02e688f96443d",
+  "preflight": {
+    "frozen_reference_artifacts_unchanged": true,
+    "frozen_reference_deterministic_replay": true,
+    "frozen_reference_finite_outputs": true,
+    "frozen_references_paired": true
+  },
+  "protocol_sha256": "eaf17ce4e4bf0ba169928bc839cb8043da3a638b450cb3d9fee9ac4752ac6f79",
+  "episodes_per_condition": 32,
+  "summary": {
+    "candidate_persistent": {
+      "core_tbler": 0.18266666666666667,
+      "core_errors": 2192,
+      "core_blocks": 12000,
+      "per_condition_tbler": {
+        "historical_tdl_b100": 0.2783203125,
+        "historical_tdl_c300": 0.26953125,
+        "natural_umi": 0.19921875,
+        "natural_uma": 0.2080078125,
+        "controlled_topology_change": 0.047200520833333336,
+        "schedule_gap_reentry": 0.2859195402298851,
+        "close_los": 0.18815104166666666,
+        "near_far": 0.0888671875
+      }
+    }
+  },
+  "raw_sha256": "6f04077e2bd5b24109d3135d5e0099b388720ff189b06882e54a3d670248113e",
+  "result_sha256": "38d3962f1725097b865e2c327832efe1e39eadf5c8a1a9947afd7bf56d95eead"
+}

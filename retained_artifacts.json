@@ -33,6 +33,14 @@
       "cold_k8"
     ]
   },
+  "retrained_k2_baseline": {
+    "path": "models/retrained_k2_baseline_20261113/checkpoint_022000",
+    "campaign_update": 22000,
+    "nrx_weights_sha256": "ccbcae4c892e4c5540fd4a4ca9a6bc1f0018f5bd4623f60fbbd5be136c20e391",
+    "weights_sha256": "ca8f41ddd49d52914e950d32703b11c0f4ffa3e6685e299b7272567b4b28e83d",
+    "purpose": "Large NRX retrained with N_it=2 on the training data and budget of the proposed NRX (paper baseline)",
+    "selection": "experiments/20261113_retrained_k2_baseline/results/best.json"
+  },
   "evidence": {
     "campaign": "experiments/20261019_learned_blend_joint_training_6000",
     "selection": "experiments/20261019_learned_blend_joint_training_6000/results/selection.json",

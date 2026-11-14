@@ -175,6 +175,45 @@ class BatchedTrainingExecution:
                  signature(bank), tf.TensorSpec([None], tf.float32), tf.TensorSpec([], tf.float32),
                  tuple(tf.TensorSpec(v.shape, v.dtype) for v in variables), tf.TensorSpec([7], tf.float32)]
 
+        from .training import BASELINE
+        if self.trainer.variant == BASELINE:
+            # Retrained two-iteration baseline: Large NRX iterations 1-2 on the LS estimate, then the full BP budget of
+            # the shipped decoder (as in the benchmark's two-iteration adapter). Same coded and payload losses as the
+            # proposed receiver, without the channel term (no filter) and without the no-memory copy (no memory).
+            plain = DecoderAssistedTB(receiver._tb_encoders[0], receiver._tb_decoders[0],
+                                      int(receiver._tb_decoders[0]._decoder._num_iter),
+                                      self.trainer.settings['architecture']['ldpc_first_iterations'])
+
+            @tf.function(input_signature=specs)
+            def baseline_gradients(targets, current, bank, weights, den, accumulated, totals):
+                y, channel, bits, coded, noise, channel_targets = targets
+                active = current[1]
+                inputs = prepare_cgnn_inputs(receiver, y, channel, active)
+                with tf.GradientTape(watch_accessed_variables=False) as tape:
+                    tape.watch(variables)
+                    state = model.base.initialize_state(inputs)
+                    for iteration in model.base._iterations[:2]:
+                        state = iteration([state, inputs[1], inputs[3]])
+                    llr = mapping.grid_to_coded(model.base._readout_llrs[0](state))
+                    code_input, _, bp_state, posterior = plain.evidence(llr)
+                    output = plain.finish(code_input, bp_state)
+                    coded_loss = (per_user_bce(coded, llr)
+                                  + per_user_bce(coded, plain.first.from_code_blocks(posterior)))/2.
+                    payload_loss = per_user_payload_loss(bits, output.logits)
+                    mask = active*weights[:, None]/den
+                    pc, pp = tf.reduce_sum(mask*coded_loss), tf.reduce_sum(mask*payload_loss)
+                    cw, pw = recipe["coded_loss_weight"], recipe["payload_loss_weight"]
+                    loss = (cw*pc + pw*pp)/(cw+pw)
+                grads = tape.gradient(loss, variables,
+                                      unconnected_gradients=tf.UnconnectedGradients.ZERO)
+                tf.debugging.assert_all_finite(loss, "Nonfinite baseline training loss")
+                accumulated = tuple(a+g for a, g in zip(accumulated, grads, strict=True))
+                zero = tf.zeros([])
+                return accumulated, totals+tf.stack([loss, pc, pp, zero, zero, zero, zero])
+
+            self.gradient_functions[width] = baseline_gradients
+            return baseline_gradients
+
         @tf.function(input_signature=specs)
         def gradients(targets, current, bank, weights, den, accumulated, totals):
             y, channel, bits, coded, noise, channel_targets = targets
@@ -220,7 +259,8 @@ class BatchedTrainingExecution:
         norm = tf.linalg.global_norm(gradients)
         tf.debugging.assert_all_finite(norm, "Nonfinite gradient norm")
         count = len(self.trainer.memory_variables)
-        metrics = tf.concat([totals, [norm, tf.linalg.global_norm(gradients[:count]), memory_rms]], 0)
+        memory_norm = tf.linalg.global_norm(gradients[:count]) if count else tf.zeros([])
+        metrics = tf.concat([totals, [norm, memory_norm, memory_rms]], 0)
         return gradients, metrics
 
     def run(self, width, packets, denominator=None):

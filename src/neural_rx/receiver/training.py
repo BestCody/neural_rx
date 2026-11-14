@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import pickle
 import shutil
 import tempfile
 from threading import Lock
@@ -30,8 +31,21 @@ def recipe_hash(recipe):
     return hashlib.sha256(json.dumps(recipe, sort_keys=True).encode()).hexdigest()
 
 
+# "cgnn_k2_baseline" trains only the Large NRX's first two CGNN iterations, state initialization, and LLR readout on
+# LS channel estimates and decodes with plain BP: the retrained two-iteration baseline without memory, filter, or IDD.
+BASELINE = "cgnn_k2_baseline"
+
+
+def receiver_variant(recipe):
+    variant = recipe.get("receiver_variant", "pilot_memory")
+    if variant not in ("pilot_memory", BASELINE):
+        raise ValueError(f"Unknown receiver variant: {variant}")
+    return variant
+
+
 def validate_recipe(recipe):
     normalize_training_recipe(recipe)
+    receiver_variant(recipe)
     validate_history_settings(recipe)
     for names, probs in (("prbs", "prb_probabilities"), ("episode_tbs", "episode_probabilities"),
                          ("channel_families", "channel_probabilities")):
@@ -101,10 +115,19 @@ class TrainingModel:
         initializer = ROOT/recipe["initializer_checkpoint"]
         if file_sha256(initializer) != recipe["initializer_sha256"]:
             raise ValueError("Receiver initialization checksum differs")
-        self.model.load_weights(str(initializer))
-        if file_sha256(initializer) != recipe["initializer_sha256"]:
-            raise ValueError("Receiver initialization changed while loading")
+        self.variant = receiver_variant(recipe)
+        if self.variant == BASELINE:
+            # build_backbone already loaded the shipped Large NRX weights into the backbone; the baseline starts there.
+            shipped = ROOT/"models/pretrained"/f"{self.contexts[first][0].label}_weights"
+            if initializer.resolve() != shipped.resolve():
+                raise ValueError("The retrained baseline must start from the shipped Large NRX weights")
+        else:
+            self.model.load_weights(str(initializer))
+            if file_sha256(initializer) != recipe["initializer_sha256"]:
+                raise ValueError("Receiver initialization changed while loading")
         self.memory_variables, self.backbone_variables = self.model.optimization_variables()
+        if self.variant == BASELINE:
+            self.memory_variables = []
         self.optimization_variables = self.memory_variables + self.backbone_variables
         self.manager = MemoryPolicy(recipe["memory_capacity"], self.model.history_tbs, recipe["expiry_tbs"])
         self.episodes = TrainingEpisodes(self.contexts, recipe, self.seed)
@@ -258,8 +281,9 @@ class MemoryTrainer(TrainingModel):
             tf.debugging.assert_all_finite(gradient, "Nonfinite combined training gradient")
         norm = tf.linalg.global_norm(gradients)
         tf.debugging.assert_all_finite(norm, "Nonfinite combined gradient norm")
+        count = len(self.memory_variables)
         metrics = tf.concat([local_metrics[:7]+remote_metrics[:7], [norm,
-            tf.linalg.global_norm(gradients[:len(self.memory_variables)]),
+            tf.linalg.global_norm(gradients[:count]) if count else tf.zeros([]),
             local_weight*local_metrics[9]+(1-local_weight)*remote_metrics[9]]], 0)
         return gradients, metrics
 
@@ -274,6 +298,10 @@ class MemoryTrainer(TrainingModel):
         try:
             self.checkpoint.write(str(temp/"state"))
             self.model.save_weights(str(temp/"receiver.weights.h5"))
+            if self.variant == BASELINE:
+                # Same format as the shipped Large NRX weights, so the benchmark's two-iteration adapter can load it.
+                with (temp/"nrx_weights.pkl").open("wb") as handle:
+                    pickle.dump(self.contexts[min(self.contexts)][1].get_weights(), handle)
             settings = json.loads((ROOT/"config/memory_receiver.json").read_text())
             settings["architecture"] = self.settings["architecture"]
             settings["benchmark_memory"].update(capacity=self.manager.capacity,
