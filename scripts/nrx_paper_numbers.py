@@ -5,6 +5,7 @@ import re
 from pathlib import Path
 
 import numpy as np
+from scipy.special import j0
 
 from neural_rx.benchmark.plan import decreasing_isotonic, snr_at_target
 from neural_rx.benchmark.scoring import paired_summary
@@ -13,6 +14,11 @@ ROOT = Path(__file__).resolve().parents[1]
 SWEEP = ROOT/"experiments/20261104_tbler_sweep"
 ORIGINAL = ROOT/"experiments/20261021_package_layout_validation/results/v2_confirmation_005000/results.json"
 FRESH = ROOT/"experiments/20261021_current_code_reproduction/results/confirmation_005000_seed86000000/results.json"
+FALLBACK = ROOT/"experiments/20261106_crc_fallback/results"
+CONTROLLER = ROOT/"experiments/20261112_early_retransmission/results"
+RETRAINED = ROOT/"experiments/20261113_retrained_k2_baseline/results/summary.json"
+RETRAINED_TEST = ROOT/"experiments/20261113_retrained_k2_baseline/results/test"
+NO_IDD = ROOT/"experiments/20261114_no_idd_ablation/results"
 SCORING_START = 16
 CORE = ("natural_umi", "controlled_topology_change", "schedule_gap_reentry")
 RECEIVERS = ("baseline_lslin_lmmse", "baseline_lmmse_kbest", "baseline_perf_csi_kbest", "frozen_cold_k2",
@@ -95,6 +101,58 @@ def memory_gain_by_speed():
     return {"memory_gain_db": gains, "gap_to_perfect_csi_db": limits}
 
 
+def effective_snr(width=1.):
+    """Required effective SNR (SNR + effective channel power of the UE in dB) at TBLER=10% per condition and receiver,
+    pooled over all sequences of the sweep without power control, in bins of `width` dB as for the memory gain.
+    Channel power comes from the stored files of the proposed NRX; every receiver decoded the same episodes."""
+    edges = np.arange(-10., 30.+width/2, width)
+    centers = edges[:-1]+width/2
+    sources = {method: SWEEP/"results" for method in RECEIVERS}
+    sources["retrained_k2"] = RETRAINED_TEST
+    sources["candidate_persistent_no_idd"] = sources["candidate_reset_no_idd"] = NO_IDD/"test"
+    result = {}
+    for condition in CORE:
+        result[condition] = {}
+        for method, base in sources.items():
+            failures, blocks = np.zeros(len(centers)), np.zeros(len(centers))
+            complete = True
+            for directory, first in (("sweep", 0), ("sweep_high", 1)):  # +3 dB appears in both sweeps
+                for path in sorted((SWEEP/"results"/directory/condition/"candidate_persistent").glob("episode_*.npz")):
+                    target = base/directory/condition/method/path.name
+                    if not target.is_file():
+                        complete = False
+                        continue
+                    with np.load(path, allow_pickle=False) as reference, np.load(target, allow_pickle=False) as data:
+                        if not np.array_equal(reference["snr_db"], data["snr_db"]):
+                            raise ValueError(f"{target}: SNR grid differs from the proposed NRX")
+                        active = reference["active"][SCORING_START:]
+                        power = 10*np.log10(reference["channel_power"][SCORING_START:])
+                        for point in range(first, len(data["snr_db"])):
+                            index = np.floor((data["snr_db"][point]+power-edges[0])/width).astype(int)
+                            valid = (index >= 0) & (index < len(centers)) & active
+                            np.add.at(failures, index[valid], data["errors"][point, SCORING_START:][valid].astype(float))
+                            np.add.at(blocks, index[valid], 1)
+            if not complete:
+                continue
+            rates = failures/np.maximum(blocks, 1)
+            fitted = decreasing_isotonic(rates, np.maximum(blocks, 1))
+            occupied = blocks >= 100
+            result[condition][method] = {
+                "required_db": float(snr_at_target(centers, fitted, .1)),
+                # Width of the TBLER drop from 80% to 5% on the fitted curve, in dB.
+                "drop_80_to_5_db": float(snr_at_target(centers, fitted, .05)-snr_at_target(centers, fitted, .8)),
+                "centers": centers[occupied].tolist(), "tbler": rates[occupied].tolist()}
+    return result
+
+
+def no_idd():
+    """Proposed NRX without IDD (with and without memory) from experiments/20261114_no_idd_ablation."""
+    summary = NO_IDD/"summary.json"
+    complexity = NO_IDD/"complexity.json"
+    return {"summary": json.loads(summary.read_text()) if summary.is_file() else None,
+            "complexity": json.loads(complexity.read_text()) if complexity.is_file() else None}
+
+
 def memory_effect():
     """TBs decoded only with memory, only with memory emptied, and by neither, over all sweep SNR points."""
     counts = {"rescued": 0, "broke": 0, "both_failed": 0}
@@ -125,6 +183,42 @@ def validation():
             "lmmse_kbest_3db_upstream": .0402}
 
 
+def network():
+    """Results quoted in the Network Decisions section: CRC fallback, persistence, power control, controller."""
+    fallback = json.loads((FALLBACK/"fallback.json").read_text())
+    kbest = json.loads((FALLBACK/"latency.json").read_text())
+    result = {"fallback": {c: {"gain_db": {k: v["gain_db_from_rounded"] for k, v in fallback[c].items()
+                                           if isinstance(v, dict) and "gain_db_from_rounded" in v},
+                               "unfixable_share": fallback[c]["unfixable_share_of_failures"],
+                               "unfixable_also_perfect_csi": fallback[c]["unfixable_also_failed_by_perfect_csi"],
+                               "unfixable_power_db": fallback[c]["median_power_unfixable_minus_all_db"]}
+                           for c in CORE},
+              "fallback_latency_median_ms": {m: v["median_ms"] for m, v in kbest.items()}}
+    for name, path in (("controller", "controller.json"), ("controller_power_control", "controller_pc.json"),
+                       ("receivers_power_control", "fallback_pc.json")):
+        if (CONTROLLER/path).is_file():
+            result[name] = json.loads((CONTROLLER/path).read_text())
+    if (CONTROLLER/"evidence_pc").is_dir():
+        result["power_changed_since_newest_entry"] = {c: power_changed(CONTROLLER/"evidence_pc"/c) for c in CORE}
+    return result
+
+
+def power_changed(directory, expiry=8, first=16):
+    """Share of TBs 17-64 with a memory entry whose UE's transmit power changed since that newest entry."""
+    changed = total = 0
+    for path in sorted(directory.glob("episode_*.npz")):
+        with np.load(path) as data:
+            active, ids, gain = data["active"], data["ue_ids"], data["power_gain_db"]
+        newest = {}
+        for tb, pos in zip(*np.nonzero(active)):
+            ue = int(ids[tb, pos])
+            if tb >= first and ue in newest and tb-newest[ue][0] <= expiry:
+                total += 1
+                changed += abs(gain[tb, pos]-newest[ue][1]) > 1e-6
+            newest[ue] = (tb, gain[tb, pos])
+    return changed/total
+
+
 def derived(numbers):
     """Differences quoted in the text, so that each one is checked rather than computed by hand."""
     snr = numbers["snr_at_10pct"]
@@ -138,10 +232,69 @@ def derived(numbers):
     # Loss of cutting the Large NRX from N_it=8 to 2, quoted in the abstract, introduction, and related work.
     cut = {condition: round(round(snr[condition]["frozen_cold_k2"], 2)-round(snr[condition]["frozen_cold_k8"], 2), 2)
            for condition in CORE}
+    # Same differences with power control (fallback_pc.json stores the required SNRs already rounded).
+    controlled = numbers["network"].get("receivers_power_control")
+    controlled_gap = {} if controlled is None else {
+        f"{condition}/{method}": round(value-controlled[condition]["required_snr_db"]["candidate_persistent"], 2)
+        for condition in CORE for method, value in controlled[condition]["required_snr_db"].items()
+        if method != "candidate_persistent" and value is not None}
+    # Retrained two-iteration baseline: its gain from retraining and the proposed NRX's remaining lead.
+    retrained = numbers.get("retrained_k2")
+    retrained_gap = {} if retrained is None else {
+        f"{setting}/{condition}/{name}": round(round(row[a], 2)-round(row[b], 2), 2)
+        for setting, rows in retrained.items() if setting != "checkpoint" for condition, row in rows.items()
+        for name, a, b in (("narrow", "frozen_cold_k2", "retrained_k2"), ("lead", "retrained_k2", "candidate_persistent"),
+                           ("no_memory_lead", "retrained_k2", "candidate_reset"))}
+    # Jakes correlation at 400 Hz between DMRS symbols (symbols 2 and 11 of each 0.5 ms slot with 14 symbols):
+    # previous slot's last to current slot's first (5 symbols), within a slot (9), and one slot apart (14).
+    symbol_s = .5e-3/14
+    correlation = {f"{gap}_symbols": float(j0(2*np.pi*400.*gap*symbol_s)) for gap in (5, 9, 14)}
+    # Multiplications per slot (latency section) and effective-SNR differences (TBLER section).
+    cost = (numbers.get("no_idd") or {}).get("complexity")
+    multiplications = {} if cost is None else {
+        "cgnn_iteration_in_1e9": cost["cgnn_iteration"]["flops"]/2/1e9,
+        "filter_in_1e7": cost["channel_filter_counted"]["real_mult"]/1e7,
+        "idd_in_1e8": (cost["idd_detector"]["real_mult"]+cost["idd_combining"]["real_mult"])/1e8,
+        "share_of_iteration": (cost["channel_filter_counted"]["real_mult"]+cost["idd_detector"]["real_mult"]
+                               +cost["idd_combining"]["real_mult"])/(cost["cgnn_iteration"]["flops"]/2)}
+    effective = numbers.get("effective_snr", {})
+    effective_gap = {f"{condition}/{method}": rows[method]["required_db"]-rows["candidate_persistent"]["required_db"]
+                     for condition, rows in effective.items() for method in rows if method != "candidate_persistent"}
+    if multiplications:
+        multiplications["filter_share_of_iteration"] = (cost["channel_filter_counted"]["real_mult"]
+                                                         / (cost["cgnn_iteration"]["flops"]/2))
+    # Without IDD: memory gain (nominal and effective SNR) and the lead over the retrained baseline.
+    plain = (numbers.get("no_idd") or {}).get("summary")
+    without_idd = {} if plain is None else {
+        condition: {
+            "memory_gain_db": round(round(plain[condition]["candidate_reset_no_idd"]["snr_at_10pct_db"], 2)
+                                    - round(plain[condition]["candidate_persistent_no_idd"]["snr_at_10pct_db"], 2), 2),
+            "lead_over_retrained_db": round(round(plain[condition]["stored"]["retrained_k2"], 2)
+                                            - round(plain[condition]["candidate_persistent_no_idd"]["snr_at_10pct_db"], 2), 2),
+            "no_memory_lead_over_retrained_db": round(
+                round(plain[condition]["stored"]["retrained_k2"], 2)
+                - round(plain[condition]["candidate_reset_no_idd"]["snr_at_10pct_db"], 2), 2),
+            "idd_gain_db": round(round(plain[condition]["candidate_persistent_no_idd"]["snr_at_10pct_db"], 2)
+                                 - round(snr[condition]["candidate_persistent"], 2), 2),
+            "effective_memory_gain_db": (effective[condition]["candidate_reset_no_idd"]["required_db"]
+                                         - effective[condition]["candidate_persistent_no_idd"]["required_db"])
+            if "candidate_reset_no_idd" in effective.get(condition, {}) else None}
+        for condition in CORE}
+    retrained_cut = {} if retrained is None else {
+        condition: round(round(row["retrained_k2"], 2)-round(row["frozen_cold_k8"], 2), 2)
+        for condition, row in retrained["no_power_control"].items()}
     return {"snr_gap_db": values,
+            "multiplications": multiplications,
+            "effective_snr_gap_db": effective_gap,
+            "without_idd": without_idd,
+            "retrained_iteration_cut_db": retrained_cut,
+            "snr_gap_power_control_db": controlled_gap,
+            "retrained_k2_gap_db": retrained_gap,
+            "dmrs_correlation_400hz": correlation,
             "iteration_cut_db": cut,
             "latency_saving_vs_large_percent": 100*(1-latency["candidate_persistent"]/latency["frozen_cold_k8"]),
             "latency_added_vs_nit2_ms": latency["candidate_persistent"]-latency["frozen_cold_k2"],
+            "latency_per_cgnn_iteration_ms": (latency["frozen_cold_k8"]-latency["frozen_cold_k2"])/6,
             "rescue_ratio": numbers["memory_effect"]["rescued"]/numbers["memory_effect"]["broke"]}
 
 
@@ -173,6 +326,21 @@ def collect():
     numbers["memory_effect"] = memory_effect()
     numbers["doppler"] = memory_gain_by_speed()
     numbers["validation"] = validation()
+    numbers["network"] = network()
+    run = ROOT/"experiments/20261019_learned_blend_joint_training_6000"
+    parent = json.loads((run/"inputs/training_recipe.json").read_text())["initializer_parent_updates"]
+    selected = json.loads((ROOT/json.loads((run/"results/best.json").read_text())["checkpoint"]/"manifest.json")
+                          .read_text())["update"]
+    numbers["training_updates"] = {"parent": parent, "final_run": selected, "total": parent+selected,
+                                   "total_in_1e4": (parent+selected)/1e4, "parent_in_1e4": parent/1e4}
+    if RETRAINED.is_file():
+        summary = json.loads(RETRAINED.read_text())
+        numbers["retrained_k2"] = {"checkpoint": summary["checkpoint"], **{
+            setting: {condition: {k: v for k, v in row.items() if k not in ("snr_db", "tbler")}
+                      for condition, row in summary[setting].items()}
+            for setting in ("no_power_control", "power_control")}}
+    numbers["effective_snr"] = effective_snr()
+    numbers["no_idd"] = no_idd()
     numbers["derived"] = derived(numbers)
     return numbers
 

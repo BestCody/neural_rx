@@ -10,6 +10,7 @@ from matplotlib.patches import FancyArrowPatch, FancyBboxPatch, Patch
 
 ROOT = Path(__file__).resolve().parents[1]
 RESULTS = ROOT/"experiments/20261104_tbler_sweep/results"
+RETRAINED = ROOT/"experiments/20261113_retrained_k2_baseline/results"
 OUT = ROOT/"paper/figures"
 plt.rcParams.update({"font.family": "serif", "font.serif": ["STIXGeneral"], "mathtext.fontset": "stix",
                      "pdf.fonttype": 42, "axes.linewidth": .7, "font.size": 8})
@@ -18,7 +19,10 @@ GREEN, PURPLE, PINK = "#76b900", "#7b2d9e", "#d6006e"
 CURVES = {"baseline_lslin_lmmse": ("LS + LMMSE", dict(color="#e41a1c", linestyle="-")),
           "baseline_lmmse_kbest": ("LMMSE + K-Best", dict(color="#1f78b4", linestyle="-")),
           "baseline_perf_csi_kbest": ("Perf.-CSI + K-Best", dict(color="#4daf4a", linestyle="-")),
-          "frozen_cold_k8": ("Large NRX", dict(color="#ff7f00", linestyle=":")),
+          "frozen_cold_k2": ("Large NRX, $N_{\\mathrm{it}}=2$", dict(color="#ff7f00", linestyle=(0, (5, 1.5)))),
+          "frozen_cold_k8": ("Large NRX, $N_{\\mathrm{it}}=8$", dict(color="#ff7f00", linestyle=":")),
+          "retrained_k2": ("Large NRX retrained, $N_{\\mathrm{it}}=2$",
+                           dict(color="#a65628", linestyle=(0, (4, 1, 1, 1, 1, 1)))),
           "candidate_reset": ("Proposed NRX, no memory", dict(color="#6a3d9a", linestyle="-.")),
           "candidate_persistent": ("Proposed NRX", dict(color=PINK, linestyle="--"))}
 PANELS = {"natural_umi": "(a) UMi", "controlled_topology_change": "(b) Channel change",
@@ -90,7 +94,7 @@ def architecture():
 
 
 def tbler_curves(summary):
-    fig, axes = plt.subplots(1, len(PANELS), figsize=(7, 1.75), sharey=True)
+    fig, axes = plt.subplots(1, len(PANELS), figsize=(7, 1.6), sharey=True)
     for ax, (condition, title) in zip(axes, PANELS.items(), strict=True):
         for method, (_, style) in CURVES.items():
             data = summary[condition][method]
@@ -103,8 +107,8 @@ def tbler_curves(summary):
         ax.set_title(title, fontsize=7.5, y=-.36)
     axes[0].set_ylabel("TBLER", fontsize=7.5, labelpad=1)
     handles = [plt.Line2D([], [], linewidth=1.05, label=label, **style) for label, style in CURVES.values()]
-    fig.legend(handles=handles, loc="upper center", ncol=6, fontsize=6.6, frameon=True, fancybox=False,
-               edgecolor="black", borderpad=.3, columnspacing=1, handlelength=2.2, bbox_to_anchor=(.5, 1.13))
+    fig.legend(handles=handles, loc="upper center", ncol=4, fontsize=6.6, frameon=True, fancybox=False,
+               edgecolor="black", borderpad=.3, columnspacing=1, handlelength=2.2, bbox_to_anchor=(.5, 1.25))
     fig.subplots_adjust(wspace=.09, left=.06, right=.995, top=.98, bottom=.2)
     save(fig, "tbler_vs_snr")
 
@@ -116,6 +120,9 @@ def snr_and_latency(summary, latency):
     right = left.twinx()
     left.plot(list(iterations), [umi[m]["snr_at_10pct_db"] for m in iterations.values()], color="#ff7f00",
               linestyle=":", marker=".", linewidth=1.05, label="Large NRX")
+    # Same architecture as the Large NRX with N_it=2, so only its required SNR is shown.
+    left.plot([2], [umi["retrained_k2"]["snr_at_10pct_db"]], color="#a65628", marker="^", markersize=4.5,
+              linestyle="none", label="Large NRX retrained, $N_{\\mathrm{it}}=2$")
     left.plot([2], [umi["candidate_persistent"]["snr_at_10pct_db"]], color=PINK, marker="*", markersize=7,
               linestyle="none", label="Proposed NRX")
     right.plot(list(iterations), [latency[m]["median_ms"] for m in iterations.values()], color="#1f78b4", marker="s",
@@ -151,8 +158,18 @@ def memory_gain(numbers):
     save(fig, "memory_gain_vs_doppler")
 
 
-def main():
+def load_summary():
+    """The sweep summary plus the retrained two-iteration baseline, decoded on the same sequences."""
     summary = json.loads((RESULTS/"summary.json").read_text())
+    retrained = json.loads((RETRAINED/"summary.json").read_text())["no_power_control"]
+    for condition, row in retrained.items():
+        summary[condition]["retrained_k2"] = {"snr_db": row["snr_db"], "tbler": row["tbler"],
+                                              "snr_at_10pct_db": row["retrained_k2"]}
+    return summary
+
+
+def main():
+    summary = load_summary()
     latency = json.loads((RESULTS/"latency.json").read_text())
     architecture()
     tbler_curves(summary)
