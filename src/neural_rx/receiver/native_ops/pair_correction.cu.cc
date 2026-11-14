@@ -4,6 +4,8 @@
 #include <cuda_runtime.h>
 #include <cmath>
 #include <mutex>
+#include <cstdlib>
+#include <string>
 using namespace tensorflow;
 using C = float2;
 
@@ -33,8 +35,9 @@ __device__ float own_prior(int symbol,int target,int q,const int64_t* labels,con
  for(int k=0;k<q;++k)if(k!=target)value+=labels[symbol*q+k]?fminf(evidence[k],0.f):-fmaxf(evidence[k],0.f);
  return value;
 }
+// maxlog replaces log-sum-exp by the maximum; hypotheses masked with -inf (reduced symbol sets) stay -inf.
 __device__ void symbol_sums(bool single,bool conditioned,int m,
- const float* score,const float* priors,float* rows){
+ const float* score,const float* priors,float* rows,bool maxlog=false){
  int divisor=single?1:m,width=min(m,32),lane=threadIdx.x%width;
  int count=single?m:2*m;
  for(int index=threadIdx.x/width;index<count;index+=blockDim.x/width){
@@ -53,11 +56,12 @@ __device__ void symbol_sums(bool single,bool conditioned,int m,
      sum+=expf(value-maximum);
    }
    sum=group_sum(sum,width);
-   if(lane==0)rows[index]=maximum+logf(sum);
+   if(lane==0)rows[index]=maximum==-INFINITY?-INFINITY:(maxlog?maximum:maximum+logf(sum));
  }
 }
+// A bit value without a surviving hypothesis gets the other value's metric minus clip (list-detector clipping).
 __device__ void bit_sums(bool conditioned,int m,int q,int kbits,const int64_t* labels,
- const float* rows,const float* evidence,float* norms,float* physical){
+ const float* rows,const float* evidence,float* norms,float* physical,bool maxlog=false,float clip=0.f){
  int width=min(m,32),lane=threadIdx.x%width;
  for(int j=threadIdx.x/width;j<kbits;j+=blockDim.x/width){
    int user=j/q,target=j%q;
@@ -79,8 +83,11 @@ __device__ void bit_sums(bool conditioned,int m,int q,int kbits,const int64_t* l
    for(int v=0;v<2;++v)sums[v]=group_sum(sums[v],width);
    if(lane==0){
      int offset=4*j+(conditioned?2:0);
-     norms[offset]=maxima[0]+logf(sums[0]);
-     norms[offset+1]=maxima[1]+logf(sums[1]);
+     float total[2];
+     for(int v=0;v<2;++v)total[v]=maxima[v]==-INFINITY?-INFINITY:(maxlog?maxima[v]:maxima[v]+logf(sums[v]));
+     for(int v=0;v<2;++v)if(total[v]==-INFINITY)total[v]=total[1-v]-clip;
+     norms[offset]=total[0];
+     norms[offset+1]=total[1];
      if(!conditioned)physical[j]=norms[offset+1]-norms[offset];
    }
  }
@@ -179,9 +186,12 @@ __global__ void PhysicalScores(bool single,int n,int r,int cells,int groups,int 
  if(threadIdx.x==0)fit[blockIdx.x]=fit_scratch[8]/r;
 }
 
+// keep (forward only, 0 = all): evaluate only each UE's `keep` most likely symbols according to the NRX LLRs; maxlog:
+// maxima instead of log-sum-exp. Both are approximations for experiments (NRX_IDD_KEEP, NRX_IDD_MAXLOG); the defaults
+// leave the exact detector unchanged.
 template<bool BACKWARD>
 __global__ void Correction(bool single,bool update,float limit,int n,int r,int cells,int groups,int m,int q,
- int max_positions,int code_size,bool cache_vectors,int hidden,
+ int max_positions,int code_size,bool cache_vectors,int hidden,int keep,bool maxlog,
  const C* y,const C* factors,const C* whitened,const float* logdet,const float* evidence,
  const float* all_phi,const int64_t* cell_ids,const int64_t* positions,const C* symbols,const int64_t* energies,const int64_t* labels,
  const bool* enabled,const int64_t* bit_indices,const float* bit_signs,const bool* wanted,
@@ -275,6 +285,32 @@ __global__ void Correction(bool single,bool update,float limit,int n,int r,int c
      for(int pair=threadIdx.x;pair<pairs;pair+=blockDim.x)score[(pair/divisor)*(divisor+1)+pair%divisor]=values[pair];
      for(int j=threadIdx.x;j<kbits;j+=blockDim.x)physical[j]=values[pairs+j];
      __syncthreads();
+     if(maxlog || (keep>0 && keep<m)){
+       if(keep>0 && keep<m){
+         for(int index=threadIdx.x;index<nsymbols;index+=blockDim.x){
+           int user=index/m,symbol=index%m;float value=0.f;
+           for(int k=0;k<q;++k){float l=base[user*q+k];value+=labels[symbol*q+k]?fminf(l,0.f):-fmaxf(l,0.f);}
+           rows0[index]=value;
+         }
+         __syncthreads();
+         for(int index=threadIdx.x;index<nsymbols;index+=blockDim.x){
+           int user=index/m,symbol=index%m,rank=0;
+           for(int other=0;other<m;++other){float v=rows0[user*m+other];
+             rank+=v>rows0[index] || (v==rows0[index] && other<symbol);}
+           rows[index]=rank<keep?0.f:-INFINITY;
+         }
+         __syncthreads();
+         for(int pair=threadIdx.x;pair<pairs;pair+=blockDim.x){
+           int a=pair/divisor,beta=pair%divisor;
+           score[a*(divisor+1)+beta]+=rows[a]+(single?0.f:rows[m+beta]);
+         }
+         __syncthreads();
+       }
+       symbol_sums(single,false,m,score,nullptr,rows0,maxlog);
+       __syncthreads();
+       bit_sums(false,m,q,kbits,labels,rows0,nullptr,norms,physical,maxlog,limit);
+       __syncthreads();
+     }
    }
    float rho=BACKWARD?fit_scratch[8]/r:fit_cache[b*n+p];
    float fit=rho/(1.f+rho);
@@ -292,9 +328,9 @@ __global__ void Correction(bool single,bool update,float limit,int n,int r,int c
      priors[index]=value;
    }
    __syncthreads();
-   symbol_sums(single,true,m,score,priors,rows);
+   symbol_sums(single,true,m,score,priors,rows,maxlog);
    __syncthreads();
-   bit_sums(true,m,q,kbits,labels,rows,calibrated,norms,physical);
+   bit_sums(true,m,q,kbits,labels,rows,calibrated,norms,physical,maxlog,limit);
    __syncthreads();
    int gate_width=1;while(gate_width<min(hidden,32))gate_width*=2;
    int gate_lane=threadIdx.x%gate_width;
@@ -527,8 +563,183 @@ Status ScoresWorkspace(bool single,int r,int groups,int m,int q,int limit,size_t
  return OkStatus();
 }
 
+
+// ---- Forward kernels with one warp per resource element (two UEs, 16-QAM, r <= 4, at most 9 energy groups).
+// Same formulas and summation order as PhysicalScores and Correction<false> (the sums follow the shuffle trees of
+// group_sum), but four resource elements per block and no idle threads. NRX_IDD_KERNELS=reference selects the
+// original kernels.
+#define WARP_RES 4
+__device__ float tree_sum(float* v,int width){for(int d=width/2;d;d>>=1)for(int i=0;i<d;++i)v[i]+=v[i+d];return v[0];}
+__device__ float warp_min(float v){for(int o=16;o;o>>=1)v=fminf(v,__shfl_xor_sync(0xffffffffu,v,o));return v;}
+
+__global__ void ScoresWarp(int total,int n,int r,int cells,int groups,bool maxlog,
+ const C* y,const C* factors,const C* whitened,const float* logdet,const float* all_phi,
+ const int64_t* cell_ids,const C* symbols,const int64_t* energies,const int64_t* labels,const bool* enabled,
+ float* output,float* fit){
+ const int m=16,q=4,pairs=256,kbits=8;
+ int warp=threadIdx.x/32,lane=threadIdx.x%32,index=blockIdx.x*WARP_RES+warp;
+ if(index>=total)return;
+ __shared__ C yw_all[WARP_RES][36];
+ __shared__ C local_all[WARP_RES][72];
+ __shared__ float score_all[WARP_RES][256];
+ __shared__ float rows_all[WARP_RES][32];
+ C* yw=yw_all[warp];C* local=local_all[warp];float* score=score_all[warp];float* rows=rows_all[warp];
+ int b=index/n,p=index%n,c=cell_ids[p];
+ float* cached=output+static_cast<size_t>(index)*(pairs+kbits);
+ if(!enabled[b*cells+c]){
+   for(int i=lane;i<pairs+kbits;i+=32)cached[i]=0.f;
+   if(lane==0)fit[index]=0.f;
+   return;
+ }
+ const C* factor=factors+static_cast<size_t>(b*cells+c)*groups*r*r;
+ const C* white=whitened+static_cast<size_t>(b*cells+c)*groups*r*6;
+ const float* ld=logdet+(b*cells+c)*groups;
+ const float* phi=all_phi+p*6;
+ const C* received=y+static_cast<size_t>(b)*n*r;
+ if(lane<groups){
+   int g=lane;
+   for(int row=0;row<r;++row){
+     C value=received[p*r+row];
+     for(int col=0;col<row;++col)value=sub(value,mul(factor[(g*r+row)*r+col],yw[g*r+col]));
+     yw[g*r+row]=scale(value,1.f/factor[(g*r+row)*r+row].x);
+   }
+ }
+ for(int i=lane;i<groups*r*2;i+=32){
+   int row=i/2,user=i%2;C value=make_float2(0,0);
+   for(int k=0;k<3;++k)value=add(value,scale(white[row*6+user*3+k],phi[user*3+k]));
+   local[i]=value;
+ }
+ __syncwarp();
+ int energy_count=static_cast<int>(sqrtf(static_cast<float>(groups))+.5f);
+ float minimum=INFINITY;
+ for(int pair=lane;pair<pairs;pair+=32){
+   int a=pair/m,beta=pair%m;
+   int g=energies[a]*energy_count+energies[beta];
+   float value=-ld[g],energy=0.f;
+   for(int row=0;row<r;++row){
+     float term=norm(residual(pair,g,row,r,m,symbols,white,phi,yw,local));
+     value-=term;energy+=term;
+   }
+   score[pair]=value;cached[pair]=value;
+   minimum=fminf(minimum,energy);
+ }
+ minimum=warp_min(minimum);
+ if(lane==0)fit[index]=minimum/r;
+ __syncwarp();
+ {
+   int user=lane/m,symbol=lane%m;float v[16],maximum=-INFINITY;
+   for(int other=0;other<m;++other){v[other]=user==0?score[symbol*m+other]:score[other*m+symbol];maximum=fmaxf(maximum,v[other]);}
+   for(int other=0;other<m;++other)v[other]=expf(v[other]-maximum);
+   float sum=tree_sum(v,m);
+   rows[lane]=maxlog?maximum:maximum+logf(sum);
+ }
+ __syncwarp();
+ if(lane<kbits){
+   int user=lane/q,target=lane%q;float s0[16],s1[16],m0=-INFINITY,m1=-INFINITY;
+   for(int symbol=0;symbol<m;++symbol){
+     float value=rows[user*m+symbol];
+     if(labels[symbol*q+target])m1=fmaxf(m1,value);else m0=fmaxf(m0,value);
+   }
+   for(int symbol=0;symbol<m;++symbol){
+     float value=rows[user*m+symbol];bool one=labels[symbol*q+target];
+     s0[symbol]=one?0.f:expf(value-m0);s1[symbol]=one?expf(value-m1):0.f;
+   }
+   float n0=maxlog?m0:m0+logf(tree_sum(s0,m)),n1=maxlog?m1:m1+logf(tree_sum(s1,m));
+   cached[pairs+lane]=n1-n0;
+ }
+}
+
+__global__ void CorrectionWarp(bool update,float limit,int total,int n,int cells,int code_size,int hidden,bool maxlog,
+ const float* evidence,const int64_t* cell_ids,const int64_t* labels,const bool* enabled,
+ const int64_t* bit_indices,const float* bit_signs,const bool* wanted,const float* effective,const float* calibration,
+ const float* strength,const float* active,const float* cached,const float* fit_cache,const float* blend_kernel,
+ const float* blend_bias,const float* blend_output,const float* blend_output_bias,float* output){
+ const int m=16,q=4,pairs=256,kbits=8;
+ int warp=threadIdx.x/32,lane=threadIdx.x%32,index=blockIdx.x*WARP_RES+warp;
+ if(index>=total)return;
+ int b=index/n,p=index%n,c=cell_ids[p];
+ if(!enabled[b*cells+c])return;
+ __shared__ float calibrated_all[WARP_RES][8];
+ __shared__ float priors_all[WARP_RES][32];
+ __shared__ float rows_all[WARP_RES][32];
+ float* calibrated=calibrated_all[warp];float* priors=priors_all[warp];float* rows=rows_all[warp];
+ const float* score=cached+static_cast<size_t>(index)*(pairs+kbits);
+ float e=0.f,base=0.f,physical=0.f;int table=0,ix=0;
+ if(lane<kbits){
+   int j=lane;
+   table=(j/q*n+p)*q+j%q;ix=(b*2+j/q)*code_size+bit_indices[table];
+   float value=update?__fmul_rn(__fsub_rn(evidence[ix],effective[ix]),active[b*2+j/q]):evidence[ix];
+   e=bit_signs[table]*value;base=bit_signs[table]*effective[ix];physical=score[pairs+j];
+   float re=e/(limit+fabsf(e)),rl=base/(limit+fabsf(base)),rp=physical/(limit+fabsf(physical));
+   float features[6]={fabsf(re),fabsf(rl),fabsf(rp),re*rl,re*rp,rl*rp};
+   float z=calibration[6];for(int k=0;k<6;++k)z+=calibration[k]*features[k];
+   float gain=2.f/(1.f+expf(-z));calibrated[j]=gain*e;
+ }
+ __syncwarp();
+ {
+   int user=lane/m,symbol=lane%m;float value=0.f;
+   for(int k=0;k<q;++k){float v=calibrated[user*q+k];value+=labels[symbol*q+k]?fminf(v,0.f):-fmaxf(v,0.f);}
+   priors[lane]=value;
+ }
+ __syncwarp();
+ {
+   int user=lane/m,symbol=lane%m;float v[16],maximum=-INFINITY;
+   for(int other=0;other<m;++other){
+     v[other]=(user==0?score[symbol*m+other]:score[other*m+symbol])+priors[(1-user)*m+other];
+     maximum=fmaxf(maximum,v[other]);
+   }
+   for(int other=0;other<m;++other)v[other]=expf(v[other]-maximum);
+   float sum=tree_sum(v,m);
+   rows[lane]=maxlog?maximum:maximum+logf(sum);
+ }
+ __syncwarp();
+ if(lane<kbits){
+   int j=lane,user=j/q,target=j%q;float s0[16],s1[16],m0=-INFINITY,m1=-INFINITY;
+   for(int symbol=0;symbol<m;++symbol){
+     float value=rows[user*m+symbol]+own_prior(symbol,target,q,labels,calibrated+user*q);
+     s0[symbol]=value;
+     if(labels[symbol*q+target])m1=fmaxf(m1,value);else m0=fmaxf(m0,value);
+   }
+   for(int symbol=0;symbol<m;++symbol){
+     float value=s0[symbol];bool one=labels[symbol*q+target];
+     s0[symbol]=one?0.f:expf(value-m0);s1[symbol]=one?expf(value-m1):0.f;
+   }
+   float n0=maxlog?m0:m0+logf(tree_sum(s0,m)),n1=maxlog?m1:m1+logf(tree_sum(s1,m));
+   float delta=n1-n0-physical;
+   float rho=fit_cache[index],fit=rho/(1.f+rho);
+   float u=strength[0]*delta,b0=base+u,b1=physical+u;
+   float inverse=1.f/(limit+fabsf(b0)+fabsf(b1)+fabsf(u));
+   float x0=b0*inverse,x1=b1*inverse,xu=u*inverse;
+   float features[7]={fabsf(x0),fabsf(x1),x0*x1,fabsf(x1-x0),fabsf(xu),x0*xu,x1*xu};
+   int gate_width=1;while(gate_width<min(hidden,32))gate_width*=2;
+   float units[32];
+   for(int h=0;h<gate_width;++h)units[h]=0.f;
+   for(int h=0;h<hidden;++h){
+     float value=blend_bias[h]+blend_kernel[7*hidden+h]*fit;
+     for(int k=0;k<7;++k)value+=features[k]*blend_kernel[k*hidden+h];
+     units[h]=fmaxf(value,0.f)*blend_output[h];
+   }
+   float z=tree_sum(units,gate_width)+blend_output_bias[0];
+   float a=1.f/(1.f+expf(-z));
+   if(wanted[(b*2+j/q)*n+p]){
+     float correction=__fmul_rn(strength[0],__fmul_rn(bit_signs[table]*delta,active[b*2+j/q]));
+     float replacement=__fmul_rn(a,__fsub_rn(bit_signs[table]*physical,effective[ix]));
+     output[ix]=update?__fadd_rn(__fadd_rn(effective[ix],correction),replacement):__fadd_rn(correction,replacement);
+   }
+ }
+}
+bool ReferenceKernels(){const char* v=std::getenv("NRX_IDD_KERNELS");return v && std::string(v)=="reference";}
+bool MaxLog(){const char* v=std::getenv("NRX_IDD_MAXLOG");return v && v[0]=='1';}
+
 Status LaunchScores(cudaStream_t stream,bool single,int b,int n,int r,int cells,int groups,int m,int q,
  size_t bytes,bool cache_vectors,const Tensor* const* in,Tensor* out,Tensor* fit){
+ if(!single && m==16 && q==4 && r<=4 && groups<=9 && !ReferenceKernels())
+   return GpuLaunchKernel(ScoresWarp,(b*n+WARP_RES-1)/WARP_RES,32*WARP_RES,0,stream,b*n,n,r,cells,groups,MaxLog(),
+     reinterpret_cast<const C*>(in[0]->flat<complex64>().data()),reinterpret_cast<const C*>(in[1]->flat<complex64>().data()),
+     reinterpret_cast<const C*>(in[2]->flat<complex64>().data()),in[3]->flat<float>().data(),in[4]->flat<float>().data(),
+     in[5]->flat<int64_t>().data(),reinterpret_cast<const C*>(in[6]->flat<complex64>().data()),
+     in[7]->flat<int64_t>().data(),in[8]->flat<int64_t>().data(),in[9]->flat<bool>().data(),
+     out->flat<float>().data(),fit->flat<float>().data());
  return GpuLaunchKernel(PhysicalScores,b*n,256,bytes,stream,single,n,r,cells,groups,m,q,cache_vectors,
    reinterpret_cast<const C*>(in[0]->flat<complex64>().data()),reinterpret_cast<const C*>(in[1]->flat<complex64>().data()),
    reinterpret_cast<const C*>(in[2]->flat<complex64>().data()),in[3]->flat<float>().data(),in[4]->flat<float>().data(),
@@ -559,7 +770,7 @@ void LaunchCorrection(OpKernelContext* c,bool backward,bool single,bool update,f
  auto symbols=reinterpret_cast<const C*>(in[8]->flat<complex64>().data());
  if(backward){
    for(int i:{4,5})OP_REQUIRES(c,cudaMemsetAsync(out[i]->flat<float>().data(),0,out[i]->NumElements()*sizeof(float),stream)==cudaSuccess,errors::Internal("Cannot clear correction input gradients"));
-   OP_REQUIRES_OK(c,GpuLaunchKernel(Correction<true>,b*cells,256,bytes,stream,single,update,llr_limit,n,r,cells,groups,m,q,t,code_size,cache_vectors,hidden,
+   OP_REQUIRES_OK(c,GpuLaunchKernel(Correction<true>,b*cells,256,bytes,stream,single,update,llr_limit,n,r,cells,groups,m,q,t,code_size,cache_vectors,hidden,0,false,
      y,factor,white,in[3]->flat<float>().data(),in[4]->flat<float>().data(),in[5]->flat<float>().data(),
      in[6]->flat<int64_t>().data(),in[7]->flat<int64_t>().data(),symbols,in[9]->flat<int64_t>().data(),in[10]->flat<int64_t>().data(),
      in[11]->flat<bool>().data(),in[12]->flat<int64_t>().data(),in[13]->flat<float>().data(),in[14]->flat<bool>().data(),
@@ -578,7 +789,18 @@ void LaunchCorrection(OpKernelContext* c,bool backward,bool single,bool update,f
    } else OP_REQUIRES(c,cudaMemsetAsync(out[0]->flat<float>().data(),0,out[0]->NumElements()*sizeof(float),stream)==cudaSuccess,errors::Internal("Cannot clear correction padding"));
    int threads=32;
    while(threads<min(256,(single?q:2*q)*max(min(m,32),min(hidden,32))))threads*=2;
-   OP_REQUIRES_OK(c,GpuLaunchKernel(Correction<false>,b*n,threads,bytes,stream,single,update,llr_limit,n,r,cells,groups,m,q,t,code_size,cache_vectors,hidden,
+   const char* keep_text=std::getenv("NRX_IDD_KEEP");const char* maxlog_text=std::getenv("NRX_IDD_MAXLOG");
+   int keep=keep_text?std::atoi(keep_text):0;bool maxlog=maxlog_text && maxlog_text[0]=='1';
+   if(!single && m==16 && q==4 && hidden<=32 && keep<=0 && !ReferenceKernels()){
+     OP_REQUIRES_OK(c,GpuLaunchKernel(CorrectionWarp,(b*n+WARP_RES-1)/WARP_RES,32*WARP_RES,0,stream,update,llr_limit,b*n,n,cells,
+       code_size,hidden,maxlog,in[4]->flat<float>().data(),in[6]->flat<int64_t>().data(),in[10]->flat<int64_t>().data(),
+       in[11]->flat<bool>().data(),in[12]->flat<int64_t>().data(),in[13]->flat<float>().data(),in[14]->flat<bool>().data(),
+       in[15]->flat<float>().data(),in[16]->flat<float>().data(),in[17]->flat<float>().data(),in[18]->flat<float>().data(),
+       in[19]->flat<float>().data(),in[20]->flat<float>().data(),in[21]->flat<float>().data(),
+       in[22]->flat<float>().data(),in[23]->flat<float>().data(),in[24]->flat<float>().data(),out[0]->flat<float>().data()));
+     return;
+   }
+   OP_REQUIRES_OK(c,GpuLaunchKernel(Correction<false>,b*n,threads,bytes,stream,single,update,llr_limit,n,r,cells,groups,m,q,t,code_size,cache_vectors,hidden,keep,maxlog,
      y,factor,white,in[3]->flat<float>().data(),in[4]->flat<float>().data(),in[5]->flat<float>().data(),
      in[6]->flat<int64_t>().data(),in[7]->flat<int64_t>().data(),symbols,in[9]->flat<int64_t>().data(),in[10]->flat<int64_t>().data(),
      in[11]->flat<bool>().data(),in[12]->flat<int64_t>().data(),in[13]->flat<float>().data(),in[14]->flat<bool>().data(),

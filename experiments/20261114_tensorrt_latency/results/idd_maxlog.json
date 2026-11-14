@@ -1,0 +1,48 @@
+{
+ "preparation": "maxlog",
+ "decoder_dependent_us_per_slot": 140.66707,
+ "decoder_independent_us_per_slot": 316.77518999999995,
+ "gpu_us_per_slot": {
+  "covariance": 49.182415,
+  "pair_preparation": 34.871085,
+  "app_detector_and_combining": 254.73892,
+  "other_tensorflow_ops": 118.64984000000001
+ },
+ "total_gpu_us_per_slot": 457.44226000000003,
+ "runs": 200,
+ "kernels_us_per_slot": {
+  "CorrectionWarp(bool, float, int, int, int, int, int, bool, float const*, long const*, long const*, bool const*, long const*, float const*, bool const*, float const*, float const*, float const*, float const*, float const*, float const*, float const*, float const*, float const*, float const*, float*)": 137.13133,
+  "ScoresWarp(int, int, int, int, int, bool, float2 const*, float2 const*, float2 const*, float const*, float const*, long const*, float2 const*, long const*, long const*, bool const*, float*, float*)": 114.07185,
+  "FusedPrepare(int, int, int, int, float, float2 const*, float2 const*, float const*, float2 const*, float const*, float2*, float2*, float*, int*)": 34.871085,
+  "void cutlass::Kernel<cutlass_80_tensorop_c1688gemm_32x32_16x4_nn_align1>(cutlass_80_tensorop_c1688gemm_32x32_16x4_nn_align1::Params)": 33.497175,
+  "void cutlass::Kernel<cutlass_80_tensorop_c1688gemm_32x32_16x4_nt_align1>(cutlass_80_tensorop_c1688gemm_32x32_16x4_nt_align1::Params)": 25.688159999999996,
+  "PackUncertainty(int, int, int, float2 const*, float const*, float2 const*, float const*, float2*, float2*, float2*, float2*)": 22.49485,
+  "void tensorflow::(anonymous namespace)::SplitOpKernel<float>(float const*, int, int, int, tensorflow::GpuDeviceArrayStruct<float*, 8>)": 15.025795,
+  "UncertaintyStats(int, int, float2 const*, float const*, float const*, float const*, float const*, float2 const*, float2 const*, float2*, float*)": 12.315835,
+  "main_kernel": 9.126415,
+  "UncertaintyFeatureValues(int, int, float2 const*, float2 const*, float const*, float const*, float const*, float const*, float2 const*, float const*, float*)": 7.383914999999999,
+  "void Eigen::internal::EigenMetaKernel<Eigen::TensorEvaluator<Eigen::TensorAssignOp<Eigen::TensorMap<Eigen::Tensor<unsigned long, 5, 1, long>, 16, Eigen::MakePointer>, Eigen::TensorShufflingOp<Eigen::array<int, 5ul> const, Eigen::TensorMap<Eigen::Tensor<unsigned long const, 5, 1, long>, 16, Eigen::MakePointer> const> const> const, Eigen::GpuDevice>, long>(Eigen::TensorEvaluator<Eigen::TensorAssignOp<Eigen::TensorMap<Eigen::Tensor<unsigned long, 5, 1, long>, 16, Eigen::MakePointer>, Eigen::TensorShufflingOp<Eigen::array<int, 5ul> const, Eigen::TensorMap<Eigen::Tensor<unsigned long const, 5, 1, long>, 16, Eigen::MakePointer> const> const> const, Eigen::GpuDevice>, long)": 5.86807,
+  "UncertaintyOutput(int, int, int, float const*, float const*, float const*, float const*, bool const*, float2 const*, float const*, float*, float2*)": 5.0959449999999995,
+  "Cast_GPU_DT_FLOAT_DT_BOOL_kernel": 4.684545,
+  "void tensorflow::GatherOpKernel<tensorflow::AlignedVector<std::complex<float>, 2>, int, true, false>(tensorflow::AlignedVector<std::complex<float>, 2> const*, int const*, tensorflow::AlignedVector<std::complex<float>, 2>*, long, long, long, long, long)": 4.60642,
+  "ampere_sgemm_32x128_nt": 4.249125,
+  "ampere_sgemm_128x32_tt": 3.9096249999999997,
+  "InitializeCorrected(int, float const*, float const*, float*)": 3.53574,
+  "void tensorflow::GatherOpKernel<tensorflow::AlignedVector<std::complex<float>, 2>, long, true>(tensorflow::AlignedVector<std::complex<float>, 2> const*, long const*, tensorflow::AlignedVector<std::complex<float>, 2>*, long, long, long, long)": 3.324685,
+  "Complex_GPU_DT_FLOAT_DT_COMPLEX64_kernel": 2.95104,
+  "void tensorflow::functor::BlockReduceKernel<bool*, bool*, 256, tensorflow::functor::Or>(bool*, bool*, int, tensorflow::functor::Or, std::iterator_traits<bool*>::value_type)": 2.00928,
+  "void Eigen::internal::EigenMetaKernel<Eigen::TensorEvaluator<Eigen::TensorAssignOp<Eigen::TensorMap<Eigen::Tensor<bool, 2, 1, int>, 16, Eigen::MakePointer>, Eigen::TensorBroadcastingOp<Eigen::array<int, 2ul> const, Eigen::TensorMap<Eigen::Tensor<bool const, 2, 1, int>, 16, Eigen::MakePointer> const> const> const, Eigen::GpuDevice>, int>(Eigen::TensorEvaluator<Eigen::TensorAssignOp<Eigen::TensorMap<Eigen::Tensor<bool, 2, 1, int>, 16, Eigen::MakePointer>, Eigen::TensorBroadcastingOp<Eigen::array<int, 2ul> const, Eigen::TensorMap<Eigen::Tensor<bool const, 2, 1, int>, 16, Eigen::MakePointer> const> const> const, Eigen::GpuDevice>, int)": 1.97602,
+  "UncertaintyRelu(int, int, float const*, float*)": 1.8918700000000002,
+  "MemcpyD2H": 1.261475,
+  "Memset 3": 0.47201
+ },
+ "gpu_lines_us_per_slot": {
+  "Stream #14(Compute)": 190.23934,
+  "Stream #44(Compute)": 116.5265,
+  "Stream #15(MemcpyH2D)": 1.56672,
+  "Stream #45(Memset,Compute,MemcpyD2H)": 36.604569999999995,
+  "Stream #49(Compute)": 114.07185,
+  "Stream #16(MemcpyD2H)": 26.361225
+ },
+ "measure": "summed GPU kernel durations from the TensorFlow profiler, per run of the IDD additions"
+}

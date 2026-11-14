@@ -2,7 +2,7 @@
 The latency of the CGNN receiver of \citet{cammerer2023neural} grows with its
 depth: on an NVIDIA A100 GPU with TensorRT, each iteration adds about
 350~$\mu$s to a fixed 270~$\mu$s, so a 1~ms budget admits two iterations
-instead of eight~\cite{wiesmayr2025realtime}. The real-time (RT) NRX of
+instead of eight~\cite{wiesmayr2025realtime}. The real-time NRX of
 \citet{wiesmayr2025realtime}, trained for two iterations only, loses less than
 0.7~dB against the eight-iteration NRX on a two-user 16-QAM test channel, and
 more at 64-QAM.
@@ -19,8 +19,7 @@ quantization~\cite{yellapragada2026qat}, factorized or shallow
 attention~\cite{yellapragada2026axial,kawai2025unified,fan2025choose}, lighter or
 phase-equivariant blocks~\cite{gupta2025lowcomplexity,gansekoele2025rpe}, and
 model-driven hybrids~\cite{honkala2026eqdeeprx,abdollahpour2025mdx}, some at a
-cost in accuracy, for example 0.73--0.80~dB for 4-bit
-weights~\cite{yellapragada2026qat}. Yet all of these methods
+cost in accuracy. Yet all of these methods
 process each slot from scratch, a statelessness that \citet{kawai2025unified} name as a limitation, calling for temporal
 context across resource grids.
 
@@ -29,11 +28,8 @@ Two-dimensional Wiener filtering weights pilots by their time--frequency
 correlation~\cite{hoeher1997wiener}, Kalman tracking propagates an estimate and
 its error covariance between blocks~\cite{komninakis2002kalman}, and 5G NR
 Release~17 standardizes joint estimation over several PUSCH slots as DMRS
-bundling~\cite{3gpp38830,3gpp38214}, with gains that depend on the number of
-bundled slots. These gains require a channel that stays correlated over the
-window and a user whose transmit phase stays continuous. Under isotropic
-scattering, the correlation of samples one 0.5~ms slot apart falls from 0.99 at
-a Doppler of 50~Hz to 0.64 at 400~Hz~\cite{jakes1974microwave}. Learned
+bundling~\cite{3gpp38830,3gpp38214}. Bundling requires a channel that stays correlated over the
+window and a user whose transmit phase stays continuous. Learned
 predictors exploit the same temporal structure with recurrent, state-space and
 transformer models over past channel
 estimates~\cite{mattu2022deep,mohsin2025continual,luo2025cpmamba,lagona2026transformer,gizzini2021talstm},
@@ -46,8 +42,8 @@ Online schemes retrain on decoder-recovered labels, on symbol decisions, or when
 a pilot-based drift test
 fires~\cite{fischer2022adaptive,finish2022symbol,uzlaner2025asynchronous}, or
 track a posterior over the weights~\cite{gusakov2026online}. They pay in label
-delay, at least 0.46~s per retraining step in \citet{fischer2022adaptive}; in compute that
-grows at least quadratically with the number of weights~\cite{gusakov2026online};
+delay~\cite{fischer2022adaptive}, in compute that
+grows at least quadratically with the number of weights~\cite{gusakov2026online},
 and in error propagation when decisions serve as labels or
 references~\cite{fischer2022adaptive,fan2025defined}. Long-term statistics such
 as time-averaged channel covariances~\cite{liu2026universal,wiesmayr2026impact}
@@ -64,24 +60,20 @@ uncoded.
 \begin{figure*}[t]
 \centering
 \includegraphics[width=\textwidth]{figures/receiver_architecture.pdf}
-\caption{Proposed NRX for 5G NR PUSCH. The pilot memory, channel filter, and IDD are new. The filter refines the LS estimate with the memory before \texttt{StateInit}, and the IDD round splits LDPC decoding into eight and ten BP iterations.}
+\caption{Proposed NRX for 5G NR PUSCH. The filter refines the LS estimate with the memory before \texttt{StateInit}.}
 \label{fig:architecture}
 \end{figure*}
 
 A detector that treats its channel estimate as exact produces overconfident
 LLRs. \citet{goutay2021ml} learn the
 covariance of the channel-estimation error and use it in the equalizer and in
-the noise variance of each LLR; with a learned demapper, their receiver gains
-1~dB at a coded bit error rate of $10^{-3}$ at 0--15~km/h and 3~dB at
-$10^{-2}$ at 30--45~km/h. IDD adds decoder feedback at run time.
+the noise variance of each LLR. IDD adds decoder feedback at run time.
 DUIDD~\cite{wiesmayr2022duidd} learns the parameters of a fixed number of
 detection--decoding rounds with a noise-plus-channel-error covariance assumed
-independent of the transmitted symbols and gains 0.6--1.2~dB at a block error
-rate of 1\% over classical IDD with the same decoding budget. With learned detectors, an
+independent of the transmitted symbols. With learned detectors, an
 approximate GNN posterior keeps part of the decoder's prior even after it is
 subtracted, so the prior is counted twice and the loop can become unstable.
-\citet{zhou2023ext} counter this with synthetic priors, extrinsic targets, and
-clipped decoder LLRs, and \citet{clausius2025joint} observe a similar
+\citet{zhou2023ext} counter this, and \citet{clausius2025joint} observe a similar
 mismatch. In these works, however, the error covariance covers only the current
 slot's pilots.
 
@@ -92,5 +84,4 @@ and stores only pilot-based estimates, so it needs no labels and cannot
 propagate decision errors. Like DMRS bundling, it assumes phase continuity
 across the stored slots. Unlike the uncertainty-aware detectors above, its
 error covariance covers a multi-slot estimate and enters a symbol-dependent
-likelihood during IDD. The approach is complementary to intra-slot cost
-reduction and to weight adaptation.
+likelihood during IDD.

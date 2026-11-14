@@ -9,6 +9,8 @@
 #include <mutex>
 #include <memory>
 #include <cmath>
+#include <cstdlib>
+#include <string>
 using namespace tensorflow;
 
 REGISTER_OP("PilotPairPrepare")
@@ -29,6 +31,7 @@ REGISTER_OP("PilotPairPrepare")
 Status AssemblePreparation(cudaStream_t,int,int,int,int,float,const Tensor* const*,Tensor* const*,Tensor*,Tensor*,Tensor*);
 Status FinishPreparation(cudaStream_t,int,int,Tensor*,Tensor*,Tensor*,Tensor*);
 Status CheckPreparation(cudaStream_t,int,int,Tensor*,Tensor*);
+Status FusedPreparation(cudaStream_t,int,int,int,int,float,const Tensor* const*,Tensor* const*,Tensor*);
 
 struct PreparationStream {
  std::unique_ptr<se::Stream> stream;
@@ -65,12 +68,15 @@ struct PreparationCall {
 
 class PairPrepareOp : public AsyncOpKernel {
  float energy_;
+ bool fused_;  // one kernel per matrix instead of cuSOLVER/cuBLAS; NRX_PAIR_PREPARE=cusolver selects the library path
  std::mutex initialization_;
  std::shared_ptr<PreparationStream> execution_;
  public:
  explicit PairPrepareOp(OpKernelConstruction* c):AsyncOpKernel(c) {
    OP_REQUIRES_OK(c,c->GetAttr("symbol_energy",&energy_));
    OP_REQUIRES(c,std::isfinite(energy_) && energy_>0,errors::InvalidArgument("Invalid symbol energy"));
+   const char* path=std::getenv("NRX_PAIR_PREPARE");
+   fused_=!(path && std::string(path)=="cusolver");
  }
  void ComputeAsync(OpKernelContext* c,DoneCallback done) override {
    const auto& coefficients=c->input(0); const auto& covariance=c->input(1);
@@ -107,15 +113,17 @@ class PairPrepareOp : public AsyncOpKernel {
      execution->stream->ThenWaitFor(main);
      auto stream=reinterpret_cast<cudaStream_t>(execution->stream->platform_specific_handle().stream);
      const Tensor* in[5];for(int i=0;i<5;++i)in[i]=&call->inputs[i];
-     status=AssemblePreparation(stream,b,j,r,e,energy_,in,out,&call->pointers,&call->info,&call->status);
+     bool fused=fused_ && r<=8;
+     if(fused)status=FusedPreparation(stream,b,j,r,e,energy_,in,out,&call->status);
+     else status=AssemblePreparation(stream,b,j,r,e,energy_,in,out,&call->pointers,&call->info,&call->status);
      auto matrices=reinterpret_cast<cuComplex**>(call->pointers.flat<int64_t>().data());
      auto rhs=matrices+count;
-     if(status.ok() && cusolverDnCpotrfBatched(execution->solver,CUBLAS_FILL_MODE_UPPER,r,matrices,r,
+     if(status.ok() && !fused && cusolverDnCpotrfBatched(execution->solver,CUBLAS_FILL_MODE_UPPER,r,matrices,r,
                                              call->info.flat<int32>().data(),count)!=CUSOLVER_STATUS_SUCCESS)
        status=errors::Internal("Preparation Cholesky launch failed");
-     if(status.ok())status=FinishPreparation(stream,count,r,out[0],out[2],&call->info,&call->status);
+     if(status.ok() && !fused)status=FinishPreparation(stream,count,r,out[0],out[2],&call->info,&call->status);
      cuComplex alpha=make_cuComplex(1.f,0.f);
-     if(status.ok()){
+     if(status.ok() && !fused){
        cublasStatus_t solved=CUBLAS_STATUS_SUCCESS;
        if(count>1 && r<=128*count)
          solved=cublasCtrsmBatched(execution->blas,CUBLAS_SIDE_RIGHT,CUBLAS_FILL_MODE_UPPER,
@@ -127,7 +135,7 @@ class PairPrepareOp : public AsyncOpKernel {
              reinterpret_cast<cuComplex*>(out[1]->flat<complex64>().data())+i*r*6,6);
        if(solved!=CUBLAS_STATUS_SUCCESS)status=errors::Internal("Preparation triangular solve launch failed");
      }
-     if(status.ok())status=CheckPreparation(stream,count,r,out[1],&call->status);
+     if(status.ok() && !fused)status=CheckPreparation(stream,count,r,out[1],&call->status);
      if(status.ok() && cudaMemcpyAsync(call->host_status.flat<int32>().data(),call->status.flat<int32>().data(),
                                      sizeof(int),cudaMemcpyDeviceToHost,stream)!=cudaSuccess)
        status=errors::Internal("Preparation status copy failed");

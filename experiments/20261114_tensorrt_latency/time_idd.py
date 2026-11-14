@@ -7,6 +7,10 @@ the GPU time per slot is the summed kernel duration divided by the number of run
 
     LD_LIBRARY_PATH=$CONDA_PREFIX/lib/python3.10/site-packages/nvidia/cuda_cupti/lib time_idd.py   # results/idd.json
 
+The pair preparation runs as one fused kernel by default; NRX_PAIR_PREPARE=cusolver selects the cuSOLVER/cuBLAS path
+(results/idd_cusolver.json). Each run also saves its preparation outputs, IDD output, and decoder output
+(results/idd_outputs_<path>.npz) so that the two paths can be compared.
+
 The profiler needs CUPTI on the library path (TensorFlow does not find the pip-installed CUPTI by itself).
 """
 import json
@@ -19,10 +23,10 @@ HERE = Path(__file__).resolve().parent
 RUNS, WARMUP = 200, 50
 GROUPS = {"covariance": ("PackUncertainty", "UncertaintyStats", "UncertaintyFeatureValues", "UncertaintyRelu",
                          "UncertaintyOutput"),
-          # pilot_pair_prepare: own kernels plus the batched Cholesky factorizations and triangular solves of
-          # cuSOLVER/cuBLAS (complex GEMM tiles c1688gemm) on its own stream
-          "pair_preparation": ("Assemble", "Finish", "Check", "potrf", "trsm", "c1688gemm"),
-          "app_detector_and_combining": ("PhysicalScores", "Correction", "InitializeCorrected")}
+          # pilot_pair_prepare: the fused kernel, or Assemble/Finish/Check with the batched Cholesky factorizations
+          # and triangular solves of cuSOLVER/cuBLAS (NRX_PAIR_PREPARE=cusolver)
+          "pair_preparation": ("FusedPrepare", "Assemble", "Finish", "Check", "potrf", "trsm"),
+          "app_detector_and_combining": ("PhysicalScores", "ScoresWarp", "Correction", "InitializeCorrected")}
 
 
 def kernel_times(logdir, runs):
@@ -87,11 +91,34 @@ def main():
                                      code_input, model.evidence_calibration, decoder.first.llr_limit,
                                      tf.sigmoid(model.correction_logit), model.blend_variables)
 
+    # Default: fused pair preparation and one-warp-per-resource-element detector kernels. NRX_IDD_KERNELS=reference
+    # selects the original detector kernels, NRX_PAIR_PREPARE=cusolver the cuSOLVER preparation (with them).
+    path = ("cusolver" if os.environ.get("NRX_PAIR_PREPARE") == "cusolver" else
+            "reference" if os.environ.get("NRX_IDD_KERNELS") == "reference" else
+            "maxlog" if os.environ.get("NRX_IDD_MAXLOG") == "1" else "fused")
+    estimate = model.channel_memory.complete(context, layout)
+    pair = model.physical.begin(inputs[0], estimate, noise, inputs[3], ids, llr, layout)[0]
+    prepared = pair[3]
+    if path == "fused":
+        # Inputs and outputs of the two kernels that do not depend on the decoder (pair preparation and symbol-pair
+        # scores), for time_overlap.py, which runs them next to the TensorRT engine.
+        physical = model.physical
+        (HERE/"build").mkdir(exist_ok=True)
+        np.savez(HERE/"build/idd_kernels.npz", theta=layout.joint(estimate.coefficients).numpy(),
+                 covariance=layout.joint(estimate.covariance).numpy(), noise=noise.numpy(),
+                 energy_levels=physical.energy_levels.numpy(), symbol_energy=np.float32(physical.symbol_energy),
+                 y=pair[2].numpy(), factor=prepared[0].numpy(), white=prepared[1].numpy(), logdet=prepared[2].numpy(),
+                 enabled=pair[4].numpy(), phi=tf.convert_to_tensor(pair[6]).numpy(), cells=tf.convert_to_tensor(pair[7]).numpy(),
+                 symbols=physical.symbols.numpy(), energy_indices=tf.convert_to_tensor(physical.energy_indices).numpy(),
+                 labels=tf.convert_to_tensor(physical.labels).numpy(), scores=pair[9][0].numpy(), fit=pair[9][1].numpy())
     # Same result as the receiver's own decoding graph for this slot.
     corrected = idd(context, llr, posterior, code_input)
     output = decoder.finish(corrected, state)
     full = model.decode(inputs, noise, ids, history, decoder, adapter.grid_map, observation, (context, channel))[0]
     assert np.array_equal(output.logits.numpy(), full.logits.numpy()), "IDD graph differs from the receiver"
+    (HERE/"results").mkdir(exist_ok=True)
+    np.savez(HERE/f"results/idd_outputs_{path}.npz", factor=prepared[0].numpy(), white=prepared[1].numpy(),
+             logdet=prepared[2].numpy(), corrected=corrected.numpy(), logits=output.logits.numpy())
 
     for _ in range(WARMUP):
         idd(context, llr, posterior, code_input).numpy()
@@ -106,12 +133,14 @@ def main():
               for group, names in GROUPS.items()}
     grouped = set(k for k in per_kernel if any(name in k for names in GROUPS.values() for name in names))
     groups["other_tensorflow_ops"] = sum(v for k, v in per_kernel.items() if k not in grouped)
-    report = {"gpu_us_per_slot": groups, "total_gpu_us_per_slot": sum(groups.values()), "runs": RUNS,
+    # Only the correction needs the decoder's output; everything else depends on the channel filter's output alone.
+    waiting = sum(v for k, v in per_kernel.items() if any(n in k for n in ("Correction", "InitializeCorrected")))
+    report = {"preparation": path, "decoder_dependent_us_per_slot": waiting,
+              "decoder_independent_us_per_slot": sum(per_kernel.values())-waiting, "gpu_us_per_slot": groups, "total_gpu_us_per_slot": sum(groups.values()), "runs": RUNS,
               "kernels_us_per_slot": dict(sorted(per_kernel.items(), key=lambda item: -item[1])),
               "gpu_lines_us_per_slot": per_line,
               "measure": "summed GPU kernel durations from the TensorFlow profiler, per run of the IDD additions"}
-    (HERE/"results").mkdir(exist_ok=True)
-    (HERE/"results/idd.json").write_text(json.dumps(report, indent=1))
+    (HERE/("results/idd.json" if path == "fused" else f"results/idd_{path}.json")).write_text(json.dumps(report, indent=1))
     print(json.dumps(report, indent=1))
 
 

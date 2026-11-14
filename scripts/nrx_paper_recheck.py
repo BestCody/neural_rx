@@ -198,8 +198,8 @@ recipe = json.load(open('experiments/20261019_learned_blend_joint_training_6000/
 selected = json.load(open('experiments/20261019_learned_blend_joint_training_6000/results/best.json'))['checkpoint']
 final_updates = json.load(open(f'{selected}/manifest.json'))['update']
 checked += 1
-phrase = (f"the receiver was trained for $1.7\\cdot 10^{{4}}$ steps in earlier versions, which did not yet have the "
-          f"combining weight $a$, and then for $5\\cdot 10^{{3}}$ more steps")
+phrase = (f"the receiver was trained for $2.2\\cdot 10^{{4}}$ steps in total, with the combining weight $a$ added for "
+          f"the last $5\\cdot 10^{{3}}$")
 initialization = json.load(open('models/learned_blend/initialization.json'))
 new_blend = 'blend' in initialization['initialized'] and initialization['training_updates'] == 0
 if not (recipe['initializer_parent_updates'] == 17000 and final_updates == 5000 and new_blend
@@ -389,9 +389,8 @@ for c in core:
 claim("which changed the transmit power since the newest entry for fewer than one in ten TBs with an entry, mostly by "
       "1\\,dB", max(pc_changed.values()) < 10 and np.mean(np.isclose(np.abs(steps), 1.)) > .5,
       'power changes since the newest memory entry')
-claim("the errors now stem from many more UEs, and the proposed NRX has fewer errors than the Large NRX with "
-      "$N_{\\mathrm{it}}=8$ in more than twice as many sequences as the reverse",
-      min(pc_ues.values()) > 1.5*max(counts) and fewer > 2*more, 'UEs and sequences with power control')
+claim("At the SNR point closest to a TBLER of 10\\%, the errors now stem from many more UEs.",
+      min(pc_ues.values()) > 1.5*max(counts), 'UEs with power control')
 claim("although these differences rest on only a few UEs", max(counts) <= 20 and max(counts) < min(pc_ues.values()),
       'few UEs without power control')
 print('power control: power changed', {c: round(v, 2) for c, v in pc_changed.items()}, 'UEs', pc_ues,
@@ -430,8 +429,8 @@ def threshold_for(scores, rows, share):
 failed_test = np.array([r['failed'] for r in pc_test]); first_test = failed_test & np.array([r['prev'] is not True for r in pc_test])
 rule_flags = np.array([r['prev'] is True for r in pc_test])
 rule_budget = np.mean([r['prev'] is True for r in pc_fit if not r['failed']])
-claim("requesting a retransmission whenever the UE's previous TB failed catches about three quarters of the errors in "
-      "the test sequences", 70 <= 100*rule_flags[failed_test].mean() <= 80, 'CRC-history rule with power control')
+claim(f"requesting a retransmission whenever the UE's previous TB failed catches {100*rule_flags[failed_test].mean():.0f}\\% "
+      "of the errors in the test sequences", 70 <= 100*rule_flags[failed_test].mean() <= 80, 'CRC-history rule with power control')
 CHECKS = [['previous_failed_flag', 'no_previous', 'noise', 'current_strength', 'has_memory', 'recent_strength', 'entries',
            'newest_age', 'estimate_strength', 'estimate_error']]
 CHECKS.append(CHECKS[0]+['llr_bit_error'])
@@ -452,8 +451,9 @@ caught = first_check >= 0
 ctrl, rule, early = (100*caught[failed_test].mean(), 100*rule_flags[failed_test].mean(),
                      100*(first_check[failed_test] == 0).mean())
 no_more_alarms = caught[~failed_test].mean() <= rule_flags[~failed_test].mean()
-claim(f"the controller catches {ctrl:.0f}\\% of the errors instead of {rule:.0f}\\%, most of them already after channel "
-      "estimation, without more unneeded retransmissions", early > ctrl/2 and no_more_alarms, 'early-retransmission controller')
+claim(f"the controller catches {ctrl:.0f}\\% of the errors instead, most of them already after channel "
+      "estimation, without more unneeded retransmissions", early > ctrl/2 and no_more_alarms and ctrl > rule,
+      'early-retransmission controller')
 claim("It also catches almost half of the errors that do not follow an error", 40 <= 100*caught[first_test].mean() < 50,
       'first errors caught')
 claim("lets the network request most retransmissions before decoding finishes, clearly more than the CRC history alone",
@@ -686,39 +686,47 @@ claim("Fig.~\\ref{fig:tradeoff} shows the median of 2{,}000 runs on an NVIDIA A4
       'TensorRT: iteration and N_it=8')
 claim("each iteration adds about 350~$\\mu$s to a fixed 270~$\\mu$s", True, 'Wiesmayr A100 values used above',
       ('related',))
-claim("The kernel takes 25\\,$\\mu$s, and the proposed NRX takes less than 3\\% longer than the Large NRX with "
+claim("The proposed NRX then takes less than 3\\% longer than the Large NRX with "
       "$N_{\\mathrm{it}}=2$, i.e., less than a tenth of a CGNN iteration, at the required SNR of the Large NRX with "
-      "$N_{\\mathrm{it}}=3$", kernel_is_filter and round(1000*ms['fused_kernel_only']) == 25
-      and max(added.values()) < .03 and max(added_iterations.values()) < .1
+      "$N_{\\mathrm{it}}=3$", kernel_is_filter and max(added.values()) < .03 and max(added_iterations.values()) < .1
       and abs(r2(ni['natural_umi']['candidate_persistent'])-r2(k3['natural_umi'])) <= .05, 'TensorRT: filter kernel')
 claim("where the Large NRX with $N_{\\mathrm{it}}=2$ takes about 0.97\\,ms~\\cite{wiesmayr2025realtime}, the proposed NRX "
       "without IDD stays at about the 1\\,ms budget, which remains to be measured",
       round(a100_k2, 2) == .97 and .95 <= a100_k2*(1+added['events']) <= 1.03, 'TensorRT: A100 estimate')
-# IDD: GPU kernel time from the profiler (own grouping of the recorded kernels), and its multiplications.
-profile = json.load(open(f'{TRT}/idd.json'))['kernels_us_per_slot']
+# IDD: GPU kernel time from the profiler (own grouping of the recorded kernels), with the fused pair preparation, whose
+# outputs match the cuSOLVER path to rounding (same decoded bits); and its multiplications.
+idd_profile = json.load(open(f'{TRT}/idd.json'))
+profile = idd_profile['kernels_us_per_slot']
 idd_total = sum(profile.values())/1000
-detector = sum(v for k, v in profile.items() if k.startswith(('PhysicalScores', 'void Correction', 'InitializeCorrected')))/1000
-factorization = sum(v for k, v in profile.items() if any(n in k for n in ('potrf', 'trsm', 'c1688gemm', 'Assemble(',
-                                                                            'Finish(', 'Check(')))/1000
-matrices = 9*cx['idd_detector']['cells']  # 3 x 3 energy pairs of 16-QAM per cell
+detector = sum(v for k, v in profile.items() if k.startswith(('ScoresWarp', 'CorrectionWarp', 'InitializeCorrected')))/1000
+# idd_outputs_reference: original detector kernels (must be bit-identical); idd_outputs_cusolver: cuSOLVER preparation.
+with np.load(f'{TRT}/idd_outputs_fused.npz') as fused_out, np.load(f'{TRT}/idd_outputs_reference.npz') as reference_out:
+    same_detector = all(np.array_equal(fused_out[k], reference_out[k]) for k in ('corrected', 'logits'))
+with np.load(f'{TRT}/idd_outputs_fused.npz') as fused_out, np.load(f'{TRT}/idd_outputs_cusolver.npz') as library_out:
+    same_preparation = (np.array_equal(fused_out['logits'] > 0, library_out['logits'] > 0)
+                        and np.array_equal(fused_out['corrected'] > 0, library_out['corrected'] > 0)
+                        and np.max(np.abs(fused_out['factor']-library_out['factor'])) <= 1e-5*np.max(np.abs(library_out['factor'])))
 claim("IDD requires only $2.2\\cdot 10^{8}$ real multiplications per slot, a tenth of the $2.2\\cdot 10^{9}$ of "
-      "a CGNN iteration, but its CUDA kernels take 1.5\\,ms on the A40 GPU, mostly for evaluating all symbol pairs and for "
-      "factorizing about 14{,}000 small covariance matrices. With IDD, the proposed NRX is therefore not yet real-time capable",
-      round(idd/1e8, 1) == 2.2 and round(cgnn/1e9, 1) == 2.2 and round(idd/cgnn, 1) == .1 and round(idd_total, 1) == 1.5
-      and (detector+factorization)/idd_total > .8 and round(matrices, -3) == 14000, 'IDD multiplications and GPU time')
+      "a CGNN iteration, but its CUDA kernels take 0.5\\,ms on the A40 GPU, more than half of it for evaluating all symbol "
+      "pairs. With "
+      "IDD, the proposed NRX is therefore not yet real-time capable",
+      idd_profile['preparation'] == 'fused' and same_preparation and same_detector and round(idd/1e8, 1) == 2.2
+      and round(cgnn/1e9, 1) == 2.2 and round(idd/cgnn, 1) == .1 and round(idd_total, 1) == .5
+      and detector/idd_total > .5, 'IDD multiplications and GPU time')
 claim("but its IDD round is not yet real-time capable. Without IDD, it matches the three-iteration NRX, and its channel "
-      "filter, as one CUDA kernel, adds less than 3\\% to the inference time of the two-iteration NRX", idd_total > 1. and min(ni_vs_k3) >= -.05 and max(added.values()) < .03,
+      "filter, as one CUDA kernel, adds less than 3\\% to the inference time of the two-iteration NRX",
+      idd_total > .1 and min(ni_vs_k3) >= -.05 and max(added.values()) < .03,  # IDD far exceeds what the budget leaves
       'two operating points, abstract', ('abstract',))
 claim("Without IDD, which leaves the low-density parity-check (LDPC) decoder unchanged, the memory gain remains, and the NRX "
       "matches the three-iteration NRX, with less than 3\\% more inference time than the two-iteration NRX when its filter "
       "runs as one CUDA kernel, whereas IDD is not yet real-time capable",
-      min(ni_memory) > 0 and min(ni_vs_k3) >= -.05 and max(added.values()) < .03 and idd_total > 1.,
+      min(ni_memory) > 0 and min(ni_vs_k3) >= -.05 and max(added.values()) < .03 and idd_total > .1,
       'two operating points, introduction', ('introduction',))
 claim("and, without IDD, matches the three-iteration NRX at less than 3\\% more inference time than the two-iteration NRX", min(ni_vs_k3) >= -.05 and max(added.values()) < .03, 'two operating points, conclusion')
 print('TensorRT medians (events)', {k: round(v, 4) for k, v in ms.items()}, 'iteration', round(iteration_ms['events'], 4),
       'added', {k: round(100*v, 2) for k, v in added.items()}, '% =', {k: round(v, 3) for k, v in added_iterations.items()},
       'iterations; A100 estimate', round(a100_k2*(1+added['events']), 3), 'ms; IDD', round(idd_total, 3), 'ms (detector',
-      round(detector, 3), 'factorization', round(factorization, 3), '); no IDD minus N_it=3', ni_vs_k3)
+      round(detector, 3), '); no IDD minus N_it=3', ni_vs_k3)
 print('without IDD', {c: {m: round(v, 2) for m, v in ni[c].items()} for c in core}, 'memory', ni_memory,
       'effective memory', [round(v, 2) for v in ni_eff_memory], 'lead over retrained', ni_lead,
       'no-memory lead', ni_no_memory_lead, 'filter share', round(filt/cgnn, 4))
