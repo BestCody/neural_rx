@@ -44,7 +44,8 @@ def crossing(snrs, rates, target=.1):
 
 section = tex[tex.index(r'\section{Evaluation}'):tex.index(r'\bibliography{references}')]
 parts = {'abstract': (r'\begin{abstract}', r'\end{abstract}'),
-         'introduction': (r'\section{Introduction}', r'\section{Related Work}')}
+         'introduction': (r'\section{Introduction}', r'\section{Related Work}'),
+         'related': (r'\section{Related Work}', r'\section{Receiver Design}')}
 parts = {name: re.sub(r'\s+', ' ', tex[tex.index(start):tex.index(end)]) for name, (start, end) in parts.items()}
 parts['section'] = re.sub(r'\s+', ' ', section)
 checked = 0
@@ -191,18 +192,7 @@ if slow_gap > .1:
     bad += 1; print('CLAIM FAILS no memory matches Perf.-CSI on slow channels', slow_gap)
 print('slow channels: no memory minus Perf.-CSI', round(slow_gap, 3))
 
-with np.load(f'{SW}/latency.npz') as data:
-    med = {k[len('latency_ms_'):]: float(np.median(data[k])) for k in data.files if k.startswith('latency_ms_')}
-print('latency medians', {k: round(v, 2) for k, v in med.items()})
-saving = 100 * (1 - med['candidate_persistent'] / med['frozen_cold_k8'])
-added = med['candidate_persistent'] - med['frozen_cold_k2']
-print('saving % ', round(saving, 1), 'added ms', round(added, 2))
-per_iteration = (med['frozen_cold_k8'] - med['frozen_cold_k2']) / 6
-claim("The proposed NRX is only slightly slower than the Large NRX with $N_{\\mathrm{it}}=2$ and clearly faster than with "
-      "$N_{\\mathrm{it}}=8$, at a comparable required SNR, as its additions cost about a third of a CGNN iteration",
-      0 < added < .05*med['frozen_cold_k2'] and saving > 15 and .29 <= added/per_iteration <= .38, 'latency')
-claim("the median latency of the proposed NRX is lower than that of the eight-iteration NRX", saving > 0,
-      'latency in the introduction', ('introduction',))
+# Latency: TensorRT inference times, checked at the end (experiments/20261114_tensorrt_latency).
 # Training budget: 17,000 parent updates recorded in the recipe plus the selected checkpoint's final-run updates.
 recipe = json.load(open('experiments/20261019_learned_blend_joint_training_6000/inputs/training_recipe.json'))
 selected = json.load(open('experiments/20261019_learned_blend_joint_training_6000/results/best.json'))['checkpoint']
@@ -216,9 +206,6 @@ if not (recipe['initializer_parent_updates'] == 17000 and final_updates == 5000 
         and recipe['initializer_checkpoint'] == 'models/learned_blend/initial_receiver.weights.h5'
         and phrase in re.sub(r'\s+', ' ', tex)):
     bad += 1; print('MISSING training budget', recipe['initializer_parent_updates'], final_updates)
-for phrase in ('real-time budget of 1',):
-    if phrase not in text.replace('- ', '-') and phrase not in section:
-        bad += 1; print('PHRASE MISSING', phrase)
 
 
 # ---- Network Decisions, recomputed independently of experiments/20261106_crc_fallback and
@@ -635,10 +622,6 @@ if abs(cgnn/(cx['weights']['cgnn_iteration']*grid_positions)-1) > .02:
     bad += 1; print('CLAIM FAILS CGNN multiplications vs weights x positions', cgnn, cx['weights']['cgnn_iteration']*grid_positions)
 filt = cx['channel_filter_counted']['real_mult']
 idd = cx['idd_detector']['real_mult']+cx['idd_combining']['real_mult']
-claim("one CGNN iteration requires about $2.2\\cdot 10^{9}$ real multiplications per slot, whereas the channel filter with "
-      "its error covariance requires $4\\cdot 10^{7}$ and IDD $2.2\\cdot 10^{8}$, together about an eighth of an iteration",
-      round(cgnn/1e9, 1) == 2.2 and round(filt/1e7) == 4 and round(idd/1e8, 1) == 2.2 and .11 <= (filt+idd)/cgnn <= .14,
-      'multiplications per slot')
 print('multiplications per slot: CGNN iteration', f'{cgnn:.3g}', 'filter', f'{filt:.3g}', 'IDD', f'{idd:.3g}',
       'share', round((filt+idd)/cgnn, 3))
 # ---- Proposed NRX without IDD (experiments/20261114_no_idd_ablation): same weights, LLRs L straight to the
@@ -664,21 +647,78 @@ ni_memory = [r2(r2(ni[c]['candidate_reset'])-r2(ni[c]['candidate_persistent'])) 
 ni_lead = [r2(r2(rt[c])-r2(ni[c]['candidate_persistent'])) for c in core]
 ni_no_memory_lead = [r2(r2(rt[c])-r2(ni[c]['candidate_reset'])) for c in core]
 ni_eff_memory = [eff_req[c]['candidate_reset_no_idd']-eff_req[c]['candidate_persistent_no_idd'] for c in core]
-claim("The memory reduces the required SNR in all three conditions, by 0.3 to 0.4\\,dB, and the required effective SNR by "
-      "more than half a dB, with and without IDD",
+claim("isolates the memory. It reduces the required SNR in all three conditions, by 0.3 to 0.4\\,dB, and the required "
+      "effective SNR by more than half a dB, with and without IDD",
       all(round(v, 1) in (.3, .4) for v in list(memory_gain.values())+ni_memory) and min(eff_memory+ni_eff_memory) > .5,
       'memory gain with and without IDD')
 claim("We also evaluate both proposed versions without IDD, i.e., with their LLRs $L$ passed to the LDPC decoder. With IDD, "
       "they use 18 BP iterations, all others 20", True, 'no-IDD setup (20 BP iterations asserted per file)')
-claim("Without IDD, which leaves the LDPC decoder unchanged, the proposed NRX still outperforms the retrained baseline in all "
-      "three conditions, but its no-memory version does not", min(ni_lead) > 0 and max(ni_no_memory_lead) < 0,
-      'no IDD vs retrained baseline')
-claim("Without IDD, the additions cost less than 2\\% of an iteration", filt/cgnn < .02, 'filter share of an iteration')
-claim("its gain remains without IDD, which leaves the channel decoder unchanged", min(ni_memory) > 0 and min(ni_eff_memory) > 0,
+claim("and its gain remains without IDD", min(ni_memory) > 0 and min(ni_eff_memory) > 0,
       'no-IDD memory gain, abstract', ('abstract',))
+# Without IDD vs. the released Large NRX with N_it = 3 (required SNR, all three conditions).
+k3 = {c: crossing(*curve(c, 'frozen_cold_k3')) for c in core}
+ni_vs_k3 = [r2(r2(k3[c])-r2(ni[c]['candidate_persistent'])) for c in core]
+ni_no_memory_vs_k3 = [r2(r2(k3[c])-r2(ni[c]['candidate_reset'])) for c in core]
+claim("Without IDD, which leaves the LDPC decoder unchanged, the proposed NRX still outperforms the retrained baseline and "
+      "matches or outperforms the Large NRX with $N_{\\mathrm{it}}=3$ in all three conditions, but its no-memory version does "
+      "neither", min(ni_lead) > 0 and min(ni_vs_k3) >= -.05 and max(ni_no_memory_lead) < 0 and max(ni_no_memory_vs_k3) < -.05,
+      'no IDD vs retrained baseline and N_it=3')
+
+# ---- Latency (experiments/20261114_tensorrt_latency): TensorRT FP16 engines on the A40, batch size one, medians recomputed
+# from the raw samples of time_fused.py (CUDA events, and CUDA graphs as a second view); the filter as one CUDA kernel.
+TRT = 'experiments/20261114_tensorrt_latency/results'
+fused = json.load(open(f'{TRT}/fused.json'))
+with np.load(f'{TRT}/fused_samples.npz') as data:
+    timing = {mode: {k[len(mode)+1:]: float(np.median(data[k])) for k in data.files if k.startswith(mode+'_')}
+              for mode in ('events', 'graph')}
+assert all(len(np.load(f'{TRT}/fused_samples.npz')[k]) >= 2000 for k in np.load(f'{TRT}/fused_samples.npz').files)
+ms = timing['events']
+iteration_ms = {mode: (t['large_k8']-t['large_k2'])/6 for mode, t in timing.items()}
+added = {mode: t['fused']/t['large_k2']-1 for mode, t in timing.items()}
+added_iterations = {mode: (t['fused']-t['large_k2'])/iteration_ms[mode] for mode, t in timing.items()}
+a100_k2 = .27+2*.35  # Wiesmayr et al.: about 270 us fixed and 350 us per iteration on the A100 GPU
+kernel_is_filter = (fused['check']['channel_all_finite'] and fused['check']['sign_agreement_abs_llr_above_1'] == 1.
+                    and fused['check']['channel_max_abs_diff'] <= 1e-4*fused['check']['channel_max_abs'])
+claim("Fig.~\\ref{fig:tradeoff} shows the median of 2{,}000 runs on an NVIDIA A40 GPU. One CGNN iteration takes 0.48\\,ms, "
+      "and the Large NRX with $N_{\\mathrm{it}}=8$ takes three times as long as with $N_{\\mathrm{it}}=2$, similar to the A100 "
+      "GPU in", fused['gpu'] == 'NVIDIA A40' and round(iteration_ms['events'], 2) == .48
+      and round(ms['large_k8']/ms['large_k2']) == 3 and abs(ms['large_k8']/ms['large_k2']-(.27+8*.35)/a100_k2) < .2,
+      'TensorRT: iteration and N_it=8')
+claim("each iteration adds about 350~$\\mu$s to a fixed 270~$\\mu$s", True, 'Wiesmayr A100 values used above',
+      ('related',))
+claim("The kernel takes 25\\,$\\mu$s, and the proposed NRX takes less than 3\\% longer than the Large NRX with "
+      "$N_{\\mathrm{it}}=2$, i.e., less than a tenth of a CGNN iteration, at the required SNR of the Large NRX with "
+      "$N_{\\mathrm{it}}=3$", kernel_is_filter and round(1000*ms['fused_kernel_only']) == 25
+      and max(added.values()) < .03 and max(added_iterations.values()) < .1
+      and abs(r2(ni['natural_umi']['candidate_persistent'])-r2(k3['natural_umi'])) <= .05, 'TensorRT: filter kernel')
+claim("where the Large NRX with $N_{\\mathrm{it}}=2$ takes about 0.97\\,ms~\\cite{wiesmayr2025realtime}, the proposed NRX "
+      "without IDD stays at about the 1\\,ms budget, which remains to be measured",
+      round(a100_k2, 2) == .97 and .95 <= a100_k2*(1+added['events']) <= 1.03, 'TensorRT: A100 estimate')
+# IDD: GPU kernel time from the profiler (own grouping of the recorded kernels), and its multiplications.
+profile = json.load(open(f'{TRT}/idd.json'))['kernels_us_per_slot']
+idd_total = sum(profile.values())/1000
+detector = sum(v for k, v in profile.items() if k.startswith(('PhysicalScores', 'void Correction', 'InitializeCorrected')))/1000
+factorization = sum(v for k, v in profile.items() if any(n in k for n in ('potrf', 'trsm', 'c1688gemm', 'Assemble(',
+                                                                            'Finish(', 'Check(')))/1000
+matrices = 9*cx['idd_detector']['cells']  # 3 x 3 energy pairs of 16-QAM per cell
+claim("IDD requires only $2.2\\cdot 10^{8}$ real multiplications per slot, a tenth of the $2.2\\cdot 10^{9}$ of "
+      "a CGNN iteration, but its CUDA kernels take 1.5\\,ms on the A40 GPU, mostly for evaluating all symbol pairs and for "
+      "factorizing about 14{,}000 small covariance matrices. With IDD, the proposed NRX is therefore not yet real-time capable",
+      round(idd/1e8, 1) == 2.2 and round(cgnn/1e9, 1) == 2.2 and round(idd/cgnn, 1) == .1 and round(idd_total, 1) == 1.5
+      and (detector+factorization)/idd_total > .8 and round(matrices, -3) == 14000, 'IDD multiplications and GPU time')
+claim("but its IDD round is not yet real-time capable. Without IDD, it matches the three-iteration NRX, and its channel "
+      "filter, as one CUDA kernel, adds less than 3\\% to the inference time of the two-iteration NRX", idd_total > 1. and min(ni_vs_k3) >= -.05 and max(added.values()) < .03,
+      'two operating points, abstract', ('abstract',))
 claim("Without IDD, which leaves the low-density parity-check (LDPC) decoder unchanged, the memory gain remains, and the NRX "
-      "still outperforms the retrained one", min(ni_memory) > 0 and min(ni_lead) > 0, 'no IDD, introduction', ('introduction',))
-claim("and a memory gain that remains without IDD", min(ni_memory) > 0, 'no IDD, conclusion')
+      "matches the three-iteration NRX, with less than 3\\% more inference time than the two-iteration NRX when its filter "
+      "runs as one CUDA kernel, whereas IDD is not yet real-time capable",
+      min(ni_memory) > 0 and min(ni_vs_k3) >= -.05 and max(added.values()) < .03 and idd_total > 1.,
+      'two operating points, introduction', ('introduction',))
+claim("and, without IDD, matches the three-iteration NRX at less than 3\\% more inference time than the two-iteration NRX", min(ni_vs_k3) >= -.05 and max(added.values()) < .03, 'two operating points, conclusion')
+print('TensorRT medians (events)', {k: round(v, 4) for k, v in ms.items()}, 'iteration', round(iteration_ms['events'], 4),
+      'added', {k: round(100*v, 2) for k, v in added.items()}, '% =', {k: round(v, 3) for k, v in added_iterations.items()},
+      'iterations; A100 estimate', round(a100_k2*(1+added['events']), 3), 'ms; IDD', round(idd_total, 3), 'ms (detector',
+      round(detector, 3), 'factorization', round(factorization, 3), '); no IDD minus N_it=3', ni_vs_k3)
 print('without IDD', {c: {m: round(v, 2) for m, v in ni[c].items()} for c in core}, 'memory', ni_memory,
       'effective memory', [round(v, 2) for v in ni_eff_memory], 'lead over retrained', ni_lead,
       'no-memory lead', ni_no_memory_lead, 'filter share', round(filt/cgnn, 4))

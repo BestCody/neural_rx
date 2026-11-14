@@ -11,6 +11,8 @@ from matplotlib.patches import FancyArrowPatch, FancyBboxPatch, Patch
 ROOT = Path(__file__).resolve().parents[1]
 RESULTS = ROOT/"experiments/20261104_tbler_sweep/results"
 RETRAINED = ROOT/"experiments/20261113_retrained_k2_baseline/results"
+TENSORRT = ROOT/"experiments/20261114_tensorrt_latency/results"
+NO_IDD = ROOT/"experiments/20261114_no_idd_ablation/results"
 OUT = ROOT/"paper/figures"
 plt.rcParams.update({"font.family": "serif", "font.serif": ["STIXGeneral"], "mathtext.fontset": "stix",
                      "pdf.fonttype": 42, "axes.linewidth": .7, "font.size": 8})
@@ -94,7 +96,7 @@ def architecture():
 
 
 def tbler_curves(summary):
-    fig, axes = plt.subplots(1, len(PANELS), figsize=(7, 1.6), sharey=True)
+    fig, axes = plt.subplots(1, len(PANELS), figsize=(7, 1.45), sharey=True)
     for ax, (condition, title) in zip(axes, PANELS.items(), strict=True):
         for method, (_, style) in CURVES.items():
             data = summary[condition][method]
@@ -113,10 +115,13 @@ def tbler_curves(summary):
     save(fig, "tbler_vs_snr")
 
 
-def snr_and_latency(summary, latency):
+def snr_and_latency(summary, latency, no_idd_snr):
+    """Required SNR (left) and median TensorRT inference time on the A40 (right) vs. N_it for UMi. The proposed NRX
+    without IDD runs its filter as one CUDA kernel before the CGNN engine; with IDD, only its SNR is shown."""
     umi = summary["natural_umi"]
     iterations = {2: "frozen_cold_k2", 3: "frozen_cold_k3", 8: "frozen_cold_k8"}
-    fig, left = plt.subplots(figsize=(3.3, 1.75))
+    engines = {2: "large_k2", 3: "large_k3", 8: "large_k8"}
+    fig, left = plt.subplots(figsize=(3.3, 1.6))
     right = left.twinx()
     left.plot(list(iterations), [umi[m]["snr_at_10pct_db"] for m in iterations.values()], color="#ff7f00",
               linestyle=":", marker=".", linewidth=1.05, label="Large NRX")
@@ -125,16 +130,19 @@ def snr_and_latency(summary, latency):
               linestyle="none", label="Large NRX retrained, $N_{\\mathrm{it}}=2$")
     left.plot([2], [umi["candidate_persistent"]["snr_at_10pct_db"]], color=PINK, marker="*", markersize=7,
               linestyle="none", label="Proposed NRX")
-    right.plot(list(iterations), [latency[m]["median_ms"] for m in iterations.values()], color="#1f78b4", marker="s",
+    left.plot([2], [no_idd_snr], color=PINK, marker="*", markersize=7, markerfacecolor="white", linestyle="none",
+              label="Proposed NRX, no IDD")
+    right.plot(list(engines), [latency[e] for e in engines.values()], color="#1f78b4", marker="s",
                markersize=3, linewidth=1.05, label="Large NRX latency")
-    right.plot([2], [latency["candidate_persistent"]["median_ms"]], color=PINK, marker="s", markersize=3.5,
-               markerfacecolor="white", linestyle="none", label="Proposed NRX latency")
+    # Hollow and larger, so the Large NRX's marker at N_it = 2 stays visible inside it (the two nearly coincide).
+    right.plot([2], [latency["fused"]], color=PINK, marker="s", markersize=5, markeredgewidth=.9,
+               markerfacecolor="none", linestyle="none", label="Proposed NRX, no IDD, latency")
     left.set_xlabel("Number of NRX iterations $N_{\\mathrm{it}}$", fontsize=7.5, labelpad=1)
     left.set_ylabel("SNR@TBLER=10% [dB]", fontsize=7.5, labelpad=2)
     right.set_ylabel("Latency [ms]", fontsize=7.5, labelpad=2)
     left.set_xticks(range(1, 9))
     left.set_ylim(6.6, 8.2)
-    right.set_ylim(0, 60)
+    right.set_ylim(0, 5)
     left.grid(True, linewidth=.3, color="#bbbbbb")
     for ax in (left, right):
         ax.tick_params(labelsize=7, length=2, pad=1.5)
@@ -170,10 +178,11 @@ def load_summary():
 
 def main():
     summary = load_summary()
-    latency = json.loads((RESULTS/"latency.json").read_text())
+    latency = json.loads((TENSORRT/"fused.json").read_text())["median_ms"]
+    no_idd = json.loads((NO_IDD/"summary.json").read_text())["natural_umi"]["candidate_persistent_no_idd"]
     architecture()
     tbler_curves(summary)
-    snr_and_latency(summary, latency)
+    snr_and_latency(summary, latency, no_idd["snr_at_10pct_db"])
     memory_gain(json.loads((RESULTS/"paper_numbers.json").read_text()))
 
 

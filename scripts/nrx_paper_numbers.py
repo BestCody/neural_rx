@@ -19,6 +19,9 @@ CONTROLLER = ROOT/"experiments/20261112_early_retransmission/results"
 RETRAINED = ROOT/"experiments/20261113_retrained_k2_baseline/results/summary.json"
 RETRAINED_TEST = ROOT/"experiments/20261113_retrained_k2_baseline/results/test"
 NO_IDD = ROOT/"experiments/20261114_no_idd_ablation/results"
+TENSORRT = ROOT/"experiments/20261114_tensorrt_latency/results"
+# Wiesmayr et al. (2025) on an A100 GPU: about 270 us fixed and 350 us per CGNN iteration, i.e. 0.97 ms for N_it = 2.
+WIESMAYR_A100_MS = {"fixed": .27, "per_iteration": .35}
 SCORING_START = 16
 CORE = ("natural_umi", "controlled_topology_change", "schedule_gap_reentry")
 RECEIVERS = ("baseline_lslin_lmmse", "baseline_lmmse_kbest", "baseline_perf_csi_kbest", "frozen_cold_k2",
@@ -151,6 +154,19 @@ def no_idd():
     complexity = NO_IDD/"complexity.json"
     return {"summary": json.loads(summary.read_text()) if summary.is_file() else None,
             "complexity": json.loads(complexity.read_text()) if complexity.is_file() else None}
+
+
+def tensorrt():
+    """TensorRT inference times (FP16, A40) with the filter as one CUDA kernel, and the GPU time of the IDD kernels,
+    from experiments/20261114_tensorrt_latency."""
+    fused, idd = TENSORRT/"fused.json", TENSORRT/"idd.json"
+    if not (fused.is_file() and idd.is_file()):
+        return None
+    fused, idd = json.loads(fused.read_text()), json.loads(idd.read_text())
+    return {"gpu": fused["gpu"], "median_ms": fused["median_ms"], "median_ms_cuda_graph": fused["median_ms_cuda_graph"],
+            "derived": fused["derived_median_ms"], "derived_cuda_graph": fused["derived_median_ms_cuda_graph"],
+            "check": fused["check"], "idd_gpu_ms": {k: v/1000 for k, v in idd["gpu_us_per_slot"].items()},
+            "idd_total_gpu_ms": idd["total_gpu_us_per_slot"]/1000}
 
 
 def memory_effect():
@@ -295,7 +311,19 @@ def derived(numbers):
             "latency_saving_vs_large_percent": 100*(1-latency["candidate_persistent"]/latency["frozen_cold_k8"]),
             "latency_added_vs_nit2_ms": latency["candidate_persistent"]-latency["frozen_cold_k2"],
             "latency_per_cgnn_iteration_ms": (latency["frozen_cold_k8"]-latency["frozen_cold_k2"])/6,
-            "rescue_ratio": numbers["memory_effect"]["rescued"]/numbers["memory_effect"]["broke"]}
+            "rescue_ratio": numbers["memory_effect"]["rescued"]/numbers["memory_effect"]["broke"],
+            "tensorrt": tensorrt_derived(numbers.get("tensorrt"))}
+
+
+def tensorrt_derived(trt):
+    """Latency values quoted in the Latency section; the A100 value scales the A40 ratio to Wiesmayr et al."""
+    if trt is None:
+        return {}
+    a100_k2 = WIESMAYR_A100_MS["fixed"]+2*WIESMAYR_A100_MS["per_iteration"]
+    return {"a100_k2_ms": a100_k2, "added_percent": 100*(trt["derived"]["fused_over_k2"]-1),
+            "added_ms": trt["derived"]["fused_minus_k2_ms"], "kernel_us": 1000*trt["median_ms"]["fused_kernel_only"],
+            "a100_proposed_ms_estimate": a100_k2*trt["derived"]["fused_over_k2"],
+            "k8_over_k2": trt["median_ms"]["large_k8"]/trt["median_ms"]["large_k2"]}
 
 
 def collect():
@@ -341,6 +369,7 @@ def collect():
             for setting in ("no_power_control", "power_control")}}
     numbers["effective_snr"] = effective_snr()
     numbers["no_idd"] = no_idd()
+    numbers["tensorrt"] = tensorrt()
     numbers["derived"] = derived(numbers)
     return numbers
 

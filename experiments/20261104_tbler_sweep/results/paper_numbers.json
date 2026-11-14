@@ -4405,6 +4405,59 @@
    }
   }
  },
+ "tensorrt": {
+  "gpu": "NVIDIA A40",
+  "median_ms": {
+   "large_k2": 1.4069759845733643,
+   "large_k3": 1.8831360340118408,
+   "large_k8": 4.2782721519470215,
+   "proposed": 1.5675680041313171,
+   "proposed_cgnn": 1.4120960235595703,
+   "fused": 1.4325759410858154,
+   "fused_kernel_only": 0.025439999997615814
+  },
+  "median_ms_cuda_graph": {
+   "large_k2": 1.3455359935760498,
+   "large_k3": 1.8001919984817505,
+   "large_k8": 4.097023963928223,
+   "proposed": 1.4858239889144897,
+   "proposed_cgnn": 1.3475840091705322,
+   "fused": 1.369088053703308,
+   "fused_kernel_only": 0.023552000522613525
+  },
+  "derived": {
+   "per_cgnn_iteration_ms": 0.47854936122894287,
+   "fused_minus_k2_ms": 0.025599956512451172,
+   "fused_minus_k2_in_iterations": 0.05349491314064025,
+   "fused_over_k2": 1.018195020237118,
+   "trt_filter_minus_k2_ms": 0.16059201955795288,
+   "kernel_in_iterations": 0.053160660234263815
+  },
+  "derived_cuda_graph": {
+   "per_cgnn_iteration_ms": 0.4585813283920288,
+   "fused_minus_k2_ms": 0.0235520601272583,
+   "fused_minus_k2_in_iterations": 0.051358523928223,
+   "fused_over_k2": 1.0175038499450793,
+   "trt_filter_minus_k2_ms": 0.14028799533843994,
+   "kernel_in_iterations": 0.05135839395205283
+  },
+  "check": {
+   "channel_all_finite": true,
+   "channel_max_abs_diff": 4.76837158203125e-07,
+   "channel_max_abs": 2.6912436485290527,
+   "llr_max_abs_diff": 0.2789344787597656,
+   "llr_max_abs": 67.81367492675781,
+   "sign_agreement": 0.9997519841269841,
+   "sign_agreement_abs_llr_above_1": 1.0
+  },
+  "idd_gpu_ms": {
+   "covariance": 0.049074035,
+   "pair_preparation": 0.47293967499999995,
+   "app_detector_and_combining": 0.938817595,
+   "other_tensorflow_ops": 0.05813873500000001
+  },
+  "idd_total_gpu_ms": 1.51897004
+ },
  "derived": {
   "snr_gap_db": {
    "natural_umi/baseline_lslin_lmmse": 2.25,
@@ -4552,6 +4605,14 @@
   "latency_saving_vs_large_percent": 22.1975762560234,
   "latency_added_vs_nit2_ms": 0.6831663195043802,
   "latency_per_cgnn_iteration_ms": 2.07646528724581,
-  "rescue_ratio": 37.56818181818182
+  "rescue_ratio": 37.56818181818182,
+  "tensorrt": {
+   "a100_k2_ms": 0.97,
+   "added_percent": 1.8195020237117943,
+   "added_ms": 0.025599956512451172,
+   "kernel_us": 25.439999997615814,
+   "a100_proposed_ms_estimate": 0.9876491696300044,
+   "k8_over_k2": 3.040757055454871
+  }
  }
 }

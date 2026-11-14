@@ -15,19 +15,19 @@ We compare the proposed NRX with three classical baselines: LS + LMMSE, which us
 We compute the TBLER over the TBs in slots 17 to 64, after the memory has filled. All receivers decode identical channels, payloads, and noise realizations. As for DMRS bundling, we assume that each UE keeps its phase continuous across slots, i.e., we simulate no frequency offset, phase noise, or timing adjustment. As in the code release, the SNR is rate-adjusted, i.e., $E_b/N_0$.
 
 \subsection{TBLER Performance}
-Fig.~\ref{fig:tbler} shows TBLER vs.\ SNR on one evaluation dataset. We call the SNR needed for a TBLER of 10\% the required SNR. The proposed NRX performs close to the Large NRX with $N_{\mathrm{it}}=8$, within 0.3\,dB in all three conditions, although these differences rest on only a few UEs. At the same $N_{\mathrm{it}}=2$, the Large NRX requires more than 1\,dB more. Retraining it with $N_{\mathrm{it}}=2$ recovers only about half a dB of this gap, so it remains at least 0.6\,dB behind the proposed NRX. The proposed NRX with no memory already outperforms this retrained baseline, and the memory adds the rest. Without IDD, which leaves the LDPC decoder unchanged, the proposed NRX still outperforms the retrained baseline in all three conditions, but its no-memory version does not.
+Fig.~\ref{fig:tbler} shows TBLER vs.\ SNR on one evaluation dataset. We call the SNR needed for a TBLER of 10\% the required SNR. The proposed NRX performs close to the Large NRX with $N_{\mathrm{it}}=8$, within 0.3\,dB in all three conditions, although these differences rest on only a few UEs. At the same $N_{\mathrm{it}}=2$, the Large NRX requires more than 1\,dB more. Retraining it with $N_{\mathrm{it}}=2$ recovers only about half a dB of this gap, so it remains at least 0.6\,dB behind the proposed NRX. The proposed NRX with no memory already outperforms this retrained baseline, and the memory adds the rest. Without IDD, which leaves the LDPC decoder unchanged, the proposed NRX still outperforms the retrained baseline and matches or outperforms the Large NRX with $N_{\mathrm{it}}=3$ in all three conditions, but its no-memory version does neither.
 
 The proposed NRX outperforms LS + LMMSE in all three conditions, matches LMMSE + K-Best for UMi and channel change, and is ahead of it for scheduling gaps. Perf.-CSI + K-Best remains ahead of all other receivers.
 
 In contrast to the waterfall curves for Double-TDL channels~\cite{wiesmayr2025realtime}, TBLER decreases slowly with SNR for all receivers, including Perf.-CSI + K-Best, because with a fixed beamformer and no power control, some UEs have low channel power. For channel change, TBLER stays at about 1\% or more for all receivers because the new channel of one UE is about 18\,dB weaker than the median, so almost all of its TBs after the change fail. We therefore also evaluate TBLER against the effective SNR, i.e., the SNR plus the effective channel power of the UE in dB, against which the TBLER of every NRX falls from 80\% to 5\% within 4\,dB. In effective SNR, the proposed NRX requires at least 0.7\,dB less than the retrained Large NRX and matches or outperforms the Large NRX with $N_{\mathrm{it}}=8$.
 
 \subsection{Benefit of the Pilot Memory}
-Comparing the proposed NRX with its no-memory version isolates the effect of the memory. The memory reduces the required SNR in all three conditions, by 0.3 to 0.4\,dB, and the required effective SNR by more than half a dB, with and without IDD.
+Comparing the proposed NRX with its no-memory version isolates the memory. It reduces the required SNR in all three conditions, by 0.3 to 0.4\,dB, and the required effective SNR by more than half a dB, with and without IDD.
 
 \begin{figure}[!ht]
 \centering
 \includegraphics[width=\columnwidth]{figures/memory_gain_vs_doppler.pdf}
-\caption{Memory gain in effective SNR at a TBLER of 10\% vs.\ Doppler shift for UMi, i.e., the reduction of the required effective SNR when the proposed NRX keeps its memory instead of emptying it.}
+\caption{Memory gain, i.e., reduction of the required effective SNR, vs.\ Doppler shift for UMi.}
 \label{fig:doppler}
 \end{figure}
 
@@ -35,14 +35,14 @@ These gains, however, depend strongly on the channel speed. Fig.~\ref{fig:dopple
 
 On two further independent datasets at a fixed SNR per condition, which add closely spaced line-of-sight (LOS) UEs, near-far UEs, and, on one dataset, channels ray-traced with Sionna RT~\cite{hoydis2023} in the Munich scene of \citet{wiesmayr2025realtime}, the memory lowers TBLER in all cases except for closely spaced LOS UEs on one dataset, where it is unchanged. The Large NRX with $N_{\mathrm{it}}=8$ stays ahead of the proposed NRX in some cases, most clearly for closely spaced LOS and near-far UEs on one dataset, and falls clearly behind on the ray-traced channels.
 
-\subsection{Latency}
-Fig.~\ref{fig:tradeoff} shows the required SNR and median latency for UMi. We time 128 TBs at an SNR of 3\,dB, one TB at a time, in TensorFlow on an NVIDIA A40 GPU. The measurement covers everything after the initial LS estimation and interpolation, including LDPC decoding, CRC, and memory transfers between host and device. These values are not comparable with the real-time budget of 1\,ms in \citet{wiesmayr2025realtime}, which covers neural network inference with TensorRT on an NVIDIA A100 GPU.
-
 \begin{figure}[!ht]
 \centering
 \includegraphics[width=\columnwidth]{figures/snr_latency_tradeoff.pdf}
-\caption{SNR performance and median latency vs.\ number of NRX iterations for UMi. Latency is measured per TB in TensorFlow on an NVIDIA A40 GPU, including LDPC decoding. The retrained Large NRX has the architecture of the Large NRX with $N_{\mathrm{it}}=2$, so only its SNR is shown.}
+\caption{Required SNR and median TensorRT inference time on an NVIDIA A40 GPU vs.\ number of NRX iterations for UMi. For the retrained Large NRX and the proposed NRX with IDD, only the SNR is shown.}
 \label{fig:tradeoff}
 \end{figure}
 
-The proposed NRX is only slightly slower than the Large NRX with $N_{\mathrm{it}}=2$ and clearly faster than with $N_{\mathrm{it}}=8$, at a comparable required SNR, as its additions cost about a third of a CGNN iteration. Independent of the implementation, one CGNN iteration requires about $2.2\cdot 10^{9}$ real multiplications per slot, whereas the channel filter with its error covariance requires $4\cdot 10^{7}$ and IDD $2.2\cdot 10^{8}$, together about an eighth of an iteration. Without IDD, the additions cost less than 2\% of an iteration. Whether the receiver fits the real-time budget remains to be measured. With IDD, the final LLRs depend on the first eight BP iterations, so the LDPC decoder must pause and resume, and its first stage adds to the NRX latency.
+\subsection{Latency}
+As in \citet{wiesmayr2025realtime}, we time the neural network from the received slot and the LS estimate to the LLRs with TensorRT in FP16 and batch size one, without decoding and transfers between host and device. Fig.~\ref{fig:tradeoff} shows the median of 2{,}000 runs on an NVIDIA A40 GPU. One CGNN iteration takes 0.48\,ms, and the Large NRX with $N_{\mathrm{it}}=8$ takes three times as long as with $N_{\mathrm{it}}=2$, similar to the A100 GPU in \citet{wiesmayr2025realtime}.
+
+For the proposed NRX without IDD, a single CUDA kernel in FP32 runs the channel filter before the TensorRT engine of the two CGNN iterations; like the LS estimate, the memory entries are inputs. The kernel takes 25\,$\mu$s, and the proposed NRX takes less than 3\% longer than the Large NRX with $N_{\mathrm{it}}=2$, i.e., less than a tenth of a CGNN iteration, at the required SNR of the Large NRX with $N_{\mathrm{it}}=3$. If the same ratio holds on the A100 GPU, where the Large NRX with $N_{\mathrm{it}}=2$ takes about 0.97\,ms~\cite{wiesmayr2025realtime}, the proposed NRX without IDD stays at about the 1\,ms budget, which remains to be measured. IDD requires only $2.2\cdot 10^{8}$ real multiplications per slot, a tenth of the $2.2\cdot 10^{9}$ of a CGNN iteration, but its CUDA kernels take 1.5\,ms on the A40 GPU, mostly for evaluating all symbol pairs and for factorizing about 14{,}000 small covariance matrices. With IDD, the proposed NRX is therefore not yet real-time capable.
