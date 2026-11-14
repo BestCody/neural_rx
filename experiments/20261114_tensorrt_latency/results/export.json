@@ -1,0 +1,33 @@
+{
+ "slot": {
+  "condition": "natural_umi",
+  "setting": "sweep",
+  "episode": 0,
+  "tb": 24,
+  "snr_db": 7.0
+ },
+ "proposed_check": {
+  "channel_max_abs_diff": 4.76837158203125e-07,
+  "channel_max_abs": 2.6912436485290527,
+  "llr_max_abs_diff": 6.103515625e-05,
+  "llr_max_abs": 67.8136978149414,
+  "llr_sign_agreement": 1.0
+ },
+ "proposed_cgnn_check": {
+  "llr_max_abs_diff": 0.0
+ },
+ "large_k2_check": {
+  "llr_max_abs_diff": 0.0
+ },
+ "large_k3_check": {
+  "llr_max_abs_diff": 0.0
+ },
+ "large_k8_check": {
+  "llr_max_abs_diff": 0.0
+ },
+ "weights": {
+  "large_k2": 134594,
+  "large_k3": 183668,
+  "large_k8": 429038
+ }
+}
