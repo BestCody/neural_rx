@@ -1,0 +1,388 @@
+{
+ "operating_points_db": {
+  "natural_umi": 7.0,
+  "controlled_topology_change": 7.0,
+  "schedule_gap_reentry": 8.0
+ },
+ "false_alarm_target": 0.01,
+ "rule_budget": 0.0041717791411042945,
+ "fit": {
+  "ue_tbs": 4461,
+  "failures": 386
+ },
+ "test": {
+  "ue_tbs": 4408,
+  "failures": 475,
+  "first_failures": 12
+ },
+ "all_episodes": {
+  "ue_tbs": 8869,
+  "failures": 861,
+  "failures_after_failure": 0.9663182346109176,
+  "first_failures": 29,
+  "by_condition": {
+   "natural_umi": 0.9933774834437086,
+   "controlled_topology_change": 0.9471830985915493,
+   "schedule_gap_reentry": 0.9563636363636364
+  }
+ },
+ "rule": {
+  "caught": 0.9747368421052631,
+  "false_alarm": 0.003559623696923468,
+  "caught_first_failures": 0.0,
+  "by_condition": {
+   "natural_umi": {
+    "caught": 1.0,
+    "false_alarm": 0.0
+   },
+   "controlled_topology_change": {
+    "caught": 0.9285714285714286,
+    "false_alarm": 0.00723589001447178
+   },
+   "schedule_gap_reentry": {
+    "caught": 0.9876543209876543,
+    "false_alarm": 0.0031872509960159364
+   }
+  }
+ },
+ "single_check": {
+  "recent observations only (known before the UE transmits)": {
+   "inputs": [
+    "noise",
+    "has_memory",
+    "recent_strength",
+    "entries",
+    "newest_age"
+   ],
+   "caught": 0.88,
+   "false_alarm": 0.012967200610221205,
+   "caught_first_failures": 0.0,
+   "by_condition": {
+    "natural_umi": {
+     "caught": 1.0,
+     "false_alarm": 0.0
+    },
+    "controlled_topology_change": {
+     "caught": 0.8636363636363636,
+     "false_alarm": 0.002170767004341534
+    },
+    "schedule_gap_reentry": {
+     "caught": 0.5555555555555556,
+     "false_alarm": 0.03824701195219123
+    }
+   }
+  },
+  "check 1, any receiver: noise and current channel strength": {
+   "inputs": [
+    "noise",
+    "current_strength"
+   ],
+   "caught": 0.8926315789473684,
+   "false_alarm": 0.013221459445715738,
+   "caught_first_failures": 0.25,
+   "by_condition": {
+    "natural_umi": {
+     "caught": 1.0,
+     "false_alarm": 0.0
+    },
+    "controlled_topology_change": {
+     "caught": 0.8896103896103896,
+     "false_alarm": 0.0
+    },
+    "schedule_gap_reentry": {
+     "caught": 0.5802469135802469,
+     "false_alarm": 0.04143426294820717
+    }
+   }
+  },
+  "check 1, + memory state and recent channel strength": {
+   "inputs": [
+    "noise",
+    "current_strength",
+    "has_memory",
+    "recent_strength",
+    "entries",
+    "newest_age"
+   ],
+   "caught": 0.8947368421052632,
+   "false_alarm": 0.011695906432748537,
+   "caught_first_failures": 0.25,
+   "by_condition": {
+    "natural_umi": {
+     "caught": 1.0,
+     "false_alarm": 0.0
+    },
+    "controlled_topology_change": {
+     "caught": 0.8896103896103896,
+     "false_alarm": 0.0
+    },
+    "schedule_gap_reentry": {
+     "caught": 0.5925925925925926,
+     "false_alarm": 0.036653386454183264
+    }
+   }
+  },
+  "check 1, + filtered estimate and its error covariance": {
+   "inputs": [
+    "noise",
+    "current_strength",
+    "has_memory",
+    "recent_strength",
+    "entries",
+    "newest_age",
+    "estimate_strength",
+    "estimate_error"
+   ],
+   "caught": 0.9473684210526315,
+   "false_alarm": 0.013729977116704805,
+   "caught_first_failures": 0.25,
+   "by_condition": {
+    "natural_umi": {
+     "caught": 1.0,
+     "false_alarm": 0.0
+    },
+    "controlled_topology_change": {
+     "caught": 0.8896103896103896,
+     "false_alarm": 0.0
+    },
+    "schedule_gap_reentry": {
+     "caught": 0.9012345679012346,
+     "false_alarm": 0.04302788844621514
+    }
+   }
+  },
+  "check 2, + LLRs after detection": {
+   "inputs": [
+    "noise",
+    "current_strength",
+    "has_memory",
+    "recent_strength",
+    "entries",
+    "newest_age",
+    "estimate_strength",
+    "estimate_error",
+    "llr_bit_error"
+   ],
+   "caught": 0.9515789473684211,
+   "false_alarm": 0.008644800406814137,
+   "caught_first_failures": 0.25,
+   "by_condition": {
+    "natural_umi": {
+     "caught": 1.0,
+     "false_alarm": 0.0
+    },
+    "controlled_topology_change": {
+     "caught": 0.9025974025974026,
+     "false_alarm": 0.0
+    },
+    "schedule_gap_reentry": {
+     "caught": 0.9012345679012346,
+     "false_alarm": 0.027091633466135457
+    }
+   }
+  },
+  "check 3, + parity checks after 8 BP iterations": {
+   "inputs": [
+    "noise",
+    "current_strength",
+    "has_memory",
+    "recent_strength",
+    "entries",
+    "newest_age",
+    "estimate_strength",
+    "estimate_error",
+    "llr_bit_error",
+    "unsatisfied_checks",
+    "failed_code_blocks",
+    "posterior_bit_error"
+   ],
+   "caught": 0.9810526315789474,
+   "false_alarm": 0.007627765064836003,
+   "caught_first_failures": 0.75,
+   "by_condition": {
+    "natural_umi": {
+     "caught": 1.0,
+     "false_alarm": 0.0
+    },
+    "controlled_topology_change": {
+     "caught": 0.9415584415584416,
+     "false_alarm": 0.01085383502170767
+    },
+    "schedule_gap_reentry": {
+     "caught": 1.0,
+     "false_alarm": 0.01195219123505976
+    }
+   }
+  }
+ },
+ "with_history": {
+  "budget 1%": {
+   "check 1": {
+    "caught": 0.9810526315789474,
+    "false_alarm": 0.015255530129672006,
+    "caught_first_failures": 0.25,
+    "by_condition": {
+     "natural_umi": {
+      "caught": 1.0,
+      "false_alarm": 0.0
+     },
+     "controlled_topology_change": {
+      "caught": 0.948051948051948,
+      "false_alarm": 0.005788712011577424
+     },
+     "schedule_gap_reentry": {
+      "caught": 0.9876543209876543,
+      "false_alarm": 0.04143426294820717
+     }
+    }
+   },
+   "check 2": {
+    "caught": 0.9810526315789474,
+    "false_alarm": 0.014492753623188406,
+    "caught_first_failures": 0.25,
+    "by_condition": {
+     "natural_umi": {
+      "caught": 1.0,
+      "false_alarm": 0.0
+     },
+     "controlled_topology_change": {
+      "caught": 0.948051948051948,
+      "false_alarm": 0.006512301013024602
+     },
+     "schedule_gap_reentry": {
+      "caught": 0.9876543209876543,
+      "false_alarm": 0.03824701195219123
+     }
+    }
+   },
+   "check 3": {
+    "caught": 0.9936842105263158,
+    "false_alarm": 0.00813628273582507,
+    "caught_first_failures": 0.75,
+    "by_condition": {
+     "natural_umi": {
+      "caught": 1.0,
+      "false_alarm": 0.0
+     },
+     "controlled_topology_change": {
+      "caught": 0.9805194805194806,
+      "false_alarm": 0.01447178002894356
+     },
+     "schedule_gap_reentry": {
+      "caught": 1.0,
+      "false_alarm": 0.009561752988047808
+     }
+    }
+   }
+  },
+  "budget of the rule": {
+   "check 1": {
+    "caught": 0.9810526315789474,
+    "false_alarm": 0.0038138825324180014,
+    "caught_first_failures": 0.25,
+    "by_condition": {
+     "natural_umi": {
+      "caught": 1.0,
+      "false_alarm": 0.0
+     },
+     "controlled_topology_change": {
+      "caught": 0.948051948051948,
+      "false_alarm": 0.005788712011577424
+     },
+     "schedule_gap_reentry": {
+      "caught": 0.9876543209876543,
+      "false_alarm": 0.005577689243027889
+     }
+    }
+   },
+   "check 2": {
+    "caught": 0.9810526315789474,
+    "false_alarm": 0.007627765064836003,
+    "caught_first_failures": 0.25,
+    "by_condition": {
+     "natural_umi": {
+      "caught": 1.0,
+      "false_alarm": 0.0
+     },
+     "controlled_topology_change": {
+      "caught": 0.948051948051948,
+      "false_alarm": 0.005788712011577424
+     },
+     "schedule_gap_reentry": {
+      "caught": 0.9876543209876543,
+      "false_alarm": 0.01752988047808765
+     }
+    }
+   },
+   "check 3": {
+    "caught": 0.9810526315789474,
+    "false_alarm": 0.003559623696923468,
+    "caught_first_failures": 0.25,
+    "by_condition": {
+     "natural_umi": {
+      "caught": 1.0,
+      "false_alarm": 0.0
+     },
+     "controlled_topology_change": {
+      "caught": 0.948051948051948,
+      "false_alarm": 0.005788712011577424
+     },
+     "schedule_gap_reentry": {
+      "caught": 0.9876543209876543,
+      "false_alarm": 0.004780876494023904
+     }
+    }
+   }
+  }
+ },
+ "step_by_step": {
+  "receiver evidence, 1%": {
+   "caught": 0.9536842105263158,
+   "false_alarm": 0.007627765064836003,
+   "caught_first_failures": 0.3333333333333333,
+   "by_condition": {
+    "natural_umi": {
+     "caught": 1.0,
+     "false_alarm": 0.0
+    },
+    "controlled_topology_change": {
+     "caught": 0.9090909090909091,
+     "false_alarm": 0.005065123010130246
+    },
+    "schedule_gap_reentry": {
+     "caught": 0.9012345679012346,
+     "false_alarm": 0.018326693227091632
+    }
+   },
+   "caught_at": {
+    "check 1": 0.7157894736842105,
+    "check 2": 0.17473684210526316,
+    "check 3": 0.06315789473684211
+   }
+  },
+  "CRC history and receiver evidence, budget of the rule": {
+   "caught": 0.9810526315789474,
+   "false_alarm": 0.0055936943808797355,
+   "caught_first_failures": 0.25,
+   "by_condition": {
+    "natural_umi": {
+     "caught": 1.0,
+     "false_alarm": 0.0
+    },
+    "controlled_topology_change": {
+     "caught": 0.948051948051948,
+     "false_alarm": 0.005788712011577424
+    },
+    "schedule_gap_reentry": {
+     "caught": 0.9876543209876543,
+     "false_alarm": 0.011155378486055778
+    }
+   },
+   "caught_at": {
+    "check 1": 0.9789473684210527,
+    "check 2": 0.002105263157894737,
+    "check 3": 0.0
+   }
+  }
+ }
+}

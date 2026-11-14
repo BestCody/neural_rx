@@ -1,0 +1,73 @@
+{
+ "operating_points_db": {
+  "natural_umi": 1.5,
+  "controlled_topology_change": 2.0,
+  "schedule_gap_reentry": 2.0
+ },
+ "natural_umi": {
+  "required_snr_db": {
+   "candidate_persistent": 1.5,
+   "candidate_reset": 1.9,
+   "frozen_cold_k2": 2.63,
+   "frozen_cold_k3": 2.25,
+   "frozen_cold_k8": 1.77,
+   "baseline_lslin_lmmse": 3.94,
+   "baseline_lmmse_kbest": 1.89,
+   "baseline_perf_csi_kbest": 1.44
+  },
+  "fallback_gain_db": {
+   "baseline_lmmse_kbest": 0.03,
+   "frozen_cold_k8": 0.08,
+   "baseline_lslin_lmmse": 0.0,
+   "upper": 0.08
+  },
+  "operating_point_failures": 309,
+  "unfixable_share_of_failures": 0.8446601941747572,
+  "unfixable_also_failed_by_perfect_csi": 0.6130268199233716,
+  "median_power_unfixable_minus_all_db": -0.6538839340209961
+ },
+ "controlled_topology_change": {
+  "required_snr_db": {
+   "candidate_persistent": 1.84,
+   "candidate_reset": 2.17,
+   "frozen_cold_k2": 3.02,
+   "frozen_cold_k3": 2.6,
+   "frozen_cold_k8": 2.1,
+   "baseline_lslin_lmmse": 4.34,
+   "baseline_lmmse_kbest": 2.18,
+   "baseline_perf_csi_kbest": 1.75
+  },
+  "fallback_gain_db": {
+   "baseline_lmmse_kbest": 0.07,
+   "frozen_cold_k8": 0.1,
+   "baseline_lslin_lmmse": 0.0,
+   "upper": 0.11
+  },
+  "operating_point_failures": 254,
+  "unfixable_share_of_failures": 0.889763779527559,
+  "unfixable_also_failed_by_perfect_csi": 0.8539823008849557,
+  "median_power_unfixable_minus_all_db": -0.787815272808075
+ },
+ "schedule_gap_reentry": {
+  "required_snr_db": {
+   "candidate_persistent": 2.12,
+   "candidate_reset": 2.51,
+   "frozen_cold_k2": 3.27,
+   "frozen_cold_k3": 2.84,
+   "frozen_cold_k8": 2.31,
+   "baseline_lslin_lmmse": 4.48,
+   "baseline_lmmse_kbest": 2.68,
+   "baseline_perf_csi_kbest": 1.69
+  },
+  "fallback_gain_db": {
+   "baseline_lmmse_kbest": 0.07,
+   "frozen_cold_k8": 0.14,
+   "baseline_lslin_lmmse": 0.0,
+   "upper": 0.14
+  },
+  "operating_point_failures": 300,
+  "unfixable_share_of_failures": 0.8966666666666666,
+  "unfixable_also_failed_by_perfect_csi": 0.6877323420074349,
+  "median_power_unfixable_minus_all_db": -0.5840315818786621
+ }
+}
