@@ -9,7 +9,8 @@ the GPU time per slot is the summed kernel duration divided by the number of run
 
 Each run also saves its preparation outputs, IDD output, and decoder output (results/idd_outputs_fused.npz). The files
 idd_cusolver.json, idd_reference.json, and idd_outputs_{cusolver,reference}.npz record the original kernels (cuSOLVER
-preparation; one block per resource element), measured at commit e734a44 before they were removed.
+preparation; one block per resource element; covariance with cuBLAS products in TF32), measured at commit e734a44
+before they were removed. The current kernels agree with them to rounding (same decoded bits).
 
 The profiler needs CUPTI on the library path (TensorFlow does not find the pip-installed CUPTI by itself).
 """
@@ -21,10 +22,9 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 RUNS, WARMUP = 200, 50
-GROUPS = {"covariance": ("PackUncertainty", "UncertaintyStats", "UncertaintyFeatureValues", "UncertaintyRelu",
-                         "UncertaintyOutput"),
+GROUPS = {"covariance": ("ChannelUncertainty",),
           "pair_preparation": ("FusedPrepare",),
-          "app_detector_and_combining": ("ScoresWarp", "CorrectionWarp", "InitializeCorrected")}
+          "app_detector_and_combining": ("DetectorWarp", "InitializeCorrected")}
 
 
 def kernel_times(logdir, runs):
@@ -96,8 +96,7 @@ def main():
     pair = model.physical.begin(inputs[0], estimate, noise, inputs[3], ids, llr, layout)[0]
     prepared = pair[3]
     if path == "fused":
-        # Inputs and outputs of the two kernels that do not depend on the decoder (pair preparation and symbol-pair
-        # scores), for time_overlap.py, which runs them next to the TensorRT engine.
+        # Inputs of the pair preparation and of the detector kernel, for profile_idd_kernels.py.
         physical = model.physical
         (HERE/"build").mkdir(exist_ok=True)
         np.savez(HERE/"build/idd_kernels.npz", theta=layout.joint(estimate.coefficients).numpy(),
@@ -106,9 +105,18 @@ def main():
                  y=pair[2].numpy(), factor=prepared[0].numpy(), white=prepared[1].numpy(), logdet=prepared[2].numpy(),
                  enabled=pair[4].numpy(), phi=tf.convert_to_tensor(pair[6]).numpy(), cells=tf.convert_to_tensor(pair[7]).numpy(),
                  symbols=physical.symbols.numpy(), energy_indices=tf.convert_to_tensor(physical.energy_indices).numpy(),
-                 labels=tf.convert_to_tensor(physical.labels).numpy(), scores=pair[9][0].numpy(), fit=pair[9][1].numpy())
+                 labels=tf.convert_to_tensor(physical.labels).numpy())
     # Same result as the receiver's own decoding graph for this slot.
     corrected = idd(context, llr, posterior, code_input)
+    if path == "fused":
+        # The detector kernel's inputs from the decoder and its output, for profile_idd_kernels.py.
+        blend = [value.numpy() for value in model.blend_variables]
+        np.savez(HERE/"build/idd_correction.npz", evidence=posterior.numpy(), effective=code_input.numpy(),
+                 bit_indices=np.asarray(decoder.symbol_indices), bit_signs=np.asarray(decoder.symbol_signs),
+                 wanted=pair[5].numpy(), active=inputs[3].numpy(), calibration=model.evidence_calibration.numpy(),
+                 strength=tf.sigmoid(model.correction_logit).numpy(), llr_limit=np.float32(decoder.first.llr_limit),
+                 blend_kernel=blend[0], blend_bias=blend[1], blend_output=blend[2], blend_output_bias=blend[3],
+                 corrected=corrected.numpy())
     output = decoder.finish(corrected, state)
     full = model.decode(inputs, noise, ids, history, decoder, adapter.grid_map, observation, (context, channel))[0]
     assert np.array_equal(output.logits.numpy(), full.logits.numpy()), "IDD graph differs from the receiver"
@@ -129,8 +137,8 @@ def main():
               for group, names in GROUPS.items()}
     grouped = set(k for k in per_kernel if any(name in k for names in GROUPS.values() for name in names))
     groups["other_tensorflow_ops"] = sum(v for k, v in per_kernel.items() if k not in grouped)
-    # Only the correction needs the decoder's output; everything else depends on the channel filter's output alone.
-    waiting = sum(v for k, v in per_kernel.items() if any(n in k for n in ("Correction", "InitializeCorrected")))
+    # The detector kernel needs the decoder's output; everything else depends on the channel filter's output alone.
+    waiting = sum(v for k, v in per_kernel.items() if any(n in k for n in ("DetectorWarp", "InitializeCorrected")))
     report = {"preparation": path, "decoder_dependent_us_per_slot": waiting,
               "decoder_independent_us_per_slot": sum(per_kernel.values())-waiting, "gpu_us_per_slot": groups, "total_gpu_us_per_slot": sum(groups.values()), "runs": RUNS,
               "kernels_us_per_slot": dict(sorted(per_kernel.items(), key=lambda item: -item[1])),

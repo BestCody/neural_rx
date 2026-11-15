@@ -34,10 +34,6 @@ def _load():
     capabilities = sorted({tf.config.experimental.get_device_details(d)['compute_capability'] for d in devices})
     flags, links = tf.sysconfig.get_compile_flags(), tf.sysconfig.get_link_flags()
     libraries = []
-    for name in ('cublas',):
-        installed = Path(tf.__file__).resolve().parent.parent/'nvidia'/name/'lib'
-        matches = sorted(installed.glob('lib'+name+'.so.*'))
-        libraries += ([str(matches[0]), '-Wl,-rpath,'+str(installed)] if matches else ['-l'+name])
     compiler = subprocess.check_output([nvcc, '--version'])
     source_bytes = [p.read_bytes() for p in sources]
     key = hashlib.sha256(b''.join(source_bytes)+Path(__file__).read_bytes()+compiler+
@@ -79,9 +75,9 @@ def _load():
         if op.get_attr('apply_update'):
             evidence *= op.inputs[18][..., None, None]
             base = incoming+base-evidence
-        hidden = op.inputs[21].shape[1]
+        hidden = op.inputs[19].shape[1]
         blend = tf.reduce_sum(result[8], axis=[0, 1])
         return [*result[:4], evidence, *([None]*10), base, tf.reduce_sum(result[6], axis=[0, 1]),
-                tf.reduce_sum(result[7]), None, None, None, tf.reshape(blend[:8*hidden], [8, hidden]),
+                tf.reduce_sum(result[7]), None, tf.reshape(blend[:8*hidden], [8, hidden]),
                 blend[8*hidden:9*hidden], blend[9*hidden:10*hidden], blend[-1]]
     return module

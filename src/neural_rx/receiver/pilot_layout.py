@@ -68,6 +68,8 @@ class PilotLayout:
             raise ValueError("Joint separation requires common data positions for all scheduled UEs")
         joint, inverse = np.unique(self.grid_indices.T, axis=0, return_inverse=True)
         self.joint_indices = joint.T.astype(np.int32)
+        # positions in the records flattened over UEs and observations, [joint cells, users]
+        self.joint_flat = (np.arange(len(packs))[:, None]*self.count+self.joint_indices).T.astype(np.int64)
         self.joint_grid = inverse.astype(np.int32)
         self.data_counts = np.stack([np.bincount(row, weights=mask.reshape(-1), minlength=self.count)
             for row, mask in zip(self.grid_indices, self.data_mask, strict=True)]).astype(np.float32)
@@ -215,10 +217,8 @@ class PilotLayout:
         return tf.reduce_sum(expanded*phi[None, ..., None, :], -1)
 
     def joint(self, records):
-        rank = records.shape.rank
-        values = tf.gather(tf.transpose(records, [1, 0, 2, *range(3, rank)]), self.joint_indices,
-                           axis=2, batch_dims=1)
-        return tf.transpose(values, [1, 2, 0, *range(3, rank)])
+        flat = tf.reshape(records, [tf.shape(records)[0], self.users*self.count, *records.shape[3:]])
+        return tf.gather(flat, self.joint_flat, axis=1)
 
     def neighbors(self, records, ports):
         current = tf.broadcast_to(tf.range(self.users)[None, :, None], tf.shape(ports))

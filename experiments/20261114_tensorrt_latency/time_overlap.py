@@ -11,6 +11,9 @@ compiled without the TensorFlow wrappers. Their outputs are checked against Tens
 by time_idd.py). The error-covariance kernels (about 0.05 ms) and TensorFlow's glue operations are not included.
 
     ~/venvs/tensorrt/bin/python time_overlap.py [--gpu 0]     # results/overlap.json, results/overlap_samples.npz
+
+The results are from commit c23faeb. As overlapping gave no gain, the symbol-pair scores were then merged with the
+correction into one kernel (DetectorWarp), which needs the decoder's output; this script needs that commit's kernels.
 """
 import argparse
 import json

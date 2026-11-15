@@ -100,16 +100,19 @@ class DecoderCorrection:
             return (factor, white, logdet), gradient
         return operation(coefficients, covariance, noise, background)
 
-    def tables(self, layout, device):
-        key = (id(layout), device)
+    def tables(self, layout, device, antennas):
+        key = (id(layout), device, antennas)
         if key not in self._tables:
             with tf.init_scope(), tf.device(device):
                 users, n = layout.users, len(layout.code_positions)
                 positions = np.full((len(layout.cell_positions), max(map(len, layout.cell_positions))), -1, np.int32)
                 for cell, rows in enumerate(layout.cell_positions):
                     positions[cell, :len(rows)] = rows
+                # real and imaginary part of every antenna in the received grid flattened to [batch, -1]
+                received = (np.asarray(layout.code_positions)[:, None, None]*2*antennas
+                            +np.arange(antennas)[None, :, None]+antennas*np.arange(2)[None, None, :])
                 values = (layout.code_positions, layout.code_cells, positions, np.arange(n, dtype=np.int32),
-                          np.arange(n, dtype=np.int32)[:, None])
+                          np.arange(n, dtype=np.int32)[:, None], received)
                 indices = tuple(tf.Variable(x, trainable=False, dtype=tf.int64) for x in values)
                 phi = layout.code_phi
                 if users == 1:
@@ -117,17 +120,14 @@ class DecoderCorrection:
                 self._tables[key] = (layout, (*indices, tf.constant(phi, tf.float32)))
         return self._tables[key][1]
 
-    def score(self, received, prepared, phi, cells, enabled, single_user=False):
-        return tuple(tf.stop_gradient(value) for value in self.native.pilot_pair_scores(
-            received, *prepared, phi, cells, self.symbols, self.energy_indices,
-            self.labels, enabled, single_user=single_user))
-
     def begin(self, received, estimate, noise, active, identities, llr, layout):
         batch, users = tf.shape(llr)[0], layout.users
         n, antennas = len(layout.code_positions), received.shape[-1]//2
-        code_positions, cells, positions, pair_cells, pair_positions, phi = self.tables(layout, self.symbols.device)
+        code_positions, cells, positions, pair_cells, pair_positions, received_indices, phi = self.tables(
+            layout, self.symbols.device, antennas)
         with tf.control_dependencies([llr]):
-            y = tf.gather(tf.reshape(complex_channel(received), [batch, -1, antennas]), code_positions, axis=1)
+            # one gather of the (real, imaginary) pairs, read as complex values
+            y = tf.bitcast(tf.gather(tf.reshape(received, [batch, -1]), received_indices, axis=1), tf.complex64)
             theta, covariance = layout.joint(estimate.coefficients), layout.joint(estimate.covariance)
             theta = tf.where(tf.cast(active[:, None, :, None, None], tf.bool), theta, 0.)
             covariance = tf.where(tf.cast(active[:, None, :, None, None], tf.bool), covariance, 0.)
@@ -140,8 +140,7 @@ class DecoderCorrection:
                     wanted = tf.concat([wanted, tf.zeros_like(wanted)], 1)
                 prepared = self.prepare(theta, covariance, noise, None)
                 enabled = tf.ones(tf.shape(theta)[:2], tf.bool)
-                scores = self.score(y, prepared, phi, cells, enabled, users == 1)
-                return [(0, 0 if users == 1 else 1, y, prepared, enabled, wanted, phi, cells, positions, scores)]
+                return [(0, 0 if users == 1 else 1, y, prepared, enabled, wanted, phi, cells, positions)]
             h = tf.transpose(theta[..., 0], [0, 1, 3, 2])*tf.cast(np.sqrt(self.symbol_energy), tf.complex64)
             v = tf.transpose(tf.math.real(tf.linalg.diag_part(covariance)), [0, 1, 3, 2])*self.symbol_energy
             selected = select_partners(h, v, noise, active, identities)
@@ -178,19 +177,15 @@ class DecoderCorrection:
                         pair_cov = tf.stack([covariance[:, :, u],
                                              tf.zeros_like(covariance[:, :, u]) if u == v else covariance[:, :, v]], 2)
                         prepared = self.prepare(pair_theta, pair_cov, noise, background)
-                        scores = self.score(residual, prepared, pair_phi, pair_cells, enabled, u == v)
-                        return residual, prepared, scores
+                        return residual, prepared
                     groups = len(self.energies)**2
                     def empty():
-                        m = 2**self.bits
                         return (tf.zeros([0, n, antennas], tf.complex64),
                                 (tf.zeros([0, n, groups, antennas, antennas], tf.complex64),
-                                 tf.zeros([0, n, groups, antennas, 6], tf.complex64), tf.zeros([0, n, groups])),
-                                (tf.zeros([0, n, m*(1 if u == v else m)+self.bits*(1 if u == v else 2)]),
-                                 tf.zeros([0, n])))
-                    residual, prepared, scores = tf.cond(tf.reduce_any(enabled), process, empty)
+                                 tf.zeros([0, n, groups, antennas, 6], tf.complex64), tf.zeros([0, n, groups])))
+                    residual, prepared = tf.cond(tf.reduce_any(enabled), process, empty)
                     pairs.append((u, v, residual, prepared, enabled, tf.stack([left, right], 1),
-                                  pair_phi, pair_cells, pair_positions, scores))
+                                  pair_phi, pair_cells, pair_positions))
             return pairs
 
     def finish(self, pairs, evidence, active, bit_indices, bit_signs, effective_input, calibration, llr_limit,
@@ -205,7 +200,7 @@ class DecoderCorrection:
         if not fused:
             evidence = (evidence-effective_input)*active[..., None, None]
         result = tf.zeros_like(evidence)
-        for u, v, received, prepared, enabled, wanted, phi, cells, positions, scores in pairs:
+        for u, v, received, prepared, enabled, wanted, phi, cells, positions in pairs:
             def correct():
                 if users == 2:
                     e, base, indices, signs, activity = evidence, effective_input, bit_indices, bit_signs, active
@@ -217,7 +212,7 @@ class DecoderCorrection:
                                                 tf.gather(active, [u, v], axis=1))
                 delta = self.native.pilot_pair_correction(received, *prepared, e, phi, cells, positions,
                     self.symbols, self.energy_indices, self.labels, enabled, indices, signs, wanted, base, calibration,
-                    strength, activity, *scores, *blend,
+                    strength, activity, *blend,
                     single_user=(u == v), llr_limit=llr_limit, apply_update=fused)
                 if users <= 2:
                     return delta[:, :users]

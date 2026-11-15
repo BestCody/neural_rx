@@ -159,8 +159,7 @@ class ChannelMemory(tf.keras.layers.Layer):
         @tf.custom_gradient
         def operation(*values):
             current, parameters = FilterContext(*values[:11]), values[11:]
-            covariance = native.pilot_channel_uncertainty(*current, tf.constant(layout.r_layout), *parameters,
-                allow_tf32=tf.config.experimental.tensor_float_32_execution_enabled())
+            covariance = native.pilot_channel_uncertainty(*current, tf.constant(layout.r_layout), *parameters)
             def gradient(incoming):
                 learned = (*current[:3], *parameters)
                 with tf.GradientTape(watch_accessed_variables=False) as tape:

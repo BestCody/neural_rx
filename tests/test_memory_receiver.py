@@ -196,7 +196,10 @@ class ChannelMemoryTest(unittest.TestCase):
                 geometry = SimpleNamespace(r_layout=layout.r_layout[np.arange(users) % 2])
                 reference = tf.function(lambda c:model.channel_memory.uncertainty(c, geometry), jit_compile=True)
                 revised = tf.function(lambda c:model.channel_memory.complete(c, geometry).covariance)
+                # The native kernel computes in FP32 whatever the TF32 setting, so the reference runs without TF32.
+                tf.config.experimental.enable_tensor_float_32_execution(False)
                 expected = reference(context)
+                tf.config.experimental.enable_tensor_float_32_execution(tf32)
                 np.testing.assert_allclose(revised(context), expected, rtol=2e-5, atol=2e-6)
                 with ThreadPoolExecutor(max_workers=2) as workers:
                     outputs = list(workers.map(lambda _:revised(context).numpy(), range(2)))
@@ -296,12 +299,10 @@ class NativeCorrectionTests(unittest.TestCase):
         indices = tf.reshape(tf.range(4,dtype=tf.int64),[1,2,2])
         indices = tf.repeat(indices,2,0)
         default_signs = tf.ones([2,2,2])
-        def native(values, signs=default_signs, fit_override=None):
-            scores, fit = kernel.score(values[0],values[1:4],phi,cells,enabled)
+        def native(values, signs=default_signs):
             return kernel.native.pilot_pair_correction(*values[:5],phi,cells,tf.constant([[0,1]],tf.int64),
                 kernel.symbols,kernel.energy_indices,kernel.labels,enabled,indices,signs,tf.ones([1,2,2],tf.bool),
-                *values[5:8],tf.ones([1,2]),scores,fit if fit_override is None else fit_override,
-                *values[8:],llr_limit=20.)
+                *values[5:8],tf.ones([1,2]),*values[8:],llr_limit=20.)
         values = [y,factor,white,logdet,evidence,base,calibration,strength,*blend]
         upstream = tf.constant(rng.normal(size=base.shape),tf.float32)
         outputs, gradients = [], []
@@ -320,11 +321,10 @@ class NativeCorrectionTests(unittest.TestCase):
         self.assertGreater(float(tf.linalg.norm(gradients[1][0])),1e-6)
         signed = [*values[:4],-evidence,-base,*values[6:]]
         np.testing.assert_array_equal(native(signed,-tf.ones([2,2,2])),-native(values))
-        low, high = native(values,fit_override=tf.zeros([1,2])),native(values,fit_override=tf.ones([1,2])*5)
-        self.assertGreater(float(tf.linalg.norm(low-high)),1e-6)
+        # The fit of the best symbol pair is computed inside the kernel; it enters through the last row of the blend kernel.
         removed = tf.concat([blend[0][:7],tf.zeros_like(blend[0][7:])],0)
         ignored = [*values[:8],removed,*values[9:]]
-        np.testing.assert_array_equal(native(ignored,fit_override=tf.zeros([1,2])),native(ignored,fit_override=tf.ones([1,2])*5))
+        self.assertGreater(float(tf.linalg.norm(native(values)-native(ignored))),1e-6)
         endpoints = [y,factor,tf.ones_like(white)*complex(.1,.15),*values[3:]]
         _, physical, delta, _ = self.reference(*endpoints[:5],phi,cells,kernel.symbols,np.asarray(kernel.labels),
             np.asarray(kernel.energy_indices),*values[5:7],20.,strength,blend,True)
@@ -558,10 +558,9 @@ class NativeCorrectionTests(unittest.TestCase):
         strength = tf.constant(.37)
         blend = [tf.constant(rng.normal(size=shape)*.3, tf.float32) for shape in ((8, 8), (8,), (8,), ())]
         def arguments(values, enabled):
-            scores = kernel.score(values[0], values[1:4], phi, tf.cast(cells, tf.int64), enabled)
             return (*values[:5],phi,tf.cast(cells,tf.int64),tf.cast(positions,tf.int64),
                     kernel.symbols,kernel.energy_indices,kernel.labels,
-                    enabled,tf.cast(mapping[0],tf.int64),*mapping[1:],*values[5:8],tf.ones([2,2]),*scores,*values[8:])
+                    enabled,tf.cast(mapping[0],tf.int64),*mapping[1:],*values[5:8],tf.ones([2,2]),*values[8:])
         all_enabled = tf.ones([2,2],tf.bool)
         def call(values, enabled=all_enabled):
             return load().pilot_pair_correction(*arguments(values,enabled),llr_limit=20.)
@@ -586,8 +585,6 @@ class NativeCorrectionTests(unittest.TestCase):
                     _, _, delta, rho = self.reference(*values[:5],phi,cells,kernel.symbols,
                         np.asarray(kernel.labels),np.asarray(kernel.energy_indices),*values[5:7],20.,values[7],values[8:],True)
                     np.testing.assert_allclose(delta, 0., atol=1e-13)
-                    np.testing.assert_allclose(kernel.score(y,(factor,white,logdet),phi,tf.cast(cells,tf.int64),
-                        tf.ones([2,2],tf.bool))[1], rho, rtol=3e-6, atol=3e-6)
                     self.assertGreater(float(tf.linalg.norm(gradients[1][0])),1e-6)
                     self.assertGreater(float(tf.linalg.norm(gradients[1][4])),1e-6)
                 repeated = load().pilot_pair_correction_grad(*arguments(values,tf.ones([2,2],tf.bool)),
@@ -651,12 +648,10 @@ class NativeCorrectionTests(unittest.TestCase):
                 with tf.GradientTape() as tape:
                     tape.watch(inputs)
                     if native:
-                        scores = kernel.score(y, (factor,white,logdet), phi, tf.zeros([n],tf.int64),
-                                              tf.ones([2,1],tf.bool))
                         output = kernel.native.pilot_pair_correction(*inputs[:5],phi,tf.zeros([n],tf.int64),
                             tf.range(n,dtype=tf.int64)[None],kernel.symbols,kernel.energy_indices,kernel.labels,tf.ones([2,1],tf.bool),
                             tf.constant(indices,tf.int64),tf.constant(signs),wanted,*inputs[5:8],
-                            tf.ones([2,2]),*scores,*blend,llr_limit=20.)
+                            tf.ones([2,2]),*blend,llr_limit=20.)
                     else:
                         symbol_evidence = tf.einsum('buc,unqc->bunq',evidence[:,:,0],permutation)
                         symbol_base = tf.einsum('buc,unqc->bunq',effective[:,:,0],permutation)
@@ -684,12 +679,10 @@ class NativeCorrectionTests(unittest.TestCase):
                 with tf.GradientTape() as tape:
                     tape.watch(values)
                     information = evidence if fused else (evidence-effective)*active[..., None, None]
-                    scores = kernel.score(y, (factor,white,logdet), phi, tf.zeros([n],tf.int64),
-                                          tf.ones([2,1],tf.bool))
                     output = kernel.native.pilot_pair_correction(y,factor,white,logdet,information,phi,
                         tf.zeros([n],tf.int64),tf.range(n,dtype=tf.int64)[None],kernel.symbols,kernel.energy_indices,
                         kernel.labels,tf.ones([2,1],tf.bool),tf.constant(indices,tf.int64),tf.constant(signs),
-                        requests,effective,calibration,strength,active,*scores,*blend,llr_limit=20.,apply_update=fused)
+                        requests,effective,calibration,strength,active,*blend,llr_limit=20.,apply_update=fused)
                     if not fused:
                         output = effective+output*active[..., None, None]
                     loss = tf.reduce_sum(output*incoming)

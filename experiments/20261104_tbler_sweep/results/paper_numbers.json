@@ -4451,12 +4451,12 @@
    "sign_agreement_abs_llr_above_1": 1.0
   },
   "idd_gpu_ms": {
-   "covariance": 0.04540456,
-   "pair_preparation": 0.034326785,
-   "app_detector_and_combining": 0.97335845,
-   "other_tensorflow_ops": 0.11833245499999998
+   "covariance": 0.027470849999999998,
+   "pair_preparation": 0.024578395,
+   "app_detector_and_combining": 0.186078615,
+   "other_tensorflow_ops": 0.029288010000000003
   },
-  "idd_total_gpu_ms": 1.1714222499999998
+  "idd_total_gpu_ms": 0.26741587
  },
  "derived": {
   "snr_gap_db": {
