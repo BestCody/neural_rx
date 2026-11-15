@@ -27,19 +27,15 @@ REGISTER_OP("PilotPairScores")
    return OkStatus();
  });
 
-Status InitializeScores(int*);
-Status ScoresWorkspace(bool,int,int,int,int,int,size_t*,bool*);
-Status LaunchScores(cudaStream_t,bool,int,int,int,int,int,int,int,size_t,bool,const Tensor* const*,Tensor*,Tensor*);
+Status LaunchScores(cudaStream_t,bool,int,int,int,int,int,int,int,const Tensor* const*,Tensor*,Tensor*);
 
 struct ScoreStream {
  std::unique_ptr<se::Stream> stream;
- int device=-1,shared_limit=0;
+ int device=-1;
  std::mutex mutex;
  Status status;
  explicit ScoreStream(se::StreamExecutor* executor) {
    if(cudaGetDevice(&device)!=cudaSuccess){status=errors::Internal("Cannot identify physical-score device");return;}
-   status=InitializeScores(&shared_limit);
-   if(!status.ok())return;
    stream=std::make_unique<se::Stream>(executor);stream->Init();
    if(!stream->ok())status=errors::Internal("Cannot create physical-score stream");
  }
@@ -89,8 +85,6 @@ class PairScoresOp : public AsyncOpKernel {
    }
    auto execution=call->execution;
    OP_REQUIRES_OK_ASYNC(c,execution->status,done);
-   size_t bytes;bool cache_vectors;
-   OP_REQUIRES_OK_ASYNC(c,ScoresWorkspace(single_,r,groups,m,q,execution->shared_limit,&bytes,&cache_vectors),done);
    Tensor *output,*fit;
    OP_REQUIRES_OK_ASYNC(c,c->allocate_output(0,TensorShape({b,n,m*(single_?1:m)+(single_?q:2*q)}),&output),done);
    OP_REQUIRES_OK_ASYNC(c,c->allocate_output(1,TensorShape({b,n}),&fit),done);
@@ -99,7 +93,7 @@ class PairScoresOp : public AsyncOpKernel {
      std::lock_guard<std::mutex> lock(execution->mutex);
      execution->stream->ThenWaitFor(main);
      auto stream=reinterpret_cast<cudaStream_t>(execution->stream->platform_specific_handle().stream);
-     auto status=LaunchScores(stream,single_,b,n,r,cells,groups,m,q,bytes,cache_vectors,in,output,fit);
+     auto status=LaunchScores(stream,single_,b,n,r,cells,groups,m,q,in,output,fit);
      c->device()->tensorflow_accelerator_device_info()->event_mgr->ThenExecute(execution->stream.get(),
        [call,c,done,status]{
          if(!status.ok())c->SetStatus(status);

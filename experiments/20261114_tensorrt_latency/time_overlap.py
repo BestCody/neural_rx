@@ -27,11 +27,12 @@ NATIVE = HERE.parents[1]/"src/neural_rx/receiver/native_ops"
 
 
 def kernel_source():
-    """Device code of FusedPrepare and PhysicalScores, as in the receiver's native operations."""
+    """Device code of FusedPrepare and ScoresWarp, as in the receiver's native operations."""
     correction = (NATIVE/"pair_correction.cu.cc").read_text()
-    scores = correction[correction.index("__device__ C add("):correction.index("template<bool BACKWARD>")]
+    scores = (correction[correction.index("__device__ C add("):correction.index("size_t ScalarWorkspace(")]
+              + correction[correction.index("#define WARP_RES 4"):correction.index("__global__ void CorrectionWarp(")])
     prepare = (NATIVE/"pair_prepare.cu.cc").read_text()
-    helpers = prepare[prepare.index("__device__ float squared("):prepare.index("__global__ void Assemble(")]
+    helpers = prepare[prepare.index("__device__ float squared("):prepare.index("// The whole preparation in one kernel")]
     fused = prepare[prepare.index("#define FUSED_ANTENNAS 8"):prepare.index("Status FusedPreparation(")]
     return ("#include <cuda_runtime.h>\n#include <cmath>\n#include <cstdint>\n#include <cstddef>\nusing C=float2;\n"
             + scores + helpers + fused)
@@ -43,7 +44,7 @@ class IddKernels:
         self.np, self.cuda, self.cudart = np, cuda, cudart
         module = call(cuda.cuModuleLoadData(cubin))
         self.prepare = call(cuda.cuModuleGetFunction(module, names["FusedPrepare"].encode()))
-        self.scores = call(cuda.cuModuleGetFunction(module, names["PhysicalScores"].encode()))
+        self.scores = call(cuda.cuModuleGetFunction(module, names["ScoresWarp"].encode()))
         batch, cells, users, r, _ = data["theta"].shape
         levels, n = len(data["energy_levels"]), data["y"].shape[1]
         m, q = data["labels"].shape
@@ -81,24 +82,22 @@ class IddKernels:
             (self.out["factor"], np.uint64), (self.out["white"], np.uint64), (self.out["logdet"], np.uint64),
             (status, np.uint64)])
         self.prepare_blocks = (count+127)//128
-        # Shared memory as in ScoresWorkspace (pair_correction.cu.cc), with the cached channel vectors.
-        scalars = m*(m+1)+2*m+5*kbits+10
-        self.shared = 4*((scalars+1) & ~1)+8*groups*r+8*2*groups*r
         self.scores_args, self.scores_params = pack([
-            (False, np.bool_), (n, i32), (r, i32), (cells, i32), (groups, i32), (m, i32), (q, i32), (True, np.bool_),
+            (False, np.bool_), (n, i32), (n, i32), (r, i32), (cells, i32), (groups, i32), (m, i32), (q, i32),
+            (False, np.bool_),
             (upload(data["y"], c64), np.uint64), (self.out["factor"], np.uint64), (self.out["white"], np.uint64),
             (self.out["logdet"], np.uint64), (upload(data["phi"], f32), np.uint64), (upload(data["cells"], i64), np.uint64),
             (upload(data["symbols"], c64), np.uint64), (upload(data["energy_indices"], i64), np.uint64),
             (upload(data["labels"], i64), np.uint64), (upload(data["enabled"], np.bool_), np.uint64),
             (self.out["scores"], np.uint64), (self.out["fit"], np.uint64)])
-        self.scores_blocks = n
+        self.scores_blocks = (n+3)//4  # four resource elements per block (WARP_RES)
         self.stream = cuda.CUstream(int(stream))
 
     def launch(self):
         cuda = self.cuda
         call(cuda.cuLaunchKernel(self.prepare, self.prepare_blocks, 1, 1, 128, 1, 1, 0, self.stream,
                                  self.prepare_params.ctypes.data, 0))
-        call(cuda.cuLaunchKernel(self.scores, self.scores_blocks, 1, 1, 256, 1, 1, self.shared, self.stream,
+        call(cuda.cuLaunchKernel(self.scores, self.scores_blocks, 1, 1, 128, 1, 1, 0, self.stream,
                                  self.scores_params.ctypes.data, 0))
 
     def read(self, name):
@@ -128,7 +127,7 @@ def main():
                         str((HERE if source == "pilot_filter" else BUILD)/f"{source}.cu")], check=True)
     symbols = subprocess.run(["nm", str(BUILD/"idd_kernels.cubin")], check=True, capture_output=True, text=True).stdout
     names = {key: next(line.split()[-1] for line in symbols.splitlines() if key in line and " T " in line)
-             for key in ("FusedPrepare", "PhysicalScores")}
+             for key in ("FusedPrepare", "ScoresWarp")}
     reference = np.load(BUILD/"reference.npz")
     tables = dict(np.load(BUILD/"filter_tables.npz"))
     data = dict(np.load(BUILD/"idd_kernels.npz"))
@@ -205,7 +204,7 @@ def main():
               "idd_ready_before_network_ms": median["network_with_idd"]-median["idd_with_network"],
               "samples_per_mode": args.rounds*args.per_round,
               "measure": "CUDA events; the IDD stream waits for the filter kernel, then runs FusedPrepare and "
-                         "PhysicalScores while the CGNN engine runs on the network's stream"}
+                         "ScoresWarp while the CGNN engine runs on the network's stream"}
     (HERE/"results/overlap.json").write_text(json.dumps(report, indent=1))
     print(json.dumps(report, indent=1))
 

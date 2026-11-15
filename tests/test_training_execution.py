@@ -142,7 +142,8 @@ class FullHistoryTrainingTests(unittest.TestCase):
         variables = memory_variables+backbone_variables
         receiver = SimpleNamespace(_neural_rx=None, _tb_encoders=[None],
             _tb_decoders=[SimpleNamespace(_decoder=SimpleNamespace(_num_iter=20))])
-        trainer = SimpleNamespace(model=model, memory_variables=memory_variables, optimization_variables=variables,
+        trainer = SimpleNamespace(model=model, variant="pilot_memory", memory_variables=memory_variables,
+            optimization_variables=variables,
             contexts={1:(None, SimpleNamespace(_receiver=receiver))}, manager=MemoryPolicy(4, 7, 8),
             settings={"architecture":{"ldpc_iterations":20,"ldpc_first_iterations":8}},
             recipe={"coded_loss_weight":1., "payload_loss_weight":1., "reset_weight":.5, "channel_loss_weight":.1})

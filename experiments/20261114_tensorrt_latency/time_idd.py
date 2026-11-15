@@ -7,9 +7,9 @@ the GPU time per slot is the summed kernel duration divided by the number of run
 
     LD_LIBRARY_PATH=$CONDA_PREFIX/lib/python3.10/site-packages/nvidia/cuda_cupti/lib time_idd.py   # results/idd.json
 
-The pair preparation runs as one fused kernel by default; NRX_PAIR_PREPARE=cusolver selects the cuSOLVER/cuBLAS path
-(results/idd_cusolver.json). Each run also saves its preparation outputs, IDD output, and decoder output
-(results/idd_outputs_<path>.npz) so that the two paths can be compared.
+Each run also saves its preparation outputs, IDD output, and decoder output (results/idd_outputs_fused.npz). The files
+idd_cusolver.json, idd_reference.json, and idd_outputs_{cusolver,reference}.npz record the original kernels (cuSOLVER
+preparation; one block per resource element), measured at commit e734a44 before they were removed.
 
 The profiler needs CUPTI on the library path (TensorFlow does not find the pip-installed CUPTI by itself).
 """
@@ -23,10 +23,8 @@ HERE = Path(__file__).resolve().parent
 RUNS, WARMUP = 200, 50
 GROUPS = {"covariance": ("PackUncertainty", "UncertaintyStats", "UncertaintyFeatureValues", "UncertaintyRelu",
                          "UncertaintyOutput"),
-          # pilot_pair_prepare: the fused kernel, or Assemble/Finish/Check with the batched Cholesky factorizations
-          # and triangular solves of cuSOLVER/cuBLAS (NRX_PAIR_PREPARE=cusolver)
-          "pair_preparation": ("FusedPrepare", "Assemble", "Finish", "Check", "potrf", "trsm"),
-          "app_detector_and_combining": ("PhysicalScores", "ScoresWarp", "Correction", "InitializeCorrected")}
+          "pair_preparation": ("FusedPrepare",),
+          "app_detector_and_combining": ("ScoresWarp", "CorrectionWarp", "InitializeCorrected")}
 
 
 def kernel_times(logdir, runs):
@@ -91,11 +89,9 @@ def main():
                                      code_input, model.evidence_calibration, decoder.first.llr_limit,
                                      tf.sigmoid(model.correction_logit), model.blend_variables)
 
-    # Default: fused pair preparation and one-warp-per-resource-element detector kernels. NRX_IDD_KERNELS=reference
-    # selects the original detector kernels, NRX_PAIR_PREPARE=cusolver the cuSOLVER preparation (with them).
-    path = ("cusolver" if os.environ.get("NRX_PAIR_PREPARE") == "cusolver" else
-            "reference" if os.environ.get("NRX_IDD_KERNELS") == "reference" else
-            "maxlog" if os.environ.get("NRX_IDD_MAXLOG") == "1" else "fused")
+    # idd_outputs_reference.npz and idd_outputs_cusolver.npz in results/ come from the original kernels (commit e734a44),
+    # which were then removed; the recheck script compares this run's outputs with them.
+    path = "maxlog" if os.environ.get("NRX_IDD_MAXLOG") == "1" else "fused"
     estimate = model.channel_memory.complete(context, layout)
     pair = model.physical.begin(inputs[0], estimate, noise, inputs[3], ids, llr, layout)[0]
     prepared = pair[3]

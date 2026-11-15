@@ -8,6 +8,9 @@ native_ops/pair_correction.cu.cc, read per call):
 In this test the full score table is still computed and then masked, so it measures accuracy, not speed. The fit
 feature of the combining network still uses all pairs.
 
+The reduced symbol sets (NRX_IDD_KEEP) lived in the original forward correction kernel, which was removed after this
+run; results/ was produced at commit e734a44. Only "exact" and "maxlog" still run with the current kernels.
+
 Episodes are regenerated as in experiments/20261114_no_idd_ablation and must match the stored fingerprints; "exact"
 must reproduce the stored errors.
 

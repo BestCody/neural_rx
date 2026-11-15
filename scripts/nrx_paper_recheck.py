@@ -707,11 +707,11 @@ with np.load(f'{TRT}/idd_outputs_fused.npz') as fused_out, np.load(f'{TRT}/idd_o
                         and np.array_equal(fused_out['corrected'] > 0, library_out['corrected'] > 0)
                         and np.max(np.abs(fused_out['factor']-library_out['factor'])) <= 1e-5*np.max(np.abs(library_out['factor'])))
 claim("IDD requires only $2.2\\cdot 10^{8}$ real multiplications per slot, a tenth of the $2.2\\cdot 10^{9}$ of "
-      "a CGNN iteration, but its CUDA kernels take 0.5\\,ms on the A40 GPU, more than half of it for evaluating all symbol "
+      "a CGNN iteration, but its CUDA kernels take 1.2\\,ms on the A40 GPU, more than half of it for evaluating all symbol "
       "pairs. With "
       "IDD, the proposed NRX is therefore not yet real-time capable",
       idd_profile['preparation'] == 'fused' and same_preparation and same_detector and round(idd/1e8, 1) == 2.2
-      and round(cgnn/1e9, 1) == 2.2 and round(idd/cgnn, 1) == .1 and round(idd_total, 1) == .5
+      and round(cgnn/1e9, 1) == 2.2 and round(idd/cgnn, 1) == .1 and round(idd_total, 1) == 1.2
       and detector/idd_total > .5, 'IDD multiplications and GPU time')
 claim("but its IDD round is not yet real-time capable. Without IDD, it matches the three-iteration NRX, and its channel "
       "filter, as one CUDA kernel, adds less than 3\\% to the inference time of the two-iteration NRX",

@@ -34,7 +34,7 @@ def _load():
     capabilities = sorted({tf.config.experimental.get_device_details(d)['compute_capability'] for d in devices})
     flags, links = tf.sysconfig.get_compile_flags(), tf.sysconfig.get_link_flags()
     libraries = []
-    for name in ('cublas', 'cusolver'):
+    for name in ('cublas',):
         installed = Path(tf.__file__).resolve().parent.parent/'nvidia'/name/'lib'
         matches = sorted(installed.glob('lib'+name+'.so.*'))
         libraries += ([str(matches[0]), '-Wl,-rpath,'+str(installed)] if matches else ['-l'+name])

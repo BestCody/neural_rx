@@ -4,13 +4,9 @@
 #include "tensorflow/core/framework/shape_inference.h"
 #include "tensorflow/core/common_runtime/device/device_event_mgr.h"
 #include "tensorflow/core/framework/cancellation.h"
-#include "third_party/gpus/cuda/include/cublas_v2.h"
-#include "third_party/gpus/cuda/include/cusolverDn.h"
 #include <mutex>
 #include <memory>
 #include <cmath>
-#include <cstdlib>
-#include <string>
 using namespace tensorflow;
 
 REGISTER_OP("PilotPairPrepare")
@@ -28,15 +24,10 @@ REGISTER_OP("PilotPairPrepare")
    return OkStatus();
  });
 
-Status AssemblePreparation(cudaStream_t,int,int,int,int,float,const Tensor* const*,Tensor* const*,Tensor*,Tensor*,Tensor*);
-Status FinishPreparation(cudaStream_t,int,int,Tensor*,Tensor*,Tensor*,Tensor*);
-Status CheckPreparation(cudaStream_t,int,int,Tensor*,Tensor*);
 Status FusedPreparation(cudaStream_t,int,int,int,int,float,const Tensor* const*,Tensor* const*,Tensor*);
 
 struct PreparationStream {
  std::unique_ptr<se::Stream> stream;
- cublasHandle_t blas=nullptr;
- cusolverDnHandle_t solver=nullptr;
  int device=-1;
  std::mutex mutex;
  Status status;
@@ -44,17 +35,11 @@ struct PreparationStream {
    if(cudaGetDevice(&device)!=cudaSuccess){status=errors::Internal("Cannot identify preparation device");return;}
    stream=std::make_unique<se::Stream>(executor); stream->Init();
    if(!stream->ok()) {status=errors::Internal("Cannot create preparation stream");return;}
-   auto raw=reinterpret_cast<cudaStream_t>(stream->platform_specific_handle().stream);
-   if(cublasCreate(&blas)!=CUBLAS_STATUS_SUCCESS || cusolverDnCreate(&solver)!=CUSOLVER_STATUS_SUCCESS ||
-      cublasSetStream(blas,raw)!=CUBLAS_STATUS_SUCCESS || cusolverDnSetStream(solver,raw)!=CUSOLVER_STATUS_SUCCESS)
-     status=errors::Internal("Cannot initialize preparation solvers");
  }
  ~PreparationStream() {
    int previous=-1;
    cudaGetDevice(&previous);
    if(device>=0)cudaSetDevice(device);
-   if(blas)cublasDestroy(blas);
-   if(solver)cusolverDnDestroy(solver);
    stream.reset();
    if(previous>=0 && previous!=device)cudaSetDevice(previous);
  }
@@ -62,21 +47,18 @@ struct PreparationStream {
 
 struct PreparationCall {
  std::vector<Tensor> inputs;
- Tensor pointers,info,status,host_status;
+ Tensor status,host_status;
  std::shared_ptr<PreparationStream> execution;
 };
 
 class PairPrepareOp : public AsyncOpKernel {
  float energy_;
- bool fused_;  // one kernel per matrix instead of cuSOLVER/cuBLAS; NRX_PAIR_PREPARE=cusolver selects the library path
  std::mutex initialization_;
  std::shared_ptr<PreparationStream> execution_;
  public:
  explicit PairPrepareOp(OpKernelConstruction* c):AsyncOpKernel(c) {
    OP_REQUIRES_OK(c,c->GetAttr("symbol_energy",&energy_));
    OP_REQUIRES(c,std::isfinite(energy_) && energy_>0,errors::InvalidArgument("Invalid symbol energy"));
-   const char* path=std::getenv("NRX_PAIR_PREPARE");
-   fused_=!(path && std::string(path)=="cusolver");
  }
  void ComputeAsync(OpKernelContext* c,DoneCallback done) override {
    const auto& coefficients=c->input(0); const auto& covariance=c->input(1);
@@ -94,8 +76,6 @@ class PairPrepareOp : public AsyncOpKernel {
    OP_REQUIRES_OK_ASYNC(c,c->allocate_output(2,TensorShape({b,j,groups}),&out[2]),done);
    auto call=std::make_shared<PreparationCall>();
    for(int i=0;i<5;++i)call->inputs.push_back(c->input(i));
-   OP_REQUIRES_OK_ASYNC(c,c->allocate_temp(DT_INT64,TensorShape({2,count}),&call->pointers),done);
-   OP_REQUIRES_OK_ASYNC(c,c->allocate_temp(DT_INT32,TensorShape({count}),&call->info),done);
    OP_REQUIRES_OK_ASYNC(c,c->allocate_temp(DT_INT32,TensorShape({}),&call->status),done);
    AllocatorAttributes host;host.set_on_host(true);host.set_gpu_compatible(true);
    OP_REQUIRES_OK_ASYNC(c,c->allocate_temp(DT_INT32,TensorShape({}),&call->host_status,host),done);
@@ -113,29 +93,7 @@ class PairPrepareOp : public AsyncOpKernel {
      execution->stream->ThenWaitFor(main);
      auto stream=reinterpret_cast<cudaStream_t>(execution->stream->platform_specific_handle().stream);
      const Tensor* in[5];for(int i=0;i<5;++i)in[i]=&call->inputs[i];
-     bool fused=fused_ && r<=8;
-     if(fused)status=FusedPreparation(stream,b,j,r,e,energy_,in,out,&call->status);
-     else status=AssemblePreparation(stream,b,j,r,e,energy_,in,out,&call->pointers,&call->info,&call->status);
-     auto matrices=reinterpret_cast<cuComplex**>(call->pointers.flat<int64_t>().data());
-     auto rhs=matrices+count;
-     if(status.ok() && !fused && cusolverDnCpotrfBatched(execution->solver,CUBLAS_FILL_MODE_UPPER,r,matrices,r,
-                                             call->info.flat<int32>().data(),count)!=CUSOLVER_STATUS_SUCCESS)
-       status=errors::Internal("Preparation Cholesky launch failed");
-     if(status.ok() && !fused)status=FinishPreparation(stream,count,r,out[0],out[2],&call->info,&call->status);
-     cuComplex alpha=make_cuComplex(1.f,0.f);
-     if(status.ok() && !fused){
-       cublasStatus_t solved=CUBLAS_STATUS_SUCCESS;
-       if(count>1 && r<=128*count)
-         solved=cublasCtrsmBatched(execution->blas,CUBLAS_SIDE_RIGHT,CUBLAS_FILL_MODE_UPPER,
-             CUBLAS_OP_N,CUBLAS_DIAG_NON_UNIT,6,r,&alpha,matrices,r,rhs,6,count);
-       else for(int i=0;i<count && solved==CUBLAS_STATUS_SUCCESS;++i)
-         solved=cublasCtrsm(execution->blas,CUBLAS_SIDE_RIGHT,CUBLAS_FILL_MODE_UPPER,
-             CUBLAS_OP_N,CUBLAS_DIAG_NON_UNIT,6,r,&alpha,
-             reinterpret_cast<cuComplex*>(out[0]->flat<complex64>().data())+i*r*r,r,
-             reinterpret_cast<cuComplex*>(out[1]->flat<complex64>().data())+i*r*6,6);
-       if(solved!=CUBLAS_STATUS_SUCCESS)status=errors::Internal("Preparation triangular solve launch failed");
-     }
-     if(status.ok() && !fused)status=CheckPreparation(stream,count,r,out[1],&call->status);
+     status=FusedPreparation(stream,b,j,r,e,energy_,in,out,&call->status);
      if(status.ok() && cudaMemcpyAsync(call->host_status.flat<int32>().data(),call->status.flat<int32>().data(),
                                      sizeof(int),cudaMemcpyDeviceToHost,stream)!=cudaSuccess)
        status=errors::Internal("Preparation status copy failed");
