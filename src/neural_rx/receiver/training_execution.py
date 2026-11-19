@@ -7,12 +7,12 @@ import numpy as np
 import tensorflow as tf
 
 from neural_rx.backbone.core import prepare_cgnn_inputs
-from neural_rx.decoding import OneLayerGridCodeMap, DecoderAssistedTB
+from neural_rx.decoding import OneLayerGridCodeMap
 from .training_options import DEFAULT_DETECTOR_BATCH_TBS, DEFAULT_DESCRIPTOR_CHUNK_TBS
 from .pilot_history import PilotHistory
 
 
-TARGETS = ("y", "ls", "bits", "coded", "no", "channel_targets")
+TARGETS = ("y", "ls", "bits", "coded", "no", "h")
 
 
 def routing_plan(ids, active, capacity, expiry, history_tbs, times=None):
@@ -67,30 +67,6 @@ def signature(value):
     return tf.TensorSpec(shape, value.dtype)
 
 
-def channel_nll(estimate, targets, layout):
-    antennas = estimate.coefficients.shape[-2]
-    count = antennas*(antennas-1)//2
-    real, imag, diagonal, off_real, off_imag = tf.split(targets, [3*antennas, 3*antennas, antennas, count, count], -1)
-    z = tf.reshape(tf.complex(real, imag), [tf.shape(targets)[0], layout.users, layout.count, antennas, 3])
-    upper = np.transpose(np.nonzero(np.triu(np.ones((antennas, antennas), bool), 1)))
-    basis = np.zeros((count, antennas, antennas), np.complex64)
-    for i, (r, c) in enumerate(upper):
-        basis[i, r, c] = 1.
-    residual = tf.einsum('bucj,jrs->bucrs', tf.complex(off_real, off_imag), tf.constant(basis))
-    residual += tf.linalg.adjoint(residual)+tf.linalg.diag(tf.cast(diagonal, tf.complex64))
-    delta = tf.linalg.matmul(estimate.coefficients, tf.cast(layout.r_layout, tf.complex64), transpose_b=True)-z
-    error = tf.linalg.matmul(delta, delta, adjoint_b=True)+residual
-    counts = tf.constant(layout.data_counts, tf.float32)
-    present = (counts[None] > 0) & (tf.reduce_sum(estimate.variance, -1) > 0)
-    covariance = tf.where(present[..., None, None], estimate.covariance, tf.eye(antennas, dtype=tf.complex64))
-    error = tf.where(present[..., None, None], error, 0.)
-    factor = tf.linalg.cholesky(covariance)
-    trace = tf.math.real(tf.linalg.trace(tf.linalg.cholesky_solve(factor, error)))
-    logdet = 2*tf.reduce_sum(tf.math.log(tf.math.real(tf.linalg.diag_part(factor))), -1)
-    loss = tf.where(present, (trace+logdet)/antennas, 0.)
-    return tf.math.divide_no_nan(tf.reduce_sum(loss*counts[None], -1), tf.reduce_sum(counts, -1)[None])
-
-
 class BatchedTrainingExecution:
     def __init__(self, trainer, detector_batch_tbs=DEFAULT_DETECTOR_BATCH_TBS,
                  descriptor_chunk_tbs=DEFAULT_DESCRIPTOR_CHUNK_TBS):
@@ -103,8 +79,8 @@ class BatchedTrainingExecution:
         self.gradient_functions = {}
 
     def settings(self):
-        return dict(version="pilot_filter_learned_blend_joint_v1",
-                    detector_batch_tbs=self.detector_batch_tbs,
+        return dict(version="pilot_filter_v1",
+                    detector_batch_tbs=self.detector_batch_tbs, detector_batch_scaling="constant_prbs_per_call",
                     descriptor_chunk_tbs=self.descriptor_chunk_tbs,
                     tf32_enabled=tf.config.experimental.tensor_float_32_execution_enabled())
 
@@ -128,24 +104,11 @@ class BatchedTrainingExecution:
         prepared, fingerprints, den = [], [], 0.
         for packet in packets:
             ids, active = np.asarray(packet["ue_ids"]), np.asarray(packet["active"])
-            if ids.shape[0] not in (1, 2) or ids.shape[1] < 1:
-                raise ValueError("Each base episode needs one history or a paired history")
-            if not np.all(ids == ids[:1]) or not np.all(active == active[:1]):
-                raise ValueError("Paired histories must use identical schedules")
-            if "time_index" in packet and not np.all(
-                    np.asarray(packet["time_index"]) == np.asarray(packet["time_index"])[:1]):
-                raise ValueError("Paired histories must use identical timestamps")
+            if ids.shape[0] != 1 or ids.shape[1] < 1:
+                raise ValueError("Each example is one sequence of TBs")
             for key in TARGETS:
                 if tuple(packet[key].shape[:2]) != tuple(ids.shape[:2]):
                     raise ValueError(f"Missing full-episode targets: {key}")
-            if ids.shape[0] == 2:
-                suffix = int(packet["metadata"]["paired_suffix_tbs"])
-                if not 0 < suffix < ids.shape[1]:
-                    raise ValueError("Paired histories need a common suffix and distinct earlier observations")
-                for key in TARGETS:
-                    future = np.asarray(packet[key])[:, -suffix:]
-                    if not np.array_equal(future[0], future[1]):
-                        raise ValueError(f"Paired histories must have identical future {key}")
             den += float(active[0].sum())
             plan = routing_plan(ids, active, self.trainer.manager.capacity, self.trainer.manager.expiry_slots,
                                 self.trainer.model.history_tbs, packet.get("time_index"))
@@ -162,105 +125,69 @@ class BatchedTrainingExecution:
     def gradient_function(self, width, targets, current, bank):
         if width in self.gradient_functions:
             return self.gradient_functions[width]
-        from .training import per_user_bce, per_user_payload_loss
+        from .training import BASELINE, per_user_bce
         receiver = self.trainer.contexts[width][1]._receiver
-        model, recipe = self.trainer.model, self.trainer.recipe
+        model = self.trainer.model
         users = targets[1].shape[1]
         mapping = OneLayerGridCodeMap(receiver._neural_rx, users, model.base._num_bits_per_symbol[0])
-        iterations = int(self.trainer.settings["architecture"]["ldpc_iterations"])
-        decoder = DecoderAssistedTB(receiver._tb_encoders[0], receiver._tb_decoders[0], iterations,
-                                    self.trainer.settings['architecture']['ldpc_first_iterations'])
         variables = self.trainer.optimization_variables
+        baseline = self.trainer.variant == BASELINE
         specs = [tuple(signature(v) for v in targets), tuple(signature(v) for v in current),
                  signature(bank), tf.TensorSpec([None], tf.float32), tf.TensorSpec([], tf.float32),
-                 tuple(tf.TensorSpec(v.shape, v.dtype) for v in variables), tf.TensorSpec([7], tf.float32)]
+                 tuple(tf.TensorSpec(v.shape, v.dtype) for v in variables), tf.TensorSpec([4], tf.float32)]
 
-        from .training import BASELINE
-        if self.trainer.variant == BASELINE:
-            # Retrained two-iteration baseline: Large NRX iterations 1-2 on the LS estimate, then the full BP budget of
-            # the shipped decoder (as in the benchmark's two-iteration adapter). Same coded and payload losses as the
-            # proposed receiver, without the channel term (no filter) and without the no-memory copy (no memory).
-            plain = DecoderAssistedTB(receiver._tb_encoders[0], receiver._tb_decoders[0],
-                                      int(receiver._tb_decoders[0]._decoder._num_iter),
-                                      self.trainer.settings['architecture']['ldpc_first_iterations'])
+        channel_weight = float(self.trainer.recipe["channel_loss_weight"])
+        distillation = float(self.trainer.recipe["distillation_weight"])
+        teacher = self.trainer.teacher
 
-            @tf.function(input_signature=specs)
-            def baseline_gradients(targets, current, bank, weights, den, accumulated, totals):
-                y, channel, bits, coded, noise, channel_targets = targets
-                active = current[1]
-                inputs = prepare_cgnn_inputs(receiver, y, channel, active)
-                with tf.GradientTape(watch_accessed_variables=False) as tape:
-                    tape.watch(variables)
-                    state = model.base.initialize_state(inputs)
-                    for iteration in model.base._iterations[:2]:
-                        state = iteration([state, inputs[1], inputs[3]])
-                    llr = mapping.grid_to_coded(model.base._readout_llrs[0](state))
-                    code_input, _, bp_state, posterior = plain.evidence(llr)
-                    output = plain.finish(code_input, bp_state)
-                    coded_loss = (per_user_bce(coded, llr)
-                                  + per_user_bce(coded, plain.first.from_code_blocks(posterior)))/2.
-                    payload_loss = per_user_payload_loss(bits, output.logits)
-                    mask = active*weights[:, None]/den
-                    pc, pp = tf.reduce_sum(mask*coded_loss), tf.reduce_sum(mask*payload_loss)
-                    cw, pw = recipe["coded_loss_weight"], recipe["payload_loss_weight"]
-                    loss = (cw*pc + pw*pp)/(cw+pw)
-                grads = tape.gradient(loss, variables,
-                                      unconnected_gradients=tf.UnconnectedGradients.ZERO)
-                tf.debugging.assert_all_finite(loss, "Nonfinite baseline training loss")
-                accumulated = tuple(a+g for a, g in zip(accumulated, grads, strict=True))
-                zero = tf.zeros([])
-                return accumulated, totals+tf.stack([loss, pc, pp, zero, zero, zero, zero])
-
-            self.gradient_functions[width] = baseline_gradients
-            return baseline_gradients
-
+        # Loss of both receivers. Data term: the binary cross-entropy of the LLRs, against the transmitted bits and,
+        # with weight distillation_weight, against the soft bits of the shipped eight-iteration network. Channel
+        # term, as for the original NRX: the squared error of the network's channel estimate, here on the scale of
+        # the network's inputs, because that is the only scale the network knows. The proposed receiver refines the
+        # LS estimate with the channel filter and the pilot memory before the two CGNN iterations; the retrained
+        # two-iteration network uses the LS estimate. The memory of a TB holds the LS estimates of the UE's earlier TBs
+        # in the sequence (bank), and the filter has no trained weights.
         @tf.function(input_signature=specs)
         def gradients(targets, current, bank, weights, den, accumulated, totals):
-            y, channel, bits, coded, noise, channel_targets = targets
+            y, ls, bits, coded, noise, truth = targets
             observation, active, indices, age, ports, valid, ue_ids = current
-            previous = tf.gather(bank, indices)
-            history = PilotHistory(previous, age, ports, valid)
-            layout = model.layout_for(channel)
-            inputs = prepare_cgnn_inputs(receiver, y, channel, active)
+            inputs = prepare_cgnn_inputs(receiver, y, ls, active)
+            truth *= model.base.input_scale(inputs[0])[:, None]
+            share = active*weights[:, None]/den
+            if teacher is not None:
+                state = teacher.initialize_state(inputs)
+                for iteration in teacher._iterations:
+                    state = iteration([state, inputs[1], inputs[3]])
+                soft = tf.sigmoid(mapping.grid_to_coded(teacher._readout_llrs[0](state)))
             with tf.GradientTape(watch_accessed_variables=False) as tape:
                 tape.watch(variables)
-                both_inputs = [value if i == 1 else tf.concat([value, value], 0)
-                               for i, value in enumerate(inputs)]
-                reset = model.empty_history(observation)
-                both_history = PilotHistory(*(tf.concat([a, b], 0) for a, b in zip(history, reset, strict=True)))
-                output, llr, corrected, posterior, _, estimate = model.decode(both_inputs, tf.concat([noise, noise], 0),
-                    tf.concat([ue_ids, ue_ids], 0), both_history, decoder, mapping,
-                    tf.concat([observation, observation], 0))
-                labels = tf.concat([coded, coded], 0)
-                coded_losses = tf.split((per_user_bce(labels, llr)+per_user_bce(labels, posterior)
-                                         +per_user_bce(labels, corrected))/3., 2, axis=0)
-                payload_losses = tf.split(per_user_payload_loss(tf.concat([bits, bits], 0), output.logits), 2, axis=0)
-                mask = active*weights[:, None]/den
-                pc, rc = [tf.reduce_sum(mask*value) for value in coded_losses]
-                pp, rp = [tf.reduce_sum(mask*value) for value in payload_losses]
-                channel_losses = channel_nll(estimate, tf.concat([channel_targets, channel_targets], 0), layout)
-                ph, rh = [tf.reduce_sum(mask*value) for value in tf.split(channel_losses, 2, axis=0)]
-                cw, pw, rw = recipe["coded_loss_weight"], recipe["payload_loss_weight"], recipe["reset_weight"]
-                loss = (cw*(pc+rw*rc) + pw*(pp+rw*rp)
-                        + recipe["channel_loss_weight"]*(ph+rw*rh))/((cw+pw)*(1+rw))
-            grads = tape.gradient(loss, variables,
-                                  unconnected_gradients=tf.UnconnectedGradients.ZERO)
-            tf.debugging.assert_all_finite(loss, "Nonfinite joint training loss")
-            accumulated = tuple(a+g for a, g in zip(accumulated, grads, strict=True))
-            return accumulated, totals+tf.stack([loss, pc, pp, rc, rp, ph, rh])
+                if baseline:
+                    grid, state = model.iterate(inputs)
+                else:
+                    history = PilotHistory(tf.gather(bank, indices), age, ports, valid)
+                    grid, _, state = model.detect_state(inputs, noise, history, observation)
+                logits = mapping.grid_to_coded(grid)
+                bce = tf.reduce_sum(share*per_user_bce(coded, logits))
+                soft_bce = tf.reduce_sum(share*per_user_bce(soft, logits)) if teacher is not None else tf.zeros([])
+                error = tf.reduce_sum(share*tf.reduce_mean(tf.square(model.channel_estimate(state)-truth), [2, 3, 4]))
+                loss = (1.-distillation)*bce+distillation*soft_bce+channel_weight*error
+            grads = tape.gradient(loss, variables, unconnected_gradients=tf.UnconnectedGradients.ZERO)
+            tf.debugging.assert_all_finite(loss, "Nonfinite training loss")
+            return (tuple(a+g for a, g in zip(accumulated, grads, strict=True)),
+                    totals+tf.stack([loss, bce, soft_bce, error]))
 
         self.gradient_functions[width] = gradients
         return gradients
 
     @tf.function(reduce_retracing=True)
-    def finish(self, gradients, totals, memory_rms):
+    def finish(self, gradients, totals):
         for gradient in gradients:
             tf.debugging.assert_all_finite(gradient, "Nonfinite joint training gradient")
         norm = tf.linalg.global_norm(gradients)
         tf.debugging.assert_all_finite(norm, "Nonfinite gradient norm")
-        count = len(self.trainer.memory_variables)
-        memory_norm = tf.linalg.global_norm(gradients[:count]) if count else tf.zeros([])
-        metrics = tf.concat([totals, [norm, memory_norm, memory_rms]], 0)
+        # loss, gradient norm, then the loss's parts: cross-entropy against the bits, against the teacher's soft
+        # bits, and the channel-estimate error
+        metrics = tf.concat([totals[:1], norm[None], totals[1:]], 0)
         return gradients, metrics
 
     def run(self, width, packets, denominator=None):
@@ -284,12 +211,15 @@ class BatchedTrainingExecution:
         ids = tf.concat([flatten_time(p["ue_ids"]) for p in prepared], 0)
         current = (observations, active, tf.concat(index_parts, 0), *metadata, ids)
         accumulated = tuple(tf.zeros_like(v) for v in self.trainer.optimization_variables)
-        totals = tf.zeros([7])
+        totals = tf.zeros([4])
         function = self.gradient_function(width, targets, current, bank)
-        for start in range(0, len(weights), self.detector_batch_tbs):
-            end = min(start+self.detector_batch_tbs, len(weights))
+        # detector_batch_tbs is the number of TBs per gradient call at the widest bandwidth of the recipe; narrower
+        # TBs need less memory, so a call takes proportionally more of them (the gradients are sums over the TBs).
+        widest = max(self.trainer.recipe.get("prbs", [width]))
+        batch = max(self.detector_batch_tbs, self.detector_batch_tbs*widest//width)
+        for start in range(0, len(weights), batch):
+            end = min(start+batch, len(weights))
             accumulated, totals = function(tuple(v[start:end] for v in targets),
                 tuple(v[start:end] for v in current), bank, weights[start:end], tf.constant(den), accumulated, totals)
-        memory_rms = tf.sqrt(tf.reduce_mean(tf.square(bank[..., :-1])))
-        gradients, metrics = self.finish(accumulated, totals, memory_rms)
+        gradients, metrics = self.finish(accumulated, totals)
         return gradients, metrics, fingerprints, local_den

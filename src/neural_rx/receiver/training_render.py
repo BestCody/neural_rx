@@ -76,18 +76,19 @@ class TrainingRenderer:
         y = tf.map_fn(lambda values: gen._add_seeded_noise(values[0], values[1], noise_seed, values[2]),
             (clean, no, times), fn_output_signature=tf.TensorSpec(clean.shape[1:], clean.dtype))
         y = tf.reshape(y, [-1, *y.shape[2:]])
-        targets = self.layout.channel_targets(gen.rx.preprocess_channel_ground_truth(h))
-        values = (payload, y, self._estimate(y, pilots), targets, coded)
+        # the true channel in the layout of the LS estimate, the target of the channel-estimate loss
+        truth = gen.rx.preprocess_channel_ground_truth(h)
+        values = (payload, y, self._estimate(y, pilots), coded, truth)
         return tuple(tf.reshape(value, [count, lanes, *value.shape[1:]]) for value in values)
 
     def __call__(self, channel, active, ue_ids, slot_numbers, ebno_db, payload_seed, noise_seed):
         no = self.generator.ebno_to_no(tf.convert_to_tensor(ebno_db, tf.float32))
         with self.lock:
-            bits, y, ls, targets, coded = self.sequence(channel, tf.convert_to_tensor(active, tf.float32),
+            bits, y, ls, coded, truth = self.sequence(channel, tf.convert_to_tensor(active, tf.float32),
                 tf.convert_to_tensor(slot_numbers, tf.int32), no,
                 tf.constant(payload_seed, tf.int32), tf.constant(noise_seed, tf.int32))
             ls[0, -1, 0, 0, 0, 0].numpy()
-        return dict(bits=bits, y=y, ls=ls, no=no, channel_targets=targets, coded=coded,
+        return dict(bits=bits, y=y, ls=ls, no=no, coded=coded, h=truth,
                     active=tf.convert_to_tensor(active, tf.float32),
                     ue_ids=tf.convert_to_tensor(ue_ids, tf.int32),
                     slot_number=tf.convert_to_tensor(slot_numbers, tf.int32))
@@ -96,8 +97,8 @@ class TrainingRenderer:
         length = tf.shape(channel)[1]
         channel, active, no = (tf.transpose(v, [1, 0, *range(2, v.shape.rank)]) for v in (channel, active, no))
         arrays = tuple(tf.TensorArray(dtype, size=length) for dtype in
-            (self.generator.source.dtype, channel.dtype, channel.dtype.real_dtype,
-             channel.dtype.real_dtype, self.generator.source.dtype))
+            (self.generator.source.dtype, channel.dtype, channel.dtype.real_dtype, self.generator.source.dtype,
+             channel.dtype.real_dtype))
 
         def step(t, arrays):
             end = tf.minimum(t+self.batch_tbs, length)

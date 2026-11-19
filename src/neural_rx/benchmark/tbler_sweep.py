@@ -28,7 +28,7 @@ from neural_rx.paths import ROOT
 
 CONFIG = "nrx_large.cfg"
 PROTOCOL = ROOT/"config/temporal_benchmark_v1.json"
-CHECKPOINT = ROOT/"models/learned_blend_joint_20261019/checkpoint_005000"
+CHECKPOINT = ROOT/"models/pilot_memory_no_teacher_20261118/checkpoint_006000"
 ANCHORS = ROOT/"experiments/20261019_learned_blend_joint_training_6000/inputs/anchors.json"
 CORE = ("natural_umi", "natural_uma", "controlled_topology_change", "schedule_gap_reentry")
 NEURAL = ("candidate_persistent", "candidate_reset", "frozen_cold_k8", "frozen_cold_k3", "frozen_cold_k2")

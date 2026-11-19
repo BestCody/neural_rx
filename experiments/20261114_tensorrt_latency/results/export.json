@@ -6,15 +6,10 @@
   "tb": 24,
   "snr_db": 7.0
  },
- "proposed_check": {
-  "channel_max_abs_diff": 4.76837158203125e-07,
-  "channel_max_abs": 2.6912436485290527,
-  "llr_max_abs_diff": 6.103515625e-05,
-  "llr_max_abs": 67.8136978149414,
-  "llr_sign_agreement": 1.0
- },
+ "checkpoint": "/home/h3lou/neural_rx/models/pilot_memory_no_teacher_20261118/checkpoint_006000",
  "proposed_cgnn_check": {
-  "llr_max_abs_diff": 0.0
+  "llr_max_abs_diff": 0.0,
+  "llr_max_abs": 82.21611785888672
  },
  "large_k2_check": {
   "llr_max_abs_diff": 0.0

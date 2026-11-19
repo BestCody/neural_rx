@@ -63,7 +63,7 @@ def logged_curve(directory, condition, episodes=range(32), key="errors"):
 
 def operating_points(directory=None):
     """The SNR point closest to the proposed NRX's 10% TBLER. Without power control, these are the sweep's points
-    behind the paper (as in experiments/20261106_crc_fallback); with it, they come from the logged episodes."""
+    behind the paper; with it, they come from the logged episodes."""
     points = {}
     if directory is None or Path(directory).name == "evidence":
         summary = json.loads((SWEEP/"summary.json").read_text())

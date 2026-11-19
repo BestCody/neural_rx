@@ -6,11 +6,10 @@
   "minimum_learning_rate": 1e-06,
   "plateau_patience": 2,
   "plateau_factor": 0.5,
-  "coded_loss_weight": 1.0,
-  "payload_loss_weight": 1.0,
-  "reset_weight": 0.5,
   "learning_rate_warmup": 32,
   "gradient_clip_norm": 1.0,
+  "channel_loss_weight": 0.01,
+  "distillation_weight": 0.0,
   "effective_examples": 8,
   "episode_tbs": [
     8,
@@ -24,10 +23,6 @@
     0.25,
     0.15
   ],
-  "cold_tbs": 4,
-  "cold_fraction": 0.125,
-  "paired_history_fraction": 0.25,
-  "paired_suffix_tbs": 4,
   "channel_families": [
     "tdl",
     "umi",
@@ -104,9 +99,8 @@
   "expiry_tbs": 8,
   "seed": 2026101901,
   "latency_scope": "prepared_full_grid_ls_to_decoded_payload",
-  "initializer_checkpoint": "models/learned_blend/initial_receiver.weights.h5",
-  "initializer_sha256": "2139a18e2dd16662a915716b590740760275e2b57c8a0e50ff655c581a8fc501",
-  "channel_loss_weight": 0.1,
+  "initializer_checkpoint": "models/pretrained/nrx_large_weights",
+  "initializer_sha256": "0e6aa52dc89725bc982710c4a14a2c617295118d7153da1d512e276d62a06592",
   "schedule_probability": 0.3,
   "channel_change_probability": 0.2,
   "schedule_switch_probability_range": [
@@ -118,5 +112,5 @@
     0.15
   ],
   "weak_link_noise_probability": 0.5,
-  "initializer_parent_updates": 17000
+  "initializer_parent_updates": 0
 }

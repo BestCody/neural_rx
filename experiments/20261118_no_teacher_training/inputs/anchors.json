@@ -1,0 +1,1130 @@
+{
+  "conditions": {
+    "historical_tdl_b100": {
+      "lower_snr_db": 1.0,
+      "anchor_snr_db": 2.0,
+      "upper_snr_db": 3.0,
+      "anchor_index": 4,
+      "target_bracketed": true,
+      "snr_at_target_db": 1.6675269334584875,
+      "interpolation": "logarithmic TBLER; linear when a bracket endpoint is zero",
+      "raw_tbler": [
+        1.0,
+        0.9609375,
+        0.7578125,
+        0.3359375,
+        0.0546875,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "isotonic_tbler": [
+        1.0,
+        0.9609375,
+        0.7578125,
+        0.3359375,
+        0.0546875,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "points": [
+        {
+          "snr_db": -2.0,
+          "errors": 128,
+          "blocks": 128
+        },
+        {
+          "snr_db": -1.0,
+          "errors": 123,
+          "blocks": 128
+        },
+        {
+          "snr_db": 0.0,
+          "errors": 97,
+          "blocks": 128
+        },
+        {
+          "snr_db": 1.0,
+          "errors": 43,
+          "blocks": 128
+        },
+        {
+          "snr_db": 2.0,
+          "errors": 7,
+          "blocks": 128
+        },
+        {
+          "snr_db": 3.0,
+          "errors": 0,
+          "blocks": 128
+        },
+        {
+          "snr_db": 4.0,
+          "errors": 0,
+          "blocks": 128
+        },
+        {
+          "snr_db": 5.0,
+          "errors": 0,
+          "blocks": 128
+        },
+        {
+          "snr_db": 6.0,
+          "errors": 0,
+          "blocks": 128
+        },
+        {
+          "snr_db": 7.0,
+          "errors": 0,
+          "blocks": 128
+        },
+        {
+          "snr_db": 8.0,
+          "errors": 0,
+          "blocks": 128
+        },
+        {
+          "snr_db": 9.0,
+          "errors": 0,
+          "blocks": 128
+        },
+        {
+          "snr_db": 10.0,
+          "errors": 0,
+          "blocks": 128
+        },
+        {
+          "snr_db": 11.0,
+          "errors": 0,
+          "blocks": 128
+        },
+        {
+          "snr_db": 12.0,
+          "errors": 0,
+          "blocks": 128
+        }
+      ]
+    },
+    "historical_tdl_c300": {
+      "lower_snr_db": 1.0,
+      "anchor_snr_db": 2.0,
+      "upper_snr_db": 3.0,
+      "anchor_index": 4,
+      "target_bracketed": true,
+      "snr_at_target_db": 1.8536170356315123,
+      "interpolation": "logarithmic TBLER; linear when a bracket endpoint is zero",
+      "raw_tbler": [
+        0.953125,
+        0.9296875,
+        0.734375,
+        0.421875,
+        0.078125,
+        0.0078125,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "isotonic_tbler": [
+        0.953125,
+        0.9296875,
+        0.734375,
+        0.421875,
+        0.078125,
+        0.0078125,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "points": [
+        {
+          "snr_db": -2.0,
+          "errors": 122,
+          "blocks": 128
+        },
+        {
+          "snr_db": -1.0,
+          "errors": 119,
+          "blocks": 128
+        },
+        {
+          "snr_db": 0.0,
+          "errors": 94,
+          "blocks": 128
+        },
+        {
+          "snr_db": 1.0,
+          "errors": 54,
+          "blocks": 128
+        },
+        {
+          "snr_db": 2.0,
+          "errors": 10,
+          "blocks": 128
+        },
+        {
+          "snr_db": 3.0,
+          "errors": 1,
+          "blocks": 128
+        },
+        {
+          "snr_db": 4.0,
+          "errors": 0,
+          "blocks": 128
+        },
+        {
+          "snr_db": 5.0,
+          "errors": 0,
+          "blocks": 128
+        },
+        {
+          "snr_db": 6.0,
+          "errors": 0,
+          "blocks": 128
+        },
+        {
+          "snr_db": 7.0,
+          "errors": 0,
+          "blocks": 128
+        },
+        {
+          "snr_db": 8.0,
+          "errors": 0,
+          "blocks": 128
+        },
+        {
+          "snr_db": 9.0,
+          "errors": 0,
+          "blocks": 128
+        },
+        {
+          "snr_db": 10.0,
+          "errors": 0,
+          "blocks": 128
+        },
+        {
+          "snr_db": 11.0,
+          "errors": 0,
+          "blocks": 128
+        },
+        {
+          "snr_db": 12.0,
+          "errors": 0,
+          "blocks": 128
+        }
+      ]
+    },
+    "natural_umi": {
+      "lower_snr_db": 4.0,
+      "anchor_snr_db": 5.0,
+      "upper_snr_db": 6.0,
+      "anchor_index": 7,
+      "target_bracketed": true,
+      "snr_at_target_db": 4.624826370937326,
+      "interpolation": "logarithmic TBLER; linear when a bracket endpoint is zero",
+      "raw_tbler": [
+        0.8125,
+        0.8125,
+        0.5703125,
+        0.4375,
+        0.375,
+        0.296875,
+        0.21875,
+        0.0625,
+        0.0625,
+        0.0625,
+        0.0625,
+        0.0625,
+        0.0625,
+        0.0625,
+        0.0625
+      ],
+      "isotonic_tbler": [
+        0.8125,
+        0.8125,
+        0.5703125,
+        0.4375,
+        0.375,
+        0.296875,
+        0.21875,
+        0.0625,
+        0.0625,
+        0.0625,
+        0.0625,
+        0.0625,
+        0.0625,
+        0.0625,
+        0.0625
+      ],
+      "points": [
+        {
+          "snr_db": -2.0,
+          "errors": 104,
+          "blocks": 128
+        },
+        {
+          "snr_db": -1.0,
+          "errors": 104,
+          "blocks": 128
+        },
+        {
+          "snr_db": 0.0,
+          "errors": 73,
+          "blocks": 128
+        },
+        {
+          "snr_db": 1.0,
+          "errors": 56,
+          "blocks": 128
+        },
+        {
+          "snr_db": 2.0,
+          "errors": 48,
+          "blocks": 128
+        },
+        {
+          "snr_db": 3.0,
+          "errors": 38,
+          "blocks": 128
+        },
+        {
+          "snr_db": 4.0,
+          "errors": 28,
+          "blocks": 128
+        },
+        {
+          "snr_db": 5.0,
+          "errors": 8,
+          "blocks": 128
+        },
+        {
+          "snr_db": 6.0,
+          "errors": 8,
+          "blocks": 128
+        },
+        {
+          "snr_db": 7.0,
+          "errors": 8,
+          "blocks": 128
+        },
+        {
+          "snr_db": 8.0,
+          "errors": 8,
+          "blocks": 128
+        },
+        {
+          "snr_db": 9.0,
+          "errors": 8,
+          "blocks": 128
+        },
+        {
+          "snr_db": 10.0,
+          "errors": 8,
+          "blocks": 128
+        },
+        {
+          "snr_db": 11.0,
+          "errors": 8,
+          "blocks": 128
+        },
+        {
+          "snr_db": 12.0,
+          "errors": 8,
+          "blocks": 128
+        }
+      ]
+    },
+    "natural_uma": {
+      "lower_snr_db": 3.0,
+      "anchor_snr_db": 4.0,
+      "upper_snr_db": 5.0,
+      "anchor_index": 6,
+      "target_bracketed": true,
+      "snr_at_target_db": 6.321928094887363,
+      "interpolation": "logarithmic TBLER; linear when a bracket endpoint is zero",
+      "raw_tbler": [
+        0.5625,
+        0.546875,
+        0.375,
+        0.375,
+        0.375,
+        0.1875,
+        0.125,
+        0.125,
+        0.125,
+        0.0625,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "isotonic_tbler": [
+        0.5625,
+        0.546875,
+        0.375,
+        0.375,
+        0.375,
+        0.1875,
+        0.125,
+        0.125,
+        0.125,
+        0.0625,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "points": [
+        {
+          "snr_db": -2.0,
+          "errors": 72,
+          "blocks": 128
+        },
+        {
+          "snr_db": -1.0,
+          "errors": 70,
+          "blocks": 128
+        },
+        {
+          "snr_db": 0.0,
+          "errors": 48,
+          "blocks": 128
+        },
+        {
+          "snr_db": 1.0,
+          "errors": 48,
+          "blocks": 128
+        },
+        {
+          "snr_db": 2.0,
+          "errors": 48,
+          "blocks": 128
+        },
+        {
+          "snr_db": 3.0,
+          "errors": 24,
+          "blocks": 128
+        },
+        {
+          "snr_db": 4.0,
+          "errors": 16,
+          "blocks": 128
+        },
+        {
+          "snr_db": 5.0,
+          "errors": 16,
+          "blocks": 128
+        },
+        {
+          "snr_db": 6.0,
+          "errors": 16,
+          "blocks": 128
+        },
+        {
+          "snr_db": 7.0,
+          "errors": 8,
+          "blocks": 128
+        },
+        {
+          "snr_db": 8.0,
+          "errors": 0,
+          "blocks": 128
+        },
+        {
+          "snr_db": 9.0,
+          "errors": 0,
+          "blocks": 128
+        },
+        {
+          "snr_db": 10.0,
+          "errors": 0,
+          "blocks": 128
+        },
+        {
+          "snr_db": 11.0,
+          "errors": 0,
+          "blocks": 128
+        },
+        {
+          "snr_db": 12.0,
+          "errors": 0,
+          "blocks": 128
+        }
+      ]
+    },
+    "controlled_topology_change": {
+      "lower_snr_db": 7.0,
+      "anchor_snr_db": 8.0,
+      "upper_snr_db": 9.0,
+      "anchor_index": 10,
+      "target_bracketed": true,
+      "snr_at_target_db": 8.47476984735695,
+      "interpolation": "logarithmic TBLER; linear when a bracket endpoint is zero",
+      "raw_tbler": [
+        0.6875,
+        0.625,
+        0.5625,
+        0.5078125,
+        0.5,
+        0.421875,
+        0.2421875,
+        0.203125,
+        0.1875,
+        0.140625,
+        0.125,
+        0.078125,
+        0.0625,
+        0.0625,
+        0.0625
+      ],
+      "isotonic_tbler": [
+        0.6875,
+        0.625,
+        0.5625,
+        0.5078125,
+        0.5,
+        0.421875,
+        0.2421875,
+        0.203125,
+        0.1875,
+        0.140625,
+        0.125,
+        0.078125,
+        0.0625,
+        0.0625,
+        0.0625
+      ],
+      "points": [
+        {
+          "snr_db": -2.0,
+          "errors": 88,
+          "blocks": 128
+        },
+        {
+          "snr_db": -1.0,
+          "errors": 80,
+          "blocks": 128
+        },
+        {
+          "snr_db": 0.0,
+          "errors": 72,
+          "blocks": 128
+        },
+        {
+          "snr_db": 1.0,
+          "errors": 65,
+          "blocks": 128
+        },
+        {
+          "snr_db": 2.0,
+          "errors": 64,
+          "blocks": 128
+        },
+        {
+          "snr_db": 3.0,
+          "errors": 54,
+          "blocks": 128
+        },
+        {
+          "snr_db": 4.0,
+          "errors": 31,
+          "blocks": 128
+        },
+        {
+          "snr_db": 5.0,
+          "errors": 26,
+          "blocks": 128
+        },
+        {
+          "snr_db": 6.0,
+          "errors": 24,
+          "blocks": 128
+        },
+        {
+          "snr_db": 7.0,
+          "errors": 18,
+          "blocks": 128
+        },
+        {
+          "snr_db": 8.0,
+          "errors": 16,
+          "blocks": 128
+        },
+        {
+          "snr_db": 9.0,
+          "errors": 10,
+          "blocks": 128
+        },
+        {
+          "snr_db": 10.0,
+          "errors": 8,
+          "blocks": 128
+        },
+        {
+          "snr_db": 11.0,
+          "errors": 8,
+          "blocks": 128
+        },
+        {
+          "snr_db": 12.0,
+          "errors": 8,
+          "blocks": 128
+        }
+      ]
+    },
+    "schedule_gap_reentry": {
+      "lower_snr_db": 2.0,
+      "anchor_snr_db": 3.0,
+      "upper_snr_db": 4.0,
+      "anchor_index": 5,
+      "target_bracketed": true,
+      "snr_at_target_db": 2.5632524147723545,
+      "interpolation": "logarithmic TBLER; linear when a bracket endpoint is zero",
+      "raw_tbler": [
+        0.6403508771929824,
+        0.5087719298245614,
+        0.41228070175438597,
+        0.32456140350877194,
+        0.15789473684210525,
+        0.07017543859649122,
+        0.05263157894736842,
+        0.03508771929824561,
+        0.017543859649122806,
+        0.008771929824561403,
+        0.008771929824561403,
+        0.008771929824561403,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "isotonic_tbler": [
+        0.6403508771929824,
+        0.5087719298245614,
+        0.41228070175438597,
+        0.32456140350877194,
+        0.15789473684210525,
+        0.07017543859649122,
+        0.05263157894736842,
+        0.03508771929824561,
+        0.017543859649122806,
+        0.008771929824561403,
+        0.008771929824561403,
+        0.008771929824561403,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "points": [
+        {
+          "snr_db": -2.0,
+          "errors": 73,
+          "blocks": 114
+        },
+        {
+          "snr_db": -1.0,
+          "errors": 58,
+          "blocks": 114
+        },
+        {
+          "snr_db": 0.0,
+          "errors": 47,
+          "blocks": 114
+        },
+        {
+          "snr_db": 1.0,
+          "errors": 37,
+          "blocks": 114
+        },
+        {
+          "snr_db": 2.0,
+          "errors": 18,
+          "blocks": 114
+        },
+        {
+          "snr_db": 3.0,
+          "errors": 8,
+          "blocks": 114
+        },
+        {
+          "snr_db": 4.0,
+          "errors": 6,
+          "blocks": 114
+        },
+        {
+          "snr_db": 5.0,
+          "errors": 4,
+          "blocks": 114
+        },
+        {
+          "snr_db": 6.0,
+          "errors": 2,
+          "blocks": 114
+        },
+        {
+          "snr_db": 7.0,
+          "errors": 1,
+          "blocks": 114
+        },
+        {
+          "snr_db": 8.0,
+          "errors": 1,
+          "blocks": 114
+        },
+        {
+          "snr_db": 9.0,
+          "errors": 1,
+          "blocks": 114
+        },
+        {
+          "snr_db": 10.0,
+          "errors": 0,
+          "blocks": 114
+        },
+        {
+          "snr_db": 11.0,
+          "errors": 0,
+          "blocks": 114
+        },
+        {
+          "snr_db": 12.0,
+          "errors": 0,
+          "blocks": 114
+        }
+      ]
+    },
+    "close_los": {
+      "lower_snr_db": 8.0,
+      "anchor_snr_db": 9.0,
+      "upper_snr_db": 10.0,
+      "anchor_index": 11,
+      "target_bracketed": true,
+      "snr_at_target_db": 9.031933958696426,
+      "interpolation": "logarithmic TBLER; linear when a bracket endpoint is zero",
+      "raw_tbler": [
+        0.8046875,
+        0.625,
+        0.5625,
+        0.5390625,
+        0.359375,
+        0.3125,
+        0.265625,
+        0.1875,
+        0.125,
+        0.125,
+        0.125,
+        0.1015625,
+        0.0625,
+        0.0625,
+        0.0546875
+      ],
+      "isotonic_tbler": [
+        0.8046875,
+        0.625,
+        0.5625,
+        0.5390625,
+        0.359375,
+        0.3125,
+        0.265625,
+        0.1875,
+        0.125,
+        0.125,
+        0.125,
+        0.1015625,
+        0.0625,
+        0.0625,
+        0.0546875
+      ],
+      "points": [
+        {
+          "snr_db": -2.0,
+          "errors": 103,
+          "blocks": 128
+        },
+        {
+          "snr_db": -1.0,
+          "errors": 80,
+          "blocks": 128
+        },
+        {
+          "snr_db": 0.0,
+          "errors": 72,
+          "blocks": 128
+        },
+        {
+          "snr_db": 1.0,
+          "errors": 69,
+          "blocks": 128
+        },
+        {
+          "snr_db": 2.0,
+          "errors": 46,
+          "blocks": 128
+        },
+        {
+          "snr_db": 3.0,
+          "errors": 40,
+          "blocks": 128
+        },
+        {
+          "snr_db": 4.0,
+          "errors": 34,
+          "blocks": 128
+        },
+        {
+          "snr_db": 5.0,
+          "errors": 24,
+          "blocks": 128
+        },
+        {
+          "snr_db": 6.0,
+          "errors": 16,
+          "blocks": 128
+        },
+        {
+          "snr_db": 7.0,
+          "errors": 16,
+          "blocks": 128
+        },
+        {
+          "snr_db": 8.0,
+          "errors": 16,
+          "blocks": 128
+        },
+        {
+          "snr_db": 9.0,
+          "errors": 13,
+          "blocks": 128
+        },
+        {
+          "snr_db": 10.0,
+          "errors": 8,
+          "blocks": 128
+        },
+        {
+          "snr_db": 11.0,
+          "errors": 8,
+          "blocks": 128
+        },
+        {
+          "snr_db": 12.0,
+          "errors": 7,
+          "blocks": 128
+        }
+      ]
+    },
+    "near_far": {
+      "lower_snr_db": 16.0,
+      "anchor_snr_db": 17.0,
+      "upper_snr_db": 18.0,
+      "anchor_index": 19,
+      "target_bracketed": true,
+      "snr_at_target_db": 16.692269777922277,
+      "interpolation": "logarithmic TBLER; linear when a bracket endpoint is zero",
+      "raw_tbler": [
+        1.0,
+        0.9921875,
+        0.9296875,
+        0.8125,
+        0.8125,
+        0.7734375,
+        0.6640625,
+        0.609375,
+        0.5625,
+        0.5625,
+        0.46875,
+        0.4375,
+        0.4375,
+        0.4375,
+        0.4296875,
+        0.359375,
+        0.3125,
+        0.15625,
+        0.140625,
+        0.0859375,
+        0.0546875,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "isotonic_tbler": [
+        1.0,
+        0.9921875,
+        0.9296875,
+        0.8125,
+        0.8125,
+        0.7734375,
+        0.6640625,
+        0.609375,
+        0.5625,
+        0.5625,
+        0.46875,
+        0.4375,
+        0.4375,
+        0.4375,
+        0.4296875,
+        0.359375,
+        0.3125,
+        0.15625,
+        0.140625,
+        0.0859375,
+        0.0546875,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "points": [
+        {
+          "snr_db": -2.0,
+          "errors": 128,
+          "blocks": 128
+        },
+        {
+          "snr_db": -1.0,
+          "errors": 127,
+          "blocks": 128
+        },
+        {
+          "snr_db": 0.0,
+          "errors": 119,
+          "blocks": 128
+        },
+        {
+          "snr_db": 1.0,
+          "errors": 104,
+          "blocks": 128
+        },
+        {
+          "snr_db": 2.0,
+          "errors": 104,
+          "blocks": 128
+        },
+        {
+          "snr_db": 3.0,
+          "errors": 99,
+          "blocks": 128
+        },
+        {
+          "snr_db": 4.0,
+          "errors": 85,
+          "blocks": 128
+        },
+        {
+          "snr_db": 5.0,
+          "errors": 78,
+          "blocks": 128
+        },
+        {
+          "snr_db": 6.0,
+          "errors": 72,
+          "blocks": 128
+        },
+        {
+          "snr_db": 7.0,
+          "errors": 72,
+          "blocks": 128
+        },
+        {
+          "snr_db": 8.0,
+          "errors": 60,
+          "blocks": 128
+        },
+        {
+          "snr_db": 9.0,
+          "errors": 56,
+          "blocks": 128
+        },
+        {
+          "snr_db": 10.0,
+          "errors": 56,
+          "blocks": 128
+        },
+        {
+          "snr_db": 11.0,
+          "errors": 56,
+          "blocks": 128
+        },
+        {
+          "snr_db": 12.0,
+          "errors": 55,
+          "blocks": 128
+        },
+        {
+          "snr_db": 13.0,
+          "errors": 46,
+          "blocks": 128
+        },
+        {
+          "snr_db": 14.0,
+          "errors": 40,
+          "blocks": 128
+        },
+        {
+          "snr_db": 15.0,
+          "errors": 20,
+          "blocks": 128
+        },
+        {
+          "snr_db": 16.0,
+          "errors": 18,
+          "blocks": 128
+        },
+        {
+          "snr_db": 17.0,
+          "errors": 11,
+          "blocks": 128
+        },
+        {
+          "snr_db": 18.0,
+          "errors": 7,
+          "blocks": 128
+        },
+        {
+          "snr_db": 19.0,
+          "errors": 0,
+          "blocks": 128
+        },
+        {
+          "snr_db": 20.0,
+          "errors": 0,
+          "blocks": 128
+        },
+        {
+          "snr_db": 21.0,
+          "errors": 0,
+          "blocks": 128
+        },
+        {
+          "snr_db": 22.0,
+          "errors": 0,
+          "blocks": 128
+        },
+        {
+          "snr_db": 23.0,
+          "errors": 0,
+          "blocks": 128
+        },
+        {
+          "snr_db": 24.0,
+          "errors": 0,
+          "blocks": 128
+        },
+        {
+          "snr_db": 25.0,
+          "errors": 0,
+          "blocks": 128
+        },
+        {
+          "snr_db": 26.0,
+          "errors": 0,
+          "blocks": 128
+        }
+      ]
+    }
+  },
+  "tbler_definition": "failed_active_user_blocks / evaluated_active_user_blocks",
+  "prbs": 132,
+  "source_identity": {
+    "packages": {
+      "numpy": "1.26.4",
+      "sionna": "0.18.0",
+      "tensorflow": "2.15.1"
+    },
+    "radio": {
+      "advancing_slot_pilots": true,
+      "bits_per_symbol": 4,
+      "maximum_active_ues": 2,
+      "mcs_index": 14,
+      "n_size_bwp": 132,
+      "noise_axis": "ebno_db",
+      "receive_antennas": 4
+    },
+    "schema": "temporal_benchmark_episode_v2",
+    "sources": {
+      "config/nrx_large.cfg": "9cd550576d8fd7fb643164a1a4f078c91929cb62977e7aaffef0ecf8c15c36e6",
+      "scripts/geometry_mumimo_data.py": "764b6940ef2c8bcb1525cbb341bc3add4ee0410873bb7263e37d52e07d0878a7",
+      "scripts/temporal_benchmark_scenarios.py": "303509821ca684b96b267d1a6556d4f155896e213474945399826fe6d18f097f",
+      "scripts/temporal_generalization_protocol.py": "0fa25713ea54e2497de7c45b86fa0c75d597d1a511c59f69cd7073c76d651cb5",
+      "scripts/temporal_receiver_core.py": "e435b483159822d8a3cca25eb7093697db5cb5b65e96648fefe03c7358380e01",
+      "scripts/temporal_training_data.py": "14796931025e1ade60534422178ed95582b6c1658b7a57c238aeb296e7039ab0",
+      "utils/__init__.py": "3de504ecd4e7eeddb7e7e5e8418a4359af7eac48229b46650235204745f7b1fa",
+      "utils/channel_models.py": "4352cef58f873573622503c7d84d8dba77795f23dea0a2d5834d433e5423203d",
+      "utils/e2e_model.py": "bbfcbeceadd8d744e3c06e07a50d8522a4a0b2d81787b884ed4f060e5839907c",
+      "utils/neural_rx.py": "577bb1c413719d1f19d6aea561383b1476297b74a2b2a251c48824a72d40490c",
+      "utils/parameters.py": "896e8cf0918e94270a399de6eca4ea4cdb845edd3e8ff03b3193dfc19e230e40",
+      "utils/utils.py": "5fb8f1e95fa5b021aaf46c1869d799bee72cbb4167fd05efb9b4443197937a22"
+    }
+  },
+  "teacher_sha256": "0e6aa52dc89725bc982710c4a14a2c617295118d7153da1d512e276d62a06592",
+  "runtime_sources": {
+    "config/nrx_large.cfg": "9cd550576d8fd7fb643164a1a4f078c91929cb62977e7aaffef0ecf8c15c36e6",
+    "config/temporal_benchmark_v1.json": "20988eb1da08f854fb53661bd5d698bbdb3ce1566520004f4f5afd457228114f",
+    "scripts/artifact_io.py": "7178aa3914388538a337f98901aa4908dea3c9a63a55e472498b0bbf5ebab16a",
+    "scripts/artifact_provenance.py": "21e41a9180f554257fce389304477034289956d846c79664ae6e3de39eae3bcf",
+    "scripts/cnn_autoencoder/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "scripts/cnn_autoencoder/benchmark.py": "f2bb5f5a2f5288b8f9b37a1f741f60ce4d01fae8071ad7ae88720e2e77a46208",
+    "scripts/cnn_autoencoder/channel_memory.py": "cf4ae135a897ba7853c0a197aa4d6167ea77cd89c3e14be00244375d92b93fa6",
+    "scripts/cnn_autoencoder/memory.py": "dac81cc04fddee954ad6d395aebfd8e76787a5f6d4415abf9fc65e8213c2ef41",
+    "scripts/cnn_autoencoder/model.py": "aa815f541f8040f3a7f42c478d9c2298ac99418484e5fdde7d86e0ad0ee2cddc",
+    "scripts/geometry_mumimo_data.py": "764b6940ef2c8bcb1525cbb341bc3add4ee0410873bb7263e37d52e07d0878a7",
+    "scripts/receiver_decoding.py": "90058bc42153f21cde0ab42b07ab5cdf71b2c8b4cc1e2efd54e92b7c368853a7",
+    "scripts/temporal_benchmark_adapters.py": "d30584281e0c2a7d8707e74afaa8a0b0f47aa224d9bd62cb8a90cbf344831513",
+    "scripts/temporal_benchmark_candidate.py": "089e5fe484b979b0be1f5146240241d15e8ac5854a8e71ac6d612fa6af91cc74",
+    "scripts/temporal_benchmark_episodes.py": "8c442ab7d35a6354fa0049ed3cc1b78ddeb6fca3939a145d977d56cbe9d4109b",
+    "scripts/temporal_benchmark_frozen.py": "4b80017c06b5dd944e2f96088ed1f927146e642704e7f5b3c8684fee757b1fe1",
+    "scripts/temporal_benchmark_io.py": "c864894c5cf88c6927f7413c5cf433ca8f54a5b6124f62583c8f0eb407fa5596",
+    "scripts/temporal_benchmark_plan.py": "6a8c18e5f8a76b88131362e073df972e5caa005eb3c6a61002b7c31ca5b8b011",
+    "scripts/temporal_benchmark_protocol.py": "0afb24697488d4716da18649c54cb9800502a6e98017692cc904c4c9658063c8",
+    "scripts/temporal_benchmark_reference.py": "da1157e7c98120bf770df72811160c79b24ec9103335fce1b64ae016c82917cb",
+    "scripts/temporal_benchmark_runtime.py": "31a8a9c58c370bd17362a9783bcc56b7381110459796992a19cd3134ac5c8ae3",
+    "scripts/temporal_benchmark_scenarios.py": "303509821ca684b96b267d1a6556d4f155896e213474945399826fe6d18f097f",
+    "scripts/temporal_benchmark_scoring.py": "d1cf0fe994f60b30b2bb0e8c6e1f8fec7a72fda0b1c2451b1d93a10c37d514cb",
+    "scripts/temporal_generalization_protocol.py": "0fa25713ea54e2497de7c45b86fa0c75d597d1a511c59f69cd7073c76d651cb5",
+    "scripts/temporal_receiver_core.py": "e435b483159822d8a3cca25eb7093697db5cb5b65e96648fefe03c7358380e01",
+    "scripts/temporal_training_data.py": "14796931025e1ade60534422178ed95582b6c1658b7a57c238aeb296e7039ab0",
+    "utils/__init__.py": "3de504ecd4e7eeddb7e7e5e8418a4359af7eac48229b46650235204745f7b1fa",
+    "utils/channel_models.py": "4352cef58f873573622503c7d84d8dba77795f23dea0a2d5834d433e5423203d",
+    "utils/e2e_model.py": "bbfcbeceadd8d744e3c06e07a50d8522a4a0b2d81787b884ed4f060e5839907c",
+    "utils/neural_rx.py": "577bb1c413719d1f19d6aea561383b1476297b74a2b2a251c48824a72d40490c",
+    "utils/parameters.py": "896e8cf0918e94270a399de6eca4ea4cdb845edd3e8ff03b3193dfc19e230e40",
+    "utils/utils.py": "5fb8f1e95fa5b021aaf46c1869d799bee72cbb4167fd05efb9b4443197937a22"
+  },
+  "manifest_sha256": "43fd7fdca72f8b64fed6b50217df367f9575a3cc4219909a7b528006bc80d34b"
+}

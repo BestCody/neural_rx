@@ -63,6 +63,7 @@ class CheckpointLoadingTest(unittest.TestCase):
         optimizer.build(model.trainable_variables)
         trainer = training.MemoryTrainer.__new__(training.MemoryTrainer)
         trainer.model = model
+        trainer.variant = "pilot_memory"
         trainer.settings = json.loads((ROOT / "config/memory_receiver.json").read_text())
         trainer.manager = SimpleNamespace(capacity=4, expiry_slots=8)
         trainer.step = tf.Variable(0,dtype=tf.int64)
@@ -107,7 +108,7 @@ class CheckpointLoadingTest(unittest.TestCase):
         weights = self.directory / "receiver.weights.h5"
         weights.write_bytes(b"checkpoint fixture")
         settings = json.loads((ROOT / "config/memory_receiver.json").read_text())
-        settings["architecture"].update(blend_hidden=features)
+        settings["architecture"].update(fit_tbs=features)
         (self.directory / "cnn_autoencoder_finalist.json").write_text(json.dumps(settings))
         self.seal_export(features)
         return weights
@@ -116,7 +117,7 @@ class CheckpointLoadingTest(unittest.TestCase):
         files = {name: core.file_sha256(self.directory / name)
                  for name in ("receiver.weights.h5", "cnn_autoencoder_finalist.json")}
         architecture = json.loads((ROOT / "config/memory_receiver.json").read_text())["architecture"]
-        architecture["blend_hidden"] = features
+        architecture["fit_tbs"] = features
         (self.directory / "manifest.json").write_text(json.dumps(
             {"binding": {"sources": {}, "architecture": architecture, "seed": 0}, "update": 7, "files": files}))
 
@@ -133,7 +134,7 @@ class CheckpointLoadingTest(unittest.TestCase):
             settings = self.directory / "cnn_autoencoder_finalist.json"
             for path in (settings, self.directory / "manifest.json"):
                 self.assertIn(artifact_record(path), manifest["support_artifacts"])
-            self.assertEqual(json.loads(settings.read_text())["architecture"]["blend_hidden"], 8)
+            self.assertEqual(json.loads(settings.read_text())["architecture"]["fit_tbs"], 8)
             raise InspectedManifest
 
         for path in (self.directory, weights):
@@ -149,7 +150,7 @@ class CheckpointLoadingTest(unittest.TestCase):
         weights = self.export(8)
         settings_path = self.directory / "cnn_autoencoder_finalist.json"
         settings = json.loads(settings_path.read_text())
-        settings["architecture"].update(blend_hidden=1)
+        settings["architecture"].update(fit_tbs=1)
         settings_path.write_text(json.dumps(settings))
         with self.assertRaisesRegex(ValueError, "checksum differs"):
             load_receiver_checkpoint_export(weights)

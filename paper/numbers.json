@@ -1,0 +1,551 @@
+{
+ "required_snr_db": {
+  "no_power_control": {
+   "natural_umi": {
+    "pilot_memory": 7.047438632763773,
+    "pilot_memory_emptied": 7.750637760349671,
+    "neural_rx_k2_trained": 7.556350510297752,
+    "frozen_cold_k2": 8.068739377118629,
+    "frozen_cold_k3": 7.332697691796511,
+    "frozen_cold_k8": 6.851275509819101,
+    "baseline_lslin_lmmse": 9.193948537703395,
+    "baseline_lmmse_kbest": 6.863097192268352,
+    "baseline_perf_csi_kbest": 6.5892469787183305
+   },
+   "controlled_topology_change": {
+    "pilot_memory": 7.018160902523352,
+    "pilot_memory_emptied": 7.715088937758486,
+    "neural_rx_k2_trained": 7.630935310644479,
+    "frozen_cold_k2": 8.087889967174686,
+    "frozen_cold_k3": 7.495671010802695,
+    "frozen_cold_k8": 6.891526906421803,
+    "baseline_lslin_lmmse": 9.07765209774098,
+    "baseline_lmmse_kbest": 6.624412489351118,
+    "baseline_perf_csi_kbest": 6.269914937018305
+   },
+   "schedule_gap_reentry": {
+    "pilot_memory": 8.12396797825663,
+    "pilot_memory_emptied": 8.89975085712011,
+    "neural_rx_k2_trained": 8.929282186613625,
+    "frozen_cold_k2": 9.57688371662223,
+    "frozen_cold_k3": 8.854535062121975,
+    "frozen_cold_k8": 7.954556991661783,
+    "baseline_lslin_lmmse": 10.104560034135348,
+    "baseline_lmmse_kbest": 8.295391058891912,
+    "baseline_perf_csi_kbest": 6.5301801971394555
+   }
+  },
+  "power_control": {
+   "natural_umi": {
+    "pilot_memory": 1.7361755493204074,
+    "pilot_memory_emptied": 2.542230032761659,
+    "neural_rx_k2_trained": 2.4525815573929823,
+    "frozen_cold_k2": 2.63,
+    "frozen_cold_k3": 2.25,
+    "frozen_cold_k8": 1.77,
+    "baseline_lslin_lmmse": 3.94,
+    "baseline_lmmse_kbest": 1.89,
+    "baseline_perf_csi_kbest": 1.44
+   },
+   "controlled_topology_change": {
+    "pilot_memory": 2.163116178927329,
+    "pilot_memory_emptied": 2.896918672965402,
+    "neural_rx_k2_trained": 2.7705276292252394,
+    "frozen_cold_k2": 3.02,
+    "frozen_cold_k3": 2.6,
+    "frozen_cold_k8": 2.1,
+    "baseline_lslin_lmmse": 4.34,
+    "baseline_lmmse_kbest": 2.18,
+    "baseline_perf_csi_kbest": 1.75
+   },
+   "schedule_gap_reentry": {
+    "pilot_memory": 2.479894853591706,
+    "pilot_memory_emptied": 3.1077497414944912,
+    "neural_rx_k2_trained": 2.988123786813497,
+    "frozen_cold_k2": 3.27,
+    "frozen_cold_k3": 2.84,
+    "frozen_cold_k8": 2.31,
+    "baseline_lslin_lmmse": 4.48,
+    "baseline_lmmse_kbest": 2.68,
+    "baseline_perf_csi_kbest": 1.69
+   }
+  }
+ },
+ "gains": {
+  "no_power_control": {
+   "natural_umi": {
+    "lead_over_retrained_db": 0.51,
+    "lead_over_three_iterations_db": 0.28,
+    "behind_eight_iterations_db": 0.2,
+    "memory_gain_db": 0.7,
+    "no_memory_lead_over_retrained_db": -0.19,
+    "retraining_gain_db": 0.51,
+    "iteration_cut_db": 1.22,
+    "retrained_behind_eight_iterations_db": 0.71
+   },
+   "controlled_topology_change": {
+    "lead_over_retrained_db": 0.61,
+    "lead_over_three_iterations_db": 0.48,
+    "behind_eight_iterations_db": 0.13,
+    "memory_gain_db": 0.7,
+    "no_memory_lead_over_retrained_db": -0.09,
+    "retraining_gain_db": 0.46,
+    "iteration_cut_db": 1.2,
+    "retrained_behind_eight_iterations_db": 0.74
+   },
+   "schedule_gap_reentry": {
+    "lead_over_retrained_db": 0.81,
+    "lead_over_three_iterations_db": 0.73,
+    "behind_eight_iterations_db": 0.17,
+    "memory_gain_db": 0.78,
+    "no_memory_lead_over_retrained_db": 0.03,
+    "retraining_gain_db": 0.65,
+    "iteration_cut_db": 1.63,
+    "retrained_behind_eight_iterations_db": 0.98
+   }
+  },
+  "power_control": {
+   "natural_umi": {
+    "lead_over_retrained_db": 0.71,
+    "lead_over_three_iterations_db": 0.51,
+    "behind_eight_iterations_db": -0.03,
+    "memory_gain_db": 0.8,
+    "no_memory_lead_over_retrained_db": -0.09,
+    "retraining_gain_db": 0.18,
+    "iteration_cut_db": 0.86,
+    "retrained_behind_eight_iterations_db": 0.68
+   },
+   "controlled_topology_change": {
+    "lead_over_retrained_db": 0.61,
+    "lead_over_three_iterations_db": 0.44,
+    "behind_eight_iterations_db": 0.06,
+    "memory_gain_db": 0.74,
+    "no_memory_lead_over_retrained_db": -0.13,
+    "retraining_gain_db": 0.25,
+    "iteration_cut_db": 0.92,
+    "retrained_behind_eight_iterations_db": 0.67
+   },
+   "schedule_gap_reentry": {
+    "lead_over_retrained_db": 0.51,
+    "lead_over_three_iterations_db": 0.36,
+    "behind_eight_iterations_db": 0.17,
+    "memory_gain_db": 0.63,
+    "no_memory_lead_over_retrained_db": -0.12,
+    "retraining_gain_db": 0.28,
+    "iteration_cut_db": 0.96,
+    "retrained_behind_eight_iterations_db": 0.68
+   }
+  }
+ },
+ "blocks": {
+  "no_power_control": {
+   "natural_umi": 3072,
+   "controlled_topology_change": 3072,
+   "schedule_gap_reentry": 2725
+  },
+  "power_control": {
+   "natural_umi": 3072,
+   "controlled_topology_change": 3072,
+   "schedule_gap_reentry": 2725
+  }
+ },
+ "effective_snr": {
+  "natural_umi": {
+   "frozen_cold_k2": {
+    "required_db": 2.67355740109125,
+    "drop_80_to_5_db": 2.750961507029161
+   },
+   "frozen_cold_k3": {
+    "required_db": 2.0635848757552613,
+    "drop_80_to_5_db": 2.436506431421393
+   },
+   "frozen_cold_k8": {
+    "required_db": 1.4765103084418536,
+    "drop_80_to_5_db": 2.0250695965818086
+   },
+   "baseline_lslin_lmmse": {
+    "required_db": 3.773180817678812,
+    "drop_80_to_5_db": 2.485169913960446
+   },
+   "baseline_lmmse_kbest": {
+    "required_db": 1.573141474769286,
+    "drop_80_to_5_db": 2.210002407687334
+   },
+   "baseline_perf_csi_kbest": {
+    "required_db": 0.9433059506519806,
+    "drop_80_to_5_db": 2.0165966176363863
+   },
+   "pilot_memory": {
+    "required_db": 1.506404837893718,
+    "drop_80_to_5_db": 2.036276043658397
+   },
+   "pilot_memory_emptied": {
+    "required_db": 2.2164639138175954,
+    "drop_80_to_5_db": 2.1169777068838194
+   },
+   "neural_rx_k2_trained": {
+    "required_db": 2.095479370043524,
+    "drop_80_to_5_db": 2.2149185613202222
+   },
+   "gains": {
+    "lead_over_retrained_db": 0.5890745321498059,
+    "memory_gain_db": 0.7100590759238774,
+    "behind_eight_iterations_db": 0.029894529451864438,
+    "lead_over_three_iterations_db": 0.5571800378615432
+   }
+  },
+  "controlled_topology_change": {
+   "frozen_cold_k2": {
+    "required_db": 3.016066401991023,
+    "drop_80_to_5_db": 3.4491629173957064
+   },
+   "frozen_cold_k3": {
+    "required_db": 2.209843894047226,
+    "drop_80_to_5_db": 2.880518171009499
+   },
+   "frozen_cold_k8": {
+    "required_db": 1.2052138347357895,
+    "drop_80_to_5_db": 2.261837513541627
+   },
+   "baseline_lslin_lmmse": {
+    "required_db": 3.907920452902931,
+    "drop_80_to_5_db": 3.0304571571670875
+   },
+   "baseline_lmmse_kbest": {
+    "required_db": 1.1570326672655924,
+    "drop_80_to_5_db": 1.9867563751931114
+   },
+   "baseline_perf_csi_kbest": {
+    "required_db": 0.7069515088304829,
+    "drop_80_to_5_db": 2.076370493414016
+   },
+   "pilot_memory": {
+    "required_db": 1.409459334250434,
+    "drop_80_to_5_db": 2.5588809982749
+   },
+   "pilot_memory_emptied": {
+    "required_db": 2.3470802346959845,
+    "drop_80_to_5_db": 2.8238688551916793
+   },
+   "neural_rx_k2_trained": {
+    "required_db": 2.3139479816513746,
+    "drop_80_to_5_db": 2.8206373170369616
+   },
+   "gains": {
+    "lead_over_retrained_db": 0.9044886474009406,
+    "memory_gain_db": 0.9376209004455505,
+    "behind_eight_iterations_db": 0.20424549951464455,
+    "lead_over_three_iterations_db": 0.8003845597967918
+   }
+  },
+  "schedule_gap_reentry": {
+   "frozen_cold_k2": {
+    "required_db": 2.9163628642693147,
+    "drop_80_to_5_db": 3.8984947993597885
+   },
+   "frozen_cold_k3": {
+    "required_db": 2.323969507857097,
+    "drop_80_to_5_db": 3.4267216490741776
+   },
+   "frozen_cold_k8": {
+    "required_db": 1.665782235887376,
+    "drop_80_to_5_db": 2.9750427827433246
+   },
+   "baseline_lslin_lmmse": {
+    "required_db": 4.03047637978956,
+    "drop_80_to_5_db": 4.049345800552367
+   },
+   "baseline_lmmse_kbest": {
+    "required_db": 2.0824984612788446,
+    "drop_80_to_5_db": 3.477847869564086
+   },
+   "baseline_perf_csi_kbest": {
+    "required_db": 1.0867556195592813,
+    "drop_80_to_5_db": 2.588487342092978
+   },
+   "pilot_memory": {
+    "required_db": 1.8694797478173866,
+    "drop_80_to_5_db": 3.13986885062227
+   },
+   "pilot_memory_emptied": {
+    "required_db": 2.5416110544902857,
+    "drop_80_to_5_db": 3.348466908628329
+   },
+   "neural_rx_k2_trained": {
+    "required_db": 2.449495274185347,
+    "drop_80_to_5_db": 3.3904930490600234
+   },
+   "gains": {
+    "lead_over_retrained_db": 0.5800155263679605,
+    "memory_gain_db": 0.6721313066728991,
+    "behind_eight_iterations_db": 0.20369751193001062,
+    "lead_over_three_iterations_db": 0.45448976003971064
+   }
+  }
+ },
+ "doppler": {
+  "required_effective_snr_db": {
+   "pilot_memory": {
+    "0-50": 1.7559322033898304,
+    "50-175": 1.563044006974389,
+    "175-400": 1.1116259539520277,
+    "all": 1.506404837893718
+   },
+   "pilot_memory_emptied": {
+    "0-50": 2.301665975047963,
+    "50-175": 2.2659908358716887,
+    "175-400": 2.0487989126421255,
+    "all": 2.2164639138175954
+   },
+   "neural_rx_k2_trained": {
+    "0-50": 2.1299163410509,
+    "50-175": 2.1942719283238885,
+    "175-400": 1.9255907674729644,
+    "all": 2.095479370043524
+   },
+   "frozen_cold_k2": {
+    "0-50": 2.5385323895396485,
+    "50-175": 3.4385389471890626,
+    "175-400": 2.283168049347735,
+    "all": 2.67355740109125
+   },
+   "frozen_cold_k3": {
+    "0-50": 1.979973366929473,
+    "50-175": 2.395875315021289,
+    "175-400": 1.779003697869393,
+    "all": 2.0635848757552613
+   },
+   "frozen_cold_k8": {
+    "0-50": 1.6306930693069306,
+    "50-175": 1.6008226672218773,
+    "175-400": 0.961449026512931,
+    "all": 1.4765103084418536
+   },
+   "baseline_lmmse_kbest": {
+    "0-50": 1.6794392523364485,
+    "50-175": 1.7874571470660794,
+    "175-400": 1.1520570549874962,
+    "all": 1.573141474769286
+   },
+   "baseline_perf_csi_kbest": {
+    "0-50": 1.005254730486779,
+    "50-175": 1.0559413471299255,
+    "175-400": 0.6406846037409168,
+    "all": 0.9433059506519806
+   }
+  },
+  "memory_gain_db": {
+   "0-50": 0.5457337716581327,
+   "50-175": 0.7029468288972998,
+   "175-400": 0.9371729586900979
+  },
+  "lead_over_retrained_db": {
+   "0-50": 0.37398413766106975,
+   "50-175": 0.6312279213494996,
+   "175-400": 0.8139648135209367
+  },
+  "behind_perfect_csi_db": {
+   "0-50": 0.7506774729030514,
+   "50-175": 0.5071026598444635,
+   "175-400": 0.47094135021111083
+  },
+  "no_memory_behind_retrained_db": {
+   "0-50": 0.171749633997063,
+   "50-175": 0.07171890754780019,
+   "175-400": 0.12320814516916112
+  }
+ },
+ "latency": {
+  "gpu": "NVIDIA A100-SXM4-40GB",
+  "tensorrt": "10.3.0",
+  "large_k2_ms": 0.7854080200195312,
+  "large_k3_ms": 1.0690560340881348,
+  "large_k8_ms": 2.4289278984069824,
+  "cgnn_iteration_ms": 0.2739199797312419,
+  "k8_over_k2": 3.0925682403225023,
+  "proposed_ms": 0.8151040077209473,
+  "proposed_minus_k2_ms": 0.029695987701416016,
+  "before_slot_ms": 0.21299199759960175,
+  "samples": 2000
+ },
+ "training": {
+  "retrained_updates": 11000,
+  "retrained_development_tbler_percent": 18.141666666666666,
+  "proposed_updates": 6000,
+  "proposed_development_tbler_percent": 15.658333333333333,
+  "learning_rate": 0.0001,
+  "channel_loss_weight": 0.01,
+  "teacher_weight_first_stage": 0.5,
+  "teacher_weight_second_stage": 0.0,
+  "sequences_per_update": 8
+ },
+ "network": {
+  "fallback": {
+   "no_power_control": {
+    "natural_umi": {
+     "kbest_gain_db": 0.23,
+     "unfixable_share": 0.9389067524115756,
+     "after_failure_share": 0.9871382636655949
+    },
+    "controlled_topology_change": {
+     "kbest_gain_db": 0.44,
+     "unfixable_share": 0.9061488673139159,
+     "after_failure_share": 0.970873786407767
+    },
+    "schedule_gap_reentry": {
+     "kbest_gain_db": 0.23,
+     "unfixable_share": 0.9637681159420289,
+     "after_failure_share": 0.9528985507246377
+    }
+   },
+   "power_control": {
+    "natural_umi": {
+     "kbest_gain_db": 0.03,
+     "unfixable_share": 0.958904109589041,
+     "after_failure_share": 0.8571428571428571
+    },
+    "controlled_topology_change": {
+     "kbest_gain_db": 0.05,
+     "unfixable_share": 0.8894736842105263,
+     "after_failure_share": 0.8184210526315789
+    },
+    "schedule_gap_reentry": {
+     "kbest_gain_db": 0.13,
+     "unfixable_share": 0.8847583643122676,
+     "after_failure_share": 0.7063197026022305
+    }
+   }
+  },
+  "controller": {
+   "rule_caught": 0.794921875,
+   "rule_false_alarm": 0.027464065708418892,
+   "caught": 0.97265625,
+   "false_alarm": 0.026694045174537988,
+   "caught_first_failures": 0.8666666666666667,
+   "caught_at_check_1_of_caught": 0.7871485943775101,
+   "single_check_caught": {
+    "recent observations only (known before the UE transmits)": 0.13671875,
+    "check 1, any receiver: noise and current channel strength": 0.208984375,
+    "check 1, + memory state and recent channel strength": 0.212890625,
+    "check 1, + filtered estimate": 0.2109375,
+    "check 2, + LLRs after detection": 0.8671875,
+    "check 3, + parity checks after 8 BP iterations": 0.943359375
+   },
+   "test_ue_tbs": 4408,
+   "test_failures": 512
+  }
+ },
+ "further_datasets": {
+  "v2": {
+   "historical_tdl_b100": {
+    "proposed": 0.14811197916666666,
+    "no_memory": 0.306640625,
+    "large_k8": 0.15266927083333334
+   },
+   "historical_tdl_c300": {
+    "proposed": 0.12760416666666666,
+    "no_memory": 0.2913411458333333,
+    "large_k8": 0.15299479166666666
+   },
+   "natural_umi": {
+    "proposed": 0.1591796875,
+    "no_memory": 0.18326822916666666,
+    "large_k8": 0.14029947916666666
+   },
+   "natural_uma": {
+    "proposed": 0.21875,
+    "no_memory": 0.2594401041666667,
+    "large_k8": 0.23046875
+   },
+   "controlled_topology_change": {
+    "proposed": 0.08365885416666667,
+    "no_memory": 0.09016927083333333,
+    "large_k8": 0.07161458333333333
+   },
+   "schedule_gap_reentry": {
+    "proposed": 0.2339433082167205,
+    "no_memory": 0.26695371367061355,
+    "large_k8": 0.22317904556871188
+   },
+   "close_los": {
+    "proposed": 0.10677083333333333,
+    "no_memory": 0.13671875,
+    "large_k8": 0.08235677083333333
+   },
+   "near_far": {
+    "proposed": 0.0380859375,
+    "no_memory": 0.048828125,
+    "large_k8": 0.026692708333333332
+   },
+   "ray_traced_munich": {
+    "proposed": 0.431640625,
+    "no_memory": 0.4671223958333333,
+    "large_k8": 0.4156901041666667
+   }
+  },
+  "seed86": {
+   "historical_tdl_b100": {
+    "proposed": 0.1533203125,
+    "no_memory": 0.3238932291666667,
+    "large_k8": 0.158203125
+   },
+   "historical_tdl_c300": {
+    "proposed": 0.17350260416666666,
+    "no_memory": 0.3414713541666667,
+    "large_k8": 0.20638020833333334
+   },
+   "natural_umi": {
+    "proposed": 0.134765625,
+    "no_memory": 0.171875,
+    "large_k8": 0.130859375
+   },
+   "natural_uma": {
+    "proposed": 0.13216145833333334,
+    "no_memory": 0.1630859375,
+    "large_k8": 0.13932291666666666
+   },
+   "controlled_topology_change": {
+    "proposed": 0.07389322916666667,
+    "no_memory": 0.08821614583333333,
+    "large_k8": 0.062174479166666664
+   },
+   "schedule_gap_reentry": {
+    "proposed": 0.25455207574654043,
+    "no_memory": 0.2789512017479971,
+    "large_k8": 0.24217042971595049
+   },
+   "close_los": {
+    "proposed": 0.125,
+    "no_memory": 0.125,
+    "large_k8": 0.125
+   },
+   "near_far": {
+    "proposed": 0.08854166666666667,
+    "no_memory": 0.11328125,
+    "large_k8": 0.0703125
+   }
+  },
+  "cases": 17,
+  "memory_lowers_tbler": 16,
+  "memory_unchanged": 1,
+  "large_k8_ahead": 10,
+  "proposed_ahead": 6
+ },
+ "weights": {
+  "large_nrx_two_iterations": 134594,
+  "large_nrx_three_iterations": 183668,
+  "large_nrx_eight_iterations": 429038,
+  "proposed": 134594
+ },
+ "weights_1e5": {
+  "two_iterations": 1.34594,
+  "eight_iterations": 4.29038
+ },
+ "filter": {
+  "entries_used": 4,
+  "fitted_tbs": 3,
+  "stored_tbs": 7,
+  "weights_per_dmrs_symbol": 29,
+  "estimates_per_fit": 4752
+ }
+}

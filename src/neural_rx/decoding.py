@@ -180,31 +180,3 @@ class SoftTBInformationDecoder:
             tf.cast(hard_payload, self.tb_decoder.dtype),
             tf.squeeze(tf.cast(crc_status, tf.bool), axis=-1),
         )
-
-
-class DecoderAssistedTB:
-    def __init__(self, tb_encoder, tb_decoder, num_iter=20, first_iterations=8):
-        if not 0 < first_iterations < num_iter:
-            raise ValueError("The first decoding stage must use part of the total iteration budget")
-        self.first = SoftTBInformationDecoder(tb_encoder, tb_decoder, first_iterations,
-                                             stateful=True, return_infobits=False)
-        self.last = SoftTBInformationDecoder(tb_encoder, tb_decoder, num_iter-first_iterations,
-                                            stateful=True)
-        bits = int(tb_encoder._num_bits_per_symbol)
-        with tf.init_scope():
-            shape = (self.first.num_tx, self.first.tb_length // bits, bits)
-            addresses = np.broadcast_to(np.asarray(self.first.transmitted_indices),
-                                        (self.first.num_tx, self.first.tb_length)).reshape(shape)
-            self.symbol_indices = tf.constant(addresses, tf.int32)
-            self.symbol_signs = tf.reshape(self.first.scrambling_signs, shape)
-
-    def evidence(self, llr):
-        inputs = self.first.to_code_blocks(llr)
-        maximum = self.first.decoder.llr_max
-        inputs = tf.clip_by_value(inputs, -maximum, maximum)
-        posterior, state = self.first.decoder([inputs, None])
-        return inputs, posterior-inputs, state, posterior
-
-    def finish(self, llr, state):
-        logits, _ = self.last.decoder([llr, state])
-        return self.last.payload(logits[..., :self.last.info_length])

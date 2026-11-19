@@ -3,46 +3,44 @@
 One deployed memory-receiver architecture:
 
 ```
-Current LS pilots + seven previous pilot records per UE
-  -> learned channel filter and correlated uncertainty
+Current LS pilots + the LS pilots of up to seven previous TBs per UE (the pilot memory)
+  -> channel filter whose weights are fitted per UE on the memory by least squares (no trained weights)
   -> CGNN initializer and two processing rounds
-  -> eight Sionna LDPC iterations
-  -> physical symbol-pair correction and learned per-bit blend
-  -> ten further LDPC iterations, retaining decoder state
-  -> payload bits and CRC.
+  -> twenty Sionna LDPC iterations
+  -> payload bits and CRC;
+the LS estimate of the TB at its pilots becomes the UE's newest memory entry.
 ```
+
+The filter (`src/neural_rx/receiver/channel_filter.py`) predicts each pilot's LS estimate from its neighbours in the
+same TB and from the newest entries, with weights fitted on the three newest entries, chooses on the current TB how
+many entries still fit (0 to 4), and combines the prediction with the pilot's own estimate by their error variances.
+
+Training has two stages on the same sequences; only the network is trained. The loss is the binary cross-entropy of
+the LLRs against the transmitted bits plus the original NRX's channel-estimate term. Stage 1 also used the soft bits of
+the shipped eight-iteration network as a teacher (`distillation_weight` 0.5); stage 2 does not (the default, 0).
 
 | Role | Path |
 | --- | --- |
-| Selected trained receiver | `models/learned_blend_joint_20261019/checkpoint_005000/` |
-| Latest checkpoint for continuing the same campaign | `models/learned_blend_joint_20261019/checkpoint_006000/` |
-| Initialization used by that campaign | `models/learned_blend/initial_receiver.weights.h5` |
+| Stage 1, neural_rx with two iterations (run `experiments/20261117_neural_rx_training`) | `models/neural_rx_k2_20261117/` |
+| Stage 2, the trained receiver: the network behind the memory and filter, from stage 1's best checkpoint (run `experiments/20261118_no_teacher_training`) | `models/pilot_memory_no_teacher_20261118/` |
+| Initialization of stage 1 | `models/pretrained/nrx_large_weights` |
 | Frozen Cold K2/K3/K8 controls | `models/pretrained/nrx_large_weights` |
 
-The checkpoints in the retained campaign are training milestones of this one
-architecture. The model folders and experiment archives of retired receivers
-were removed. The initializer retains the inherited trained detector; it is
-not a randomly initialized network.
+The released Large NRX weights are the starting point of stage 1; nothing is trained from random initialization.
 
 ### Versioned artifacts
 
-The files above are committed, together with the campaign's metadata
-(`run.json`, `progress.json`, `completion.json`, `latest.json`) and the
-experiment archive described under [Results and reproduction](#results-and-reproduction).
-To keep the repository small, the following stay local and are not in git:
-
-- intermediate milestones `checkpoint_000000`–`checkpoint_004000`
-- the per-update training history `models/learned_blend_joint_20261019/history.jsonl` (82 MB)
-- the experiment training log `experiments/20261019_learned_blend_joint_training_6000/run.log` (82 MB)
-- the RAM-backed `episodes` archive, which is regenerated from the retained plans and seeds
-
-`retained_artifacts.json` records SHA-256 hashes for the committed weights.
+Model folders hold the checkpoints at every development check (`checkpoint_NNNNNN/`), the run metadata (`run.json`,
+`progress.json`, `latest.json`) and the per-update history (`history.jsonl`, large, not meant for git). The selected
+checkpoints are `models/neural_rx_k2_20261117/checkpoint_011000` (stage 1) and
+`models/pilot_memory_no_teacher_20261118/checkpoint_006000` (stage 2, the proposed receiver);
+`src/neural_rx/benchmark/tbler_sweep.py` points to the latter.
 
 ## Setup
 
 ### Requirements
 
-- Linux with an NVIDIA GPU. The decoder-correction ops are CUDA-only; the
+- Linux with an NVIDIA GPU. The memory buffer op is CUDA-only; the
   receiver raises an error on load when no GPU is visible. Results were
   produced on 2× NVIDIA A40 (48 GB, compute capability 8.6).
 - An NVIDIA driver that supports CUDA 12 (tested with 550.163).
@@ -102,7 +100,7 @@ pip install -r requirements-rt.txt
 From the repository root, in the `neural_rx` environment:
 
 ```bash
-pytest                                  # full suite, about 6 minutes on an A40
+pytest                                  # full suite, about 4 minutes on an A40
 pytest tests/test_artifact_io.py        # a single module
 ruff check .                            # lint
 ```
@@ -119,13 +117,12 @@ src/neural_rx/
   backbone/                Original CGNN (cgnn.py), Parameters, E2E model, backbone loading (core.py).
   receiver/                Pilot-history memory receiver:
     model.py                 Complete receiver composition.
-    channel_filter.py        Learned channel estimate and uncertainty.
+    channel_filter.py        Learned channel filter over the current pilots and the memory.
     pilot_history.py         Per-UE GPU history and lifecycle management.
     pilot_layout.py          Pilot positions, neighborhoods, and grid mappings.
-    decoder_correction.py    Physical scoring and learned bit-prediction blend.
-    native_ops/              CUDA operations and their training gradients.
+    native_ops/              CUDA operation of the memory buffer.
     benchmark_adapter.py     Stateful evaluation adapter.
-    training*.py             Joint training, fresh data, batching, and workers.
+    training*.py             Training (both stages), fresh data, batching, and workers.
     checkpoints.py           Atomic checkpoint recovery.
   decoding.py              Shared Sionna decoder and bit mapping (memory and Cold receivers).
   benchmark/               Shared accuracy/latency evaluation, protocol, scoring, smoke test.
@@ -136,12 +133,12 @@ src/neural_rx/
   cli/                     Entry points behind the nrx-* commands.
   paths.py                 Repository root for configs, models, and datasets.
 tests/                     Correctness tests and shared fixtures.
-scripts/                   Paper-figure scripts (plot_*.py).
+scripts/                   Paper numbers, their checks, and figures (nrx_paper_*.py, plot_nrx_paper_figures.py).
 
 config/memory_receiver.json        Current receiver dimensions and memory policy.
-config/memory_training.json        Joint training recipe.
+config/memory_training.json        Training recipe (both stages).
 config/temporal_benchmark_v2.json  Default evaluation scenarios and scoring (v1 plus ray-traced Munich).
-config/temporal_benchmark_v1.json  Statistical-channel scenarios; used by training and the 20261019 campaign.
+config/temporal_benchmark_v1.json  Statistical-channel scenarios; used by the development checks and the test sequences.
 config/nrx_large.cfg               Radio setup and original backbone settings.
 config/rt_munich.json              Munich ray-tracing setup for exporting channel banks.
 ```
@@ -162,17 +159,16 @@ checkpoint selection, final confirmation, and a latency comparison.
 `nrx-train` provides the training loop without that orchestration.
 `nrx-train-backbone` retains the original backbone trainer.
 
-To evaluate the selected model, pass
+To evaluate the selected model with the shared benchmark, pass
 
 ```
---experiment-checkpoint models/learned_blend_joint_20261019/checkpoint_005000
+--experiment-checkpoint models/pilot_memory_no_teacher_20261118/checkpoint_006000
 ```
 
-to the shared benchmark. Accuracy phases also require calibration anchors.
-The completed campaign's anchors are in
-`experiments/20261019_learned_blend_joint_training_6000/inputs/anchors.json`.
-They cover the v1 statistical conditions only; evaluate against them with
-`--benchmark-protocol config/temporal_benchmark_v1.json`.
+Accuracy phases also require calibration anchors:
+`experiments/20261019_learned_blend_joint_training_6000/inputs/anchors.json` for the v1 statistical conditions
+(with `--benchmark-protocol config/temporal_benchmark_v1.json`), and
+`experiments/20261021_package_layout_validation/results/v2_calibration/anchors.json` for the default v2 protocol.
 
 The default v2 protocol adds `ray_traced_munich` as a report condition: it is
 evaluated and reported in calibration and confirmation, but it is excluded from
@@ -182,40 +178,56 @@ and confirmation read the independently seeded banks declared in v2 from
 
 ## Results and reproduction
 
-`experiments/20261019_learned_blend_joint_training_6000/` retains the launch
-configuration, actual source snapshot, development results, confirmation
-results, and trained-weight latency results. `retained_artifacts.json`
-identifies these artifacts and their roles.
+All results are simulations with one training seed. Required SNR is the SNR ($E_b/N_0$) at a TBLER of 10% on 32 test
+sequences of 64 slots per condition, 2x4 MU-MIMO, 16-QAM (MCS 14), 132 PRBs; PC = closed-loop power control.
 
-The selected model's primary confirmation TBLER was 15.846%, versus 16.504%
-for frozen Cold K8 and 17.004% with identical weights reset every TB. Memory
-benefit passed the declared statistical criterion; K8 superiority did not.
-Measured p95 latency was 42.846 ms versus Cold K3's 44.018 ms. The shared timer
-includes memory, detection, decoding, and transfers, and excludes initial
-LS estimation and interpolation.
+| Receiver | UMi | Channel change | Scheduling gaps | UMi, PC | Channel change, PC | Scheduling gaps, PC |
+| --- | --- | --- | --- | --- | --- | --- |
+| Proposed NRX | 7.05 | 7.02 | 8.12 | 1.74 | 2.16 | 2.48 |
+| Proposed NRX, memory emptied before every TB | 7.75 | 7.72 | 8.90 | 2.54 | 2.90 | 3.11 |
+| Large NRX retrained, 2 iterations (stage 1) | 7.56 | 7.63 | 8.93 | 2.45 | 2.77 | 2.99 |
+| Large NRX released, 2 iterations | 8.07 | 8.09 | 9.58 | 2.63 | 3.02 | 3.27 |
+| Large NRX released, 3 iterations | 7.33 | 7.50 | 8.85 | 2.25 | 2.60 | 2.84 |
+| Large NRX released, 8 iterations | 6.85 | 6.89 | 7.95 | 1.77 | 2.10 | 2.31 |
+| LMMSE + K-Best | 6.86 | 6.62 | 8.30 | 1.89 | 2.18 | 2.68 |
+| Perfect CSI + K-Best | 6.59 | 6.27 | 6.53 | 1.44 | 1.75 | 1.69 |
 
-### Figures
+Median TensorRT 10.3 FP16 inference time on an NVIDIA A100 (export as in the code release of Wiesmayr et al., network
+only, 2,000 runs; `experiments/20261114_tensorrt_latency/results/fused_a100.json`, measured on a rented GPU with
+`modal_a100.py`): Large NRX with 2 / 3 / 8 iterations 0.79 / 1.07 / 2.43 ms, proposed NRX 0.82 ms. So the proposed NRX
+meets the 1 ms budget and the Large NRX with 3 iterations does not. On the server's A40 (`results/fused_a40.json`):
+1.41 / 1.88 / 4.26 ms and 1.44 ms. The channel filter runs as CUDA kernels (`fitted_filter.cu`, launched by
+`filter_kernels.py`): what only depends on the memory, i.e. the fit of the weights and the memory's part of the
+predictions, is computed before the slot (0.21 ms on the A100); the rest runs on the slot in front of the network
+(0.03 ms). `time_fused.py` checks the kernels against the TensorFlow receiver and also times every receiver as a CUDA
+graph, without the host's time to launch the kernels (A100: 0.71 / 0.97 / 2.24 ms and 0.73 ms; not used in the paper).
+`make_a100_bundle.sh` and `run_a100.sh` repeat the measurement on another machine.
 
-Both scripts read only committed files and run in seconds without a GPU:
+On two further datasets at a fixed SNR per condition (17 cases: TDL-B100, TDL-C300, UMi, UMa, channel change,
+scheduling gaps, closely spaced LOS UEs, near-far UEs, and, on one dataset, ray-traced Munich channels), the memory
+lowers TBLER in 16 cases and leaves it unchanged in one. The proposed NRX is ahead of the Large NRX with 8 iterations
+in 6 of the 17 cases (TDL-B100, TDL-C300 and UMa on both datasets) and behind in 10. TBLER over all cases of the first
+/ second dataset: proposed NRX 17.1% / 14.1%, memory emptied 22.7% / 20.0%, Large NRX with 8 iterations 16.6% / 14.1%.
 
-```bash
-python scripts/plot_receiver_diagrams.py   # misc/receiver_architecture.*, misc/evaluation_setup.*
-python scripts/plot_paper_results.py       # misc/confirmation_tbler.*, misc/latency.*, misc/development_tbler.*
-```
+| Step | Folder | Run | Main output |
+| --- | --- | --- | --- |
+| Stage 1: Large NRX retrained with 2 iterations | `experiments/20261117_neural_rx_training` | `./run.sh start` (runs until `./run.sh stop`) | `results/best.json`, `models/neural_rx_k2_20261117/` |
+| Stage 2: proposed receiver on top of stage 1 | `experiments/20261118_no_teacher_training` | `./run.sh start` (runs until `./run.sh stop`); its first 2,048 updates were made on rented GPUs with `modal_app.py` and brought here with `bring_home.sh` | `results/best.json`, `models/pilot_memory_no_teacher_20261118/` |
+| Test sequences, with and without power control | `experiments/20261118_test_evaluation` | `RECEIVERS="pilot_memory pilot_memory_emptied" ./run.sh` (the stage-1 results are kept), `python fill_missing.py` if a process ran out of GPU memory, then `python summarize.py`, `python doppler.py` | `results/summary.json`, `results/doppler.json` |
+| Latency | `experiments/20261114_tensorrt_latency` | `python export.py` (neural_rx env), then on an A100 `modal run modal_a100.py` (or `./make_a100_bundle.sh` and `run_a100.sh` there); on the server `~/venvs/tensorrt/bin/python time_fused.py --tag a40` | `results/fused_a100.json` (paper), `results/fused_a40.json` |
+| Network decisions: fallback and early retransmission | `experiments/20261118_network_decisions` | `./run.sh`, then `./run.sh analyze` | `results/fallback.json`, `results/controller.json` |
+| Two further datasets at fixed SNRs | `experiments/20261118_further_datasets` | `./run.sh` | `results/v2/results.json`, `results/seed86/results.json` |
+| Paper numbers, checks, figures | `scripts/` | `python scripts/nrx_paper_numbers.py --check paper/main.tex --allowed 0.25 0.05 2.14 0.01 38.901 5.1 4.8 10.3`, `python scripts/nrx_paper_recheck.py`, `python scripts/plot_nrx_paper_figures.py` | `paper/numbers.json`, `paper/figures/` |
 
-`plot_paper_results.py` verifies each result's `result_sha256` and
-`protocol_sha256` seal before plotting, and writes the plotted values to
-`misc/paper_results.csv` and the input result hashes to
-`misc/paper_results_manifest.json`. Figures are written as PNG and PDF.
+Both training stages use both GPUs, so only one runs at a time; each has a development check every 1,000 updates on
+the development set in `experiments/20261113_retrained_k2_baseline/episodes/development`.
 
-| Reported number | Source | Figure |
-| --- | --- | --- |
-| TBLER 15.846% / 17.004% / 16.504% (persistent / reset / Cold K8, core pooled) | `results/confirmation_005000/results.json` → `summary` | `confirmation_tbler` |
-| p95 latency 42.846 ms vs Cold K3 44.018 ms | `results/latency_005000/results.json` → `receivers` | `latency` |
-| Checkpoint selection (update 5000) | `results/development_*/results.json`, `results/selection.json` | `development_tbler` |
-
-Paths in the table are relative to
-`experiments/20261019_learned_blend_joint_training_6000/`.
+Stored results of other experiments that the steps above read: the released Large NRX and the classical receivers on
+the same test sequences (`experiments/20261104_tbler_sweep`, and with power control
+`experiments/20261112_early_retransmission/results/receivers_pc`, which also provides `power_control.py`), and the
+calibration anchors named under [Commands](#commands). Of the experiments of earlier receiver designs, only what is
+still read remains: these two folders with their validation record (`experiments/20261021_current_code_reproduction`),
+the two anchor files, and the development set.
 
 Published checkpoint metadata still uses the internal filename
 `cnn_autoencoder_finalist.json`. The recipe protocol and deterministic seed

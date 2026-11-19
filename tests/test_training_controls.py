@@ -242,6 +242,67 @@ class TrainingControlsTest(unittest.TestCase):
                 train_main()
             self.assertEqual(updates[-1], 6004)
 
+    def test_development_results_reach_the_schedule_a_fixed_number_of_updates_later(self):
+        from neural_rx.cli.train import parser, run_training
+
+        class Trainer:
+            def __init__(self, *args):
+                self.value, self.seed, self.seen = 0, 1, -1
+                self.episodes = SimpleNamespace()
+                self.step = SimpleNamespace(numpy=lambda: self.value)
+
+            def binding(self):
+                return {}
+
+            def schedule_state(self):
+                return {"development_update": self.seen}
+
+            def restore(self, path):
+                self.value = json.loads((Path(path)/"state.json").read_text())["update"]
+                self.seen = seen[self.value]
+
+            def save(self, path):
+                seen[self.value] = self.seen
+                return publish_checkpoint(path, self.value)
+
+            def update(self, packets):
+                self.value += 1
+                return {"update": self.value}, []
+
+            def observe_development(self, result):
+                self.seen = result["update"]
+                observed.append((result["update"], self.value))
+
+        def evaluate(checkpoint):
+            return dict(checkpoint=str(checkpoint), update=int(Path(checkpoint).name.split("_")[1]))
+
+        tensorflow = SimpleNamespace(config=SimpleNamespace(list_physical_devices=lambda _: [],
+                                    experimental=SimpleNamespace(enable_op_determinism=lambda: None)))
+        training_module = SimpleNamespace(MemoryTrainer=Trainer, atomic_json=write_json)
+        recipe = ROOT/"config/memory_training.json"
+        for delay, resume_at, expected in ((0, None, [(4, 4), (8, 8)]), (2, None, [(4, 6), (8, 10)]),
+                                           (2, 5, [(4, 6), (8, 10)]), (3, None, [(4, 7), (8, 10)])):
+            observed, seen = [], {}       # seen: the schedule's last development update, per saved update
+            with self.subTest(delay=delay, resume_at=resume_at), tempfile.TemporaryDirectory() as temporary, \
+                    mock.patch.dict(os.environ), mock.patch("builtins.print"), \
+                    mock.patch.dict(sys.modules, {"tensorflow": tensorflow,
+                                                  "neural_rx.receiver.training": training_module}):
+                output = Path(temporary)
+                argv = ["--recipe", str(recipe), "--output-dir", str(output), "--data-gpu", "none",
+                        "--replica-gpu", "none", "--steps", "10"]
+                if resume_at is not None:
+                    # a run that stopped between the development update 4 and the use of its result
+                    publish_checkpoint(output, 4)
+                    checkpoint = publish_checkpoint(output, resume_at)
+                    seen[resume_at] = -1
+                    argv += ["--resume", str(checkpoint)]
+                run_training(parser().parse_args(argv), evaluation_points=[4, 8], evaluate=evaluate,
+                             evaluation_delay=delay)
+                self.assertEqual(observed, expected)
+        with self.assertRaisesRegex(ValueError, "before the next development update"):
+            run_training(parser().parse_args(["--recipe", str(recipe), "--output-dir", "unused", "--steps", "10"]),
+                         evaluation_points=[4, 8], evaluate=evaluate, evaluation_delay=4)
+
 
 if __name__ == "__main__":
     unittest.main()

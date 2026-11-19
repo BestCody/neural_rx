@@ -24,7 +24,7 @@ class ArtifactProvenanceTest(unittest.TestCase):
             return hashlib.sha256(json.dumps(value, sort_keys=True).encode()).hexdigest()
         saved = {"sources": {"old.py": "old hash"}, "recipe": recipe,
                  "recipe_sha256": checksum(recipe), "seed": 42,
-                 "architecture": {"filter_hidden": 16},
+                 "architecture": {"fit_tbs": 16},
                  "execution": {"version": "pilot_filter_learned_blend_joint_v1", "tf32_enabled": False,
                                "detector_batch_tbs": 8, "descriptor_chunk_tbs": 16}}
         current = copy.deepcopy(saved)
@@ -41,7 +41,7 @@ class ArtifactProvenanceTest(unittest.TestCase):
             elif key == "execution":
                 changed[key]["tf32_enabled"] = True
             elif key == "architecture":
-                changed[key]["filter_hidden"] *= 2
+                changed[key]["fit_tbs"] *= 2
             else:
                 changed[key] += 1
             with self.subTest(key=key), self.assertRaises(ValueError):
@@ -71,8 +71,8 @@ class ArtifactProvenanceTest(unittest.TestCase):
         sources = evaluation_source_records()
         required = {"src/neural_rx/decoding.py", "src/neural_rx/receiver/benchmark_adapter.py",
                     "src/neural_rx/receiver/model.py",
-                    "src/neural_rx/receiver/native_ops/pair_correction.cc",
-                    "src/neural_rx/receiver/native_ops/pair_correction.cu.cc", "config/nrx_large.cfg"}
+                    "src/neural_rx/receiver/native_ops/memory_append.cc",
+                    "src/neural_rx/receiver/native_ops/memory_append.cu.cc", "config/nrx_large.cfg"}
         self.assertTrue(required.issubset(sources))
         for name in required:
             incomplete = {k: v for k, v in sources.items() if k != name}

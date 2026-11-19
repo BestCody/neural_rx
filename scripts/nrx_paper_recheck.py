@@ -1,29 +1,77 @@
-"""Second pass: recompute the evaluation values from raw per-episode files with separate code and compare with the text."""
-import glob, json, math, os, re, subprocess
+"""Second pass: recompute the paper's evaluation values from the raw per-sequence files with code that is separate
+from scripts/nrx_paper_numbers.py, and compare them with the text of paper/*.tex.
+
+Every check is either a number that must appear in the text as printed (expect) or a statement that must appear
+verbatim and that the recomputed data must support (claim). Exit code 1 if anything is missing or does not hold.
+
+    python scripts/nrx_paper_recheck.py
+"""
+import glob
+import json
+import math
+import re
+
 import numpy as np
-SW = 'experiments/20261104_tbler_sweep/results'
-text = re.sub(r'\s+', ' ', subprocess.run(['pdftotext', 'paper/build/main.pdf', '-'], capture_output=True, text=True).stdout)
-# main.tex pulls the sections in with \input{name}; expand them to check the full text.
+
+SW = 'experiments/20261104_tbler_sweep/results'                       # released Large NRX, classical receivers
+NEW = 'experiments/20261118_test_evaluation/results'                  # proposed NRX, retrained Large NRX
+PC = 'experiments/20261112_early_retransmission/results/receivers_pc'  # stored receivers with power control
+NET = 'experiments/20261118_network_decisions/results'
+TRT = 'experiments/20261114_tensorrt_latency/results'
+OURS = ('pilot_memory', 'pilot_memory_emptied', 'neural_rx_k2_trained')
+STORED = ('baseline_lslin_lmmse', 'baseline_lmmse_kbest', 'baseline_perf_csi_kbest', 'frozen_cold_k2', 'frozen_cold_k3',
+          'frozen_cold_k8')
+CORE = ['natural_umi', 'controlled_topology_change', 'schedule_gap_reentry']
 tex = re.sub(r'\\input\{([^}]+)\}', lambda m: open(f'paper/{m.group(1)}.tex', encoding='utf8').read(),
              open('paper/main.tex', encoding='utf8').read())
-bad = 0
+tex = re.sub(r'(?m)(?<!\\)%.*$', '', tex)
+text = re.sub(r'\s+', ' ', tex)
+bad = checked = 0
 
-def curve(cond, method):
+
+def expect(string, label):
+    global bad, checked
+    checked += 1
+    if string not in text:
+        bad += 1; print('MISSING', label, '|', string)
+
+
+def claim(phrase, holds, label):
+    """A statement: it must appear verbatim, and the recomputed data must support it."""
+    global bad, checked
+    checked += 2
+    if phrase not in text:
+        bad += 1; print('MISSING', label, '|', phrase)
+    if not holds:
+        bad += 1; print('CLAIM FAILS', label)
+
+
+def directories(setting, method):
+    if setting == 'pc':
+        return [f'{NEW}/power_control' if method in OURS else PC]
+    return [f'{NEW if method in OURS else SW}/{d}' for d in ('sweep', 'sweep_high')]
+
+
+def errors(setting, cond, method, combine=None):
+    """Failures and blocks per SNR point over TBs 17-64 of active UEs; `combine` lists receivers that must all fail."""
     table = {}
-    for directory in ('sweep', 'sweep_high'):
-        files = sorted(glob.glob(f'{SW}/{directory}/{cond}/{method}/episode_*.npz'))
-        assert len(files) == 32, (cond, method, directory, len(files))
+    for position, directory in enumerate(directories(setting, method)):
+        files = sorted(glob.glob(f'{directory}/{cond}/{method}/episode_*.npz'))
+        assert len(files) == 32, (setting, cond, method, len(files))
         for path in files:
             with np.load(path) as data:
-                mask = data['active'][16:]
+                mask = data['active'][16:].astype(bool)
+                failed = data['errors'][:, 16:]
+                for other in combine or ():
+                    with np.load(path.replace(f'{directory}/{cond}/{method}', f'{directories(setting, other)[position]}/{cond}/{other}')) as second:
+                        assert np.array_equal(second['fingerprint'], data['fingerprint'])
+                        failed = failed & second['errors'][:, 16:]
                 for k, snr in enumerate(data['snr_db']):
-                    fails = int((data['errors'][k, 16:] & mask).sum())
-                    entry = table.setdefault(float(snr), {})
-                    entry.setdefault(directory, [0, 0])
-                    entry[directory][0] += fails
-                    entry[directory][1] += int(mask.sum())
+                    entry = table.setdefault(float(snr), {}).setdefault(position, [0, 0])
+                    entry[0] += int((failed[k] & mask).sum()); entry[1] += int(mask.sum())
     snrs = sorted(table)
-    return snrs, [table[x].get('sweep', table[x].get('sweep_high'))[0] / table[x].get('sweep', table[x].get('sweep_high'))[1] for x in snrs]
+    return snrs, [table[x][min(table[x])][0]/table[x][min(table[x])][1] for x in snrs]
+
 
 def crossing(snrs, rates, target=.1):
     # monotone envelope by pooled adjacent violators, then log-TBLER interpolation
@@ -32,708 +80,212 @@ def crossing(snrs, rates, target=.1):
         levels.append([r, 1])
         while len(levels) > 1 and levels[-2][0] < levels[-1][0]:
             v2, n2 = levels.pop(); v1, n1 = levels.pop()
-            levels.append([(v1 * n1 + v2 * n2) / (n1 + n2), n1 + n2])
+            levels.append([(v1*n1+v2*n2)/(n1+n2), n1+n2])
     fit = [v for v, n in levels for _ in range(n)]
-    for i in range(len(fit) - 1):
-        if fit[i] >= target >= fit[i + 1]:
-            if fit[i] == fit[i + 1]:
-                return (snrs[i] + snrs[i + 1]) / 2
-            f = (math.log(target) - math.log(fit[i])) / (math.log(fit[i + 1]) - math.log(fit[i])) if fit[i + 1] > 0 else (fit[i] - target) / (fit[i] - fit[i + 1])
-            return snrs[i] + f * (snrs[i + 1] - snrs[i])
+    for i in range(len(fit)-1):
+        if fit[i] >= target >= fit[i+1]:
+            if fit[i] == fit[i+1]:
+                return (snrs[i]+snrs[i+1])/2
+            f = ((math.log(target)-math.log(fit[i]))/(math.log(fit[i+1])-math.log(fit[i])) if fit[i+1] > 0
+                 else (fit[i]-target)/(fit[i]-fit[i+1]))
+            return snrs[i]+f*(snrs[i+1]-snrs[i])
     return None
 
-section = tex[tex.index(r'\section{Evaluation}'):tex.index(r'\bibliography{references}')]
-parts = {'abstract': (r'\begin{abstract}', r'\end{abstract}'),
-         'introduction': (r'\section{Introduction}', r'\section{Related Work}'),
-         'related': (r'\section{Related Work}', r'\section{Receiver Design}')}
-parts = {name: re.sub(r'\s+', ' ', tex[tex.index(start):tex.index(end)]) for name, (start, end) in parts.items()}
-parts['section'] = re.sub(r'\s+', ' ', section)
-checked = 0
 
-def expect(string, label):
-    global bad, checked
-    checked += 1
-    if string not in section:
-        bad += 1; print('MISSING', label, string)
+def span(values):
+    values = sorted(round(v, 2) for v in values)
+    return f'{values[0]:.2f} to {values[-1]:.2f}'
 
-def claim(phrase, holds, label, where=('section',)):
-    """A qualitative statement: it must appear verbatim where stated, and the data must support it."""
-    global bad, checked
-    for name in where:
-        checked += 1
-        if phrase not in parts[name]:
-            bad += 1; print('MISSING in', name, label, '|', phrase)
-    checked += 1
-    if not holds:
-        bad += 1; print('CLAIM FAILS', label)
 
-final_claims = []  # statements that need values computed further below
+# ---------------------------------------------------------------------------------------------- required SNR
+required = {s: {c: {m: round(crossing(*errors(s, c, m)), 2) for m in (*OURS, *STORED)} for c in CORE} for s in ('no', 'pc')}
+def gap(s, a, b):
+    return [round(required[s][c][a]-required[s][c][b], 2) for c in CORE]
 
-core = ['natural_umi', 'controlled_topology_change', 'schedule_gap_reentry']
-required = {c: {m: crossing(*curve(c, m)) for m in ['baseline_lslin_lmmse', 'baseline_lmmse_kbest', 'baseline_perf_csi_kbest', 'frozen_cold_k2', 'frozen_cold_k8', 'candidate_reset', 'candidate_persistent']} for c in core}
-def gap(c, m):
-    return abs(round(required[c][m], 2) - round(required[c]['candidate_persistent'], 2))
-k8 = {c: gap(c, 'frozen_cold_k8') for c in core}
-memory_gain = {c: round(required[c]['candidate_reset'], 2)-round(required[c]['candidate_persistent'], 2) for c in core}
-claim("performs close to the Large NRX with $N_{\\mathrm{it}}=8$, within 0.3\\,dB in all three conditions",
-      max(k8.values()) < .3, 'close to N_it=8')
-claim("At the same $N_{\\mathrm{it}}=2$, the Large NRX requires more than 1\\,dB more",
-      min(gap(c, 'frozen_cold_k2') for c in core) > 1 and
-      all(required[c]['candidate_persistent'] < required[c]['frozen_cold_k2'] for c in core), 'N_it=2 more than 1 dB behind')
-# "by 0.3 to 0.4 dB ... with and without IDD": checked with the no-IDD results at the end.
-claim("The memory alone reduces the required SNR in all three conditions", min(memory_gain.values()) > 0,
-      'memory gain in the introduction', ('introduction',))
-# Loss of cutting the Large NRX from N_it=8 to 2; the abstract and introduction quote its range (checked below).
-cut = {c: abs(round(required[c]['frozen_cold_k2'], 2) - round(required[c]['frozen_cold_k8'], 2)) for c in core}
-MATCH_DB = .1  # "matches": required SNRs within this margin
-proposed = {c: round(required[c]['candidate_persistent'], 2) for c in core}
-baselines = {
-    'outperforms LS + LMMSE in all three conditions':
-        all(proposed[c] < round(required[c]['baseline_lslin_lmmse'], 2) for c in core),
-    'matches LMMSE + K-Best for UMi and channel change':
-        all(gap(c, 'baseline_lmmse_kbest') <= MATCH_DB for c in ('natural_umi', 'controlled_topology_change')),
-    'ahead of LMMSE + K-Best for scheduling gaps':
-        proposed['schedule_gap_reentry'] < round(required['schedule_gap_reentry']['baseline_lmmse_kbest'], 2),
-    'Perf.-CSI + K-Best ahead of all other receivers':
-        all(required[c]['baseline_perf_csi_kbest'] < required[c][m] for c in core for m in required[c]
-            if m != 'baseline_perf_csi_kbest'),
-}
 
-SE = {'first': 'experiments/20261021_package_layout_validation/results/v2_confirmation_005000/errors.npz', 'second': 'experiments/20261021_current_code_reproduction/results/confirmation_005000_seed86000000/errors.npz'}
-names = ['historical_tdl_b100', 'historical_tdl_c300', 'natural_umi', 'natural_uma', 'controlled_topology_change', 'schedule_gap_reentry', 'close_los', 'near_far', 'ray_traced_munich']
-methods = ['candidate_persistent', 'candidate_reset', 'frozen_cold_k8']
-rates, pooled = {}, {}
-for ds, path in SE.items():
-    data = np.load(path)
-    for c, name in enumerate(names[:data['active'].shape[0]]):
-        mask = data['active'][c, :, 16:]
-        for m in methods:
-            e = int((data[f'errors_{m}'][c, 0, :, 16:] & mask).sum()); n = int(mask.sum())
-            rates[ds, name, m] = 100 * e / n
-# The cases the fixed-SNR paragraph names: the three conditions, close LOS, near-far, and Munich (first dataset only).
-cases = [(ds, n) for ds in SE for n in core + ['close_los', 'near_far', 'ray_traced_munich'] if (ds, n, methods[0]) in rates]
-unchanged = [('second', 'close_los')]
-claims = {
-    **baselines,
-    'memory lowers TBLER in all named fixed-SNR cases but one':
-        all(rates[k + ('candidate_persistent',)] < rates[k + ('candidate_reset',)] for k in cases if k not in unchanged),
-    'close LOS unchanged on one dataset':
-        all(rates[k + ('candidate_persistent',)] == rates[k + ('candidate_reset',)] for k in unchanged),
-}
-k8_lead = {k: rates[k + ('candidate_persistent',)] - rates[k + ('frozen_cold_k8',)] for k in cases}
-largest = sorted(k8_lead, key=k8_lead.get, reverse=True)[:2]
-claim("The Large NRX with $N_{\\mathrm{it}}=8$ stays ahead of the proposed NRX in some cases, most clearly for closely "
-      "spaced LOS and near-far UEs on one dataset, and falls clearly behind on the ray-traced channels",
-      set(largest) == {('first', 'close_los'), ('first', 'near_far')} and k8_lead[('first', 'ray_traced_munich')] < -5,
-      'Large NRX N_it=8 on the fixed-SNR datasets')
-for statement, holds in claims.items():
-    checked += 1
-    if not holds:
-        bad += 1; print('CLAIM FAILS', statement)
-# Paper tables only; the 3GPP citation "Table~5.1.3.1-1" is not one.
-if re.search(r'\\begin\{table|tab:', section):
-    bad += 1; print('A table reference remains')
-print('values and claims recomputed:', checked)
+lead, three, behind = gap('no', 'neural_rx_k2_trained', 'pilot_memory'), gap('no', 'frozen_cold_k3', 'pilot_memory'), gap('no', 'pilot_memory', 'frozen_cold_k8')
+memory, no_memory = gap('no', 'pilot_memory_emptied', 'pilot_memory'), gap('no', 'neural_rx_k2_trained', 'pilot_memory_emptied')
+claim('costs more than 1\\,dB in all three conditions', min(gap('no', 'frozen_cold_k2', 'frozen_cold_k8')) > 1, 'iteration cut')
+claim('recovers about half a dB', all(.4 <= v <= .7 for v in gap('no', 'frozen_cold_k2', 'neural_rx_k2_trained')), 'retraining gain')
+expect(f'The proposed NRX requires {span(lead)}\\,dB less than this retrained Large NRX', 'lead over retrained')
+expect(f'by {span(three)}\\,dB, and stays within {max(behind):.2f}\\,dB of the Large NRX with $N_{{\\mathrm{{it}}}}=8$', 'three and eight iterations')
+claim('The proposed NRX outperforms LS + LMMSE in all three conditions', min(gap('no', 'baseline_lslin_lmmse', 'pilot_memory')) > 0, 'LS + LMMSE')
+kbest = gap('no', 'pilot_memory', 'baseline_lmmse_kbest')
+claim('remains ahead of it for UMi and channel change, whereas the proposed NRX is ahead for scheduling gaps',
+      kbest[0] > .1 and kbest[1] > .1 and kbest[2] < -.1, 'LMMSE + K-Best')
+claim('Perf.-CSI + K-Best remains ahead of all other receivers',
+      all(required[s][c]['baseline_perf_csi_kbest'] < required[s][c][m] for s in required for c in CORE
+          for m in required[s][c] if m != 'baseline_perf_csi_kbest'), 'perfect CSI')
+expect(f'by {span(memory)}\\,dB. Without its memory, the proposed NRX requires up to {max(-v for v in no_memory):.2f}\\,dB more than the retrained Large NRX',
+       'memory gain')
+pc_lead, pc_three, pc_behind, pc_memory = (gap('pc', 'neural_rx_k2_trained', 'pilot_memory'), gap('pc', 'frozen_cold_k3', 'pilot_memory'),
+                                           gap('pc', 'pilot_memory', 'frozen_cold_k8'), gap('pc', 'pilot_memory_emptied', 'pilot_memory'))
+expect(f'requires {span(pc_lead)}\\,dB less than the retrained Large NRX and {span(pc_three)}\\,dB less than the Large NRX with $N_{{\\mathrm{{it}}}}=3$. '
+       f'It stays within {max(pc_behind):.2f}\\,dB of the Large NRX with $N_{{\\mathrm{{it}}}}=8$', 'power control')
+claim('is on par with it for UMi', abs(pc_behind[0]) <= .05, 'power control: UMi')
+claim('outperforms LMMSE + K-Best in all three conditions', min(gap('pc', 'baseline_lmmse_kbest', 'pilot_memory')) > 0,
+      'power control: LMMSE + K-Best')
+expect(f'The memory contributes {span(pc_memory)}\\,dB', 'power control: memory')
+both = lead+pc_lead
+claim(f'requires {min(both):.2f} to {max(both):.2f}\\,dB less SNR than the same NRX retrained with two iterations', True, 'abstract lead')
+claim(f'stays within {max(behind+pc_behind):.2f}\\,dB of the eight-iteration NRX', True, 'abstract eight iterations')
+claim('outperforms the three-iteration NRX in all cases', min(three+pc_three) > 0, 'abstract three iterations')
+claim('by up to 1\\,dB, even when the NRX is retrained for two iterations',
+      .9 <= max(gap('no', 'neural_rx_k2_trained', 'frozen_cold_k8')) <= 1.05, 'introduction')
 
-def speed_curve(method, stratum):
-    table = {}
-    for directory, skip in (('sweep', 0), ('sweep_high', 1)):
-        for path in glob.glob(f'{SW}/{directory}/natural_umi/{method}/episode_*.npz'):
-            if int(os.path.basename(path)[8:13]) % 3 != stratum:
+# ------------------------------------------------------------------------- effective SNR and Doppler groups (UMi)
+def effective(cond, method, group=None, edges=np.arange(-10., 30.5, 1.)):
+    fails, blocks = np.zeros(len(edges)-1), np.zeros(len(edges)-1)
+    for first, directory in enumerate(directories('no', method)):
+        for path in sorted(glob.glob(f'{directory}/{cond}/{method}/episode_*.npz')):
+            index = int(path[-9:-4])
+            if group is not None and index % 3 != group:
                 continue
+            with np.load(path) as data, np.load(f'{SW}/{"sweep_high" if first else "sweep"}/{cond}/candidate_persistent/episode_{index:05d}.npz') as ref:
+                assert np.array_equal(data['fingerprint'], ref['fingerprint'])
+                mask = ref['active'][16:].astype(bool)
+                power = 10*np.log10(ref['channel_power'][16:])
+                for k in range(first, len(data['snr_db'])):     # the shared point is counted once
+                    bins = np.floor(data['snr_db'][k]+power-edges[0]).astype(int)
+                    ok = mask & (bins >= 0) & (bins < len(fails))
+                    np.add.at(fails, bins[ok], data['errors'][k, 16:][ok]); np.add.at(blocks, bins[ok], 1)
+    rates = fails/np.maximum(blocks, 1)
+    # weighted pooled adjacent violators
+    levels = []
+    for r, n in zip(rates, np.maximum(blocks, 1)):
+        levels.append([r, n, 1])
+        while len(levels) > 1 and levels[-2][0] < levels[-1][0]:
+            v2, n2, c2 = levels.pop(); v1, n1, c1 = levels.pop()
+            levels.append([(v1*n1+v2*n2)/(n1+n2), n1+n2, c1+c2])
+    fit = [v for v, _, c in levels for _ in range(c)]
+    centers = edges[:-1]+.5
+    for i in range(len(fit)-1):
+        if fit[i] >= .1 >= fit[i+1] and fit[i] != fit[i+1]:
+            f = (math.log(.1)-math.log(fit[i]))/(math.log(fit[i+1])-math.log(fit[i])) if fit[i+1] > 0 else (fit[i]-.1)/(fit[i]-fit[i+1])
+            return centers[i]+f
+    return None
+
+
+eff = {c: {m: effective(c, m) for m in (*OURS, 'frozen_cold_k8')} for c in CORE}
+expect(f'the proposed NRX requires {span([eff[c]["neural_rx_k2_trained"]-eff[c]["pilot_memory"] for c in CORE])}\\,dB less than the retrained Large NRX '
+       f'and stays within {max(round(eff[c]["pilot_memory"]-eff[c]["frozen_cold_k8"], 2) for c in CORE):.2f}\\,dB of the Large NRX with $N_{{\\mathrm{{it}}}}=8$',
+       'effective SNR')
+doppler = {g: {m: effective('natural_umi', m, g, np.arange(-6., 14.)) for m in OURS} for g in range(3)}
+gains = [doppler[g]['pilot_memory_emptied']-doppler[g]['pilot_memory'] for g in range(3)]
+expect(f'it rises from {gains[0]:.2f}\\,dB at Doppler shifts below 50\\,Hz to {gains[2]:.2f}\\,dB above 175\\,Hz', 'Doppler gain')
+claim('The gain of the memory grows with the channel speed', gains[0] < gains[1] < gains[2], 'Doppler order')
+
+# --------------------------------------------------------------------------------------------------- latency
+aw = np.load(f'{TRT}/fused_a100_samples.npz')
+ms = {k: float(np.median(aw[f'events_{k}'])) for k in ('large_k2', 'large_k3', 'large_k8', 'proposed', 'fit_only')}
+claim('median of 2{,}000 runs on an NVIDIA A100 GPU', 'A100' in json.load(open(f'{TRT}/fused_a100.json'))['gpu']
+      and all(len(aw[f'events_{k}']) == 2000 for k in ms), 'GPU and number of runs')
+claim('with TensorRT~10.3 in FP16', json.load(open(f'{TRT}/fused_a100.json'))['tensorrt'].startswith('10.3.'), 'TensorRT version')
+expect(f'takes {ms["large_k2"]:.2f}\\,ms, each further CGNN iteration adds {(ms["large_k8"]-ms["large_k2"])/6:.2f}\\,ms', 'iteration time')
+claim('takes three times as long as $N_{\\mathrm{it}}=2$', 2.8 < ms['large_k8']/ms['large_k2'] < 3.3, 'eight vs two')
+claim(f'$N_{{\\mathrm{{it}}}}=2$ meets the 1\\,ms budget, which $N_{{\\mathrm{{it}}}}=3$ exceeds with {ms["large_k3"]:.2f}\\,ms',
+      ms['large_k2'] < 1 < ms['large_k3'], 'budget of the Large NRX')
+claim(f'The proposed NRX takes {ms["proposed"]:.2f}\\,ms, i.e., {ms["proposed"]-ms["large_k2"]:.2f}\\,ms more than the Large NRX with '
+      '$N_{\\mathrm{it}}=2$, and thus meets the 1\\,ms budget', ms['proposed'] < 1, 'time of the proposed NRX')
+expect(f'are computed before the slot arrives, which takes {ms["fit_only"]:.2f}\\,ms', 'time before the slot')
+for phrase in ('It meets the 1\\,ms real-time budget, which the three-iteration NRX exceeds',
+               'by which the proposed NRX remains real-time capable, whereas the three-iteration NRX exceeds the 1\\,ms budget',
+               'by which it remains real-time capable, unlike the three-iteration NRX'):
+    claim(phrase, ms['proposed'] < 1 < ms['large_k3'], 'real time')
+
+# -------------------------------------------------------------------------------------------- network decisions
+realistic = [m for m in (*OURS, *STORED) if m != 'baseline_perf_csi_kbest']
+fallback, unfixable, repeated = {}, {}, {}
+for s in ('no', 'pc'):
+    for c in CORE:
+        snrs, alone = errors(s, c, 'pilot_memory')
+        fallback[s, c] = round(round(crossing(snrs, alone), 2)-round(crossing(*errors(s, c, 'pilot_memory', ['baseline_lmmse_kbest'])), 2), 2)
+        point = int(np.argmin(np.abs(np.asarray(snrs)-crossing(snrs, alone))))
+        every = errors(s, c, 'pilot_memory', [m for m in realistic if m != 'pilot_memory'])[1][point]
+        unfixable[s, c] = every/alone[point]
+        flags = []
+        position, directory = max((p, d) for p, d in enumerate(directories(s, 'pilot_memory'))
+                                  if snrs[point] in np.load(sorted(glob.glob(f'{d}/{c}/pilot_memory/episode_*.npz'))[0])['snr_db'])
+        for path in sorted(glob.glob(f'{directory}/{c}/pilot_memory/episode_*.npz')):
             with np.load(path) as data:
-                for k, snr in enumerate(data['snr_db'][skip:], skip):
-                    for tb in range(16, 64):
-                        for ue in range(2):
-                            if data['active'][tb, ue]:
-                                bin_ = math.floor(snr + 10 * math.log10(data['channel_power'][tb, ue]))
-                                if -6 <= bin_ < 13:
-                                    entry = table.setdefault(bin_, [0, 0])
-                                    entry[0] += int(data['errors'][k, tb, ue]); entry[1] += 1
-    centers = [b + .5 for b in sorted(table)]
-    return crossing(centers, [table[b][0] / table[b][1] for b in sorted(table)])
-
-sizes = [sum(int(os.path.basename(p)[8:13]) % 3 == s for p in glob.glob(f'{SW}/sweep/natural_umi/candidate_persistent/episode_*.npz')) for s in range(3)]
-expect('Each group contains about 10 sequences', 'Doppler group size phrase')
-checked += 1
-if not all(10 <= n <= 11 for n in sizes):
-    bad += 1; print('CLAIM FAILS about 10 sequences per Doppler group', sizes)
-doppler_gain = [speed_curve('candidate_reset', s) - speed_curve('candidate_persistent', s) for s in range(3)]
-gain = doppler_gain[2]
-claim("The gain is small on slow channels and exceeds 1\\,dB at Doppler shifts above 175\\,Hz",
-      doppler_gain[0] < .1 and doppler_gain[2] > 1, 'memory gain by Doppler shift')
-claim("its gain grows with the Doppler shift", doppler_gain[0] < doppler_gain[1] < doppler_gain[2],
-      'memory gain grows with Doppler', ('introduction',))
-claim("The memory contributes most on fast-varying channels", doppler_gain[2] == max(doppler_gain),
-      'memory gain largest on fast channels', ('abstract',))
-# Why the memory helps on fast channels: Jakes correlation between DMRS symbols at the highest Doppler shift,
-# with J0 by numerical integration and the DMRS positions and UE speed read from the radio configuration.
-cfg = open('config/nrx_large.cfg', encoding='utf8').read()
-setting = lambda key: float(re.search(rf'^{key}\s*=\s*([-\d.e]+)', cfg, re.M).group(1))
-assert setting('dmrs_additional_position') == 1  # TS 38.211 Table 6.4.1.1.3-3: type A, 14 symbols, pos1 -> l0 and 11
-first, last = int(setting('dmrs_type_a_position')), 11
-speed, carrier = setting('max_ut_velocity'), setting('carrier_frequency')
-doppler = speed*carrier/299792458.
-theta = np.linspace(0, np.pi, 200001)
-jakes = lambda tau: np.trapz(np.cos(2*np.pi*doppler*tau*np.sin(theta)), theta)/np.pi
-symbol_s = .5e-3/14
-across, within = 14-last+first, last-first
-words = {5: 'five', 9: 'nine'}
-claim(f"Its last DMRS symbol lies only {words[across]} OFDM symbols before that symbol, whereas the second DMRS symbol of "
-      f"the current slot lies {words[within]} symbols after it, so under isotropic scattering the older pilot is the more "
-      "strongly correlated one", jakes(across*symbol_s) > jakes(within*symbol_s), 'DMRS correlation at the highest Doppler')
-expect(f"Doppler shifts up to {round(doppler)}\\,Hz, which corresponds to the maximum UE speed of {speed:.0f}\\,m/s",
-       'maximum UE speed')
-print('memory gain by Doppler group', [round(g, 3) for g in doppler_gain],
-      'correlation at 400 Hz', round(jakes(across*symbol_s), 3), round(jakes(within*symbol_s), 3))
-slow_gap = speed_curve('candidate_reset', 0) - speed_curve('baseline_perf_csi_kbest', 0)
-checked += 1
-if slow_gap > .1:
-    bad += 1; print('CLAIM FAILS no memory matches Perf.-CSI on slow channels', slow_gap)
-print('slow channels: no memory minus Perf.-CSI', round(slow_gap, 3))
-
-# Latency: TensorRT inference times, checked at the end (experiments/20261114_tensorrt_latency).
-# Training budget: 17,000 parent updates recorded in the recipe plus the selected checkpoint's final-run updates.
-recipe = json.load(open('experiments/20261019_learned_blend_joint_training_6000/inputs/training_recipe.json'))
-selected = json.load(open('experiments/20261019_learned_blend_joint_training_6000/results/best.json'))['checkpoint']
-final_updates = json.load(open(f'{selected}/manifest.json'))['update']
-checked += 1
-phrase = (f"the receiver was trained for $2.2\\cdot 10^{{4}}$ steps in total, with the combining weight $a$ added for "
-          f"the last $5\\cdot 10^{{3}}$")
-initialization = json.load(open('models/learned_blend/initialization.json'))
-new_blend = 'blend' in initialization['initialized'] and initialization['training_updates'] == 0
-if not (recipe['initializer_parent_updates'] == 17000 and final_updates == 5000 and new_blend
-        and recipe['initializer_checkpoint'] == 'models/learned_blend/initial_receiver.weights.h5'
-        and phrase in re.sub(r'\s+', ' ', tex)):
-    bad += 1; print('MISSING training budget', recipe['initializer_parent_updates'], final_updates)
+                k = int(np.flatnonzero(data['snr_db'] == snrs[point])[0])
+                active, ids, failed, last = data['active'].astype(bool), data['ue_ids'], data['errors'][k], {}
+                for tb in range(active.shape[0]):
+                    for u in np.flatnonzero(active[tb]):
+                        if tb >= 16 and failed[tb, u]:
+                            flags.append(last.get(int(ids[tb, u]), False))
+                        last[int(ids[tb, u])] = bool(failed[tb, u])
+        repeated[s, c] = float(np.mean(flags))
 
 
-# ---- Network Decisions, recomputed independently of experiments/20261106_crc_fallback and
-# experiments/20261112_early_retransmission (own loaders, own logistic fit with L-BFGS instead of Newton steps).
-REAL = ['candidate_persistent', 'candidate_reset', 'frozen_cold_k2', 'frozen_cold_k3', 'frozen_cold_k8',
-        'baseline_lslin_lmmse', 'baseline_lmmse_kbest']
+def percent(values):
+    values = sorted(round(100*v) for v in values)
+    return f'{values[0]}\\% to {values[-1]}\\%'
 
-def sweep_episodes(cond, methods):
-    """Per episode: (active, ue_ids, channel power), merged SNR grid, per-method errors [SNR, TB, UE]."""
-    out = []
-    for name in sorted(os.path.basename(p) for p in glob.glob(f'{SW}/sweep/{cond}/candidate_persistent/episode_*.npz')):
-        errs = {m: {} for m in methods}
-        for directory in ('sweep', 'sweep_high'):
-            for m in methods:
-                with np.load(f'{SW}/{directory}/{cond}/{m}/{name}') as data:
-                    for k, snr in enumerate(data['snr_db']):
-                        errs[m].setdefault(float(snr), data['errors'][k])
-                    base = (data['active'], data['ue_ids'], data['channel_power'])
-        snrs = sorted(errs[methods[0]])
-        out.append((base, snrs, {m: np.stack([errs[m][s] for s in snrs]) for m in methods}))
-    return out
 
-def after_failure(active, ids, errors_at_point):
-    """Per scored failure: whether the same UE's previous scheduled TB failed."""
-    last, flags = {}, []
-    for tb in range(active.shape[0]):
-        for pos in range(active.shape[1]):
-            if not active[tb, pos]:
-                continue
-            ue = int(ids[tb, pos])
-            if tb >= 16 and errors_at_point[tb, pos]:
-                flags.append(last.get(ue) is True)
-            last[ue] = bool(errors_at_point[tb, pos])
-    return flags
+expect(f'by {span([fallback["no", c] for c in CORE])}\\,dB, at the cost of a second receiver', 'fallback without power control')
+expect(f'{percent([unfixable["no", c] for c in CORE])} of the failed TBs fail for every receiver without perfect CSI, and '
+       f'{percent([repeated["no", c] for c in CORE])} follow an error', 'unfixable without power control')
+expect(f'the fallback reduces the required SNR by at most {max(fallback["pc", c] for c in CORE):.2f}\\,dB, and '
+       f'{percent([unfixable["pc", c] for c in CORE])} of the failed TBs', 'fallback with power control')
+expect(f'Only {percent([repeated["pc", c] for c in CORE])} of the errors then follow an error of the same UE', 'CRC history with power control')
+controller = json.load(open(f'{NET}/controller.json'))
+step = controller['step_by_step']['CRC history and receiver evidence, budget of the rule']
+single = controller['single_check']
+expect(f'catches {round(100*controller["rule"]["caught"])}\\% of the errors in the test sequences', 'rule')
+expect(f'the controller catches {round(100*step["caught"])}\\% of the errors instead', 'controller')
+claim('about four fifths of them already after channel estimation', .75 <= step['caught_at']['check 1']/step['caught'] <= .85, 'check 1 share')
+claim(f'flags {100*step["false_alarm"]:.1f}\\% of the correct TBs in the test sequences, as does this rule',
+      f'{100*step["false_alarm"]:.1f}' == f'{100*controller["rule"]["false_alarm"]:.1f}', 'false alarms')
+expect(f'It also catches {round(100*step["caught_first_failures"])}\\% of the errors that do not follow an error', 'first failures')
+claim('catch about a fifth of the errors after channel estimation',
+      .17 <= single['check 1, any receiver: noise and current channel strength']['caught'] <= .23, 'fifth')
+claim('the memory state and the filtered estimate add little',
+      single['check 1, + filtered estimate']['caught']-single['check 1, any receiver: noise and current channel strength']['caught'] < .03, 'adds little')
+expect(f'the LLRs raise the share to {round(100*single["check 2, + LLRs after detection"]["caught"])}\\%, and the parity checks to '
+       f'{round(100*single["check 3, + parity checks after 8 BP iterations"]["caught"])}\\%', 'LLRs and parity checks')
+claim(f'request {round(100*step["caught"])}\\% of the retransmissions before decoding finishes, compared with {round(100*controller["rule"]["caught"])}\\% for the CRC history alone',
+      True, 'abstract controller')
 
-kbest_gain, stuck_share, persistent, ues = {}, {}, [], {}
-for c in core:
-    eps = sweep_episodes(c, REAL)
-    snrs = eps[0][1]
-    def req(rule):
-        fails, n = np.zeros(len(snrs)), 0
-        for (active, ids, power), _, e in eps:
-            fails += (rule(e)[:, 16:] & active[16:][None]).sum((1, 2)); n += int(active[16:].sum())
-        return crossing(snrs, list(fails/n))
-    alone = req(lambda e: e['candidate_persistent'])
-    assert round(alone, 2) == round(required[c]['candidate_persistent'], 2)
-    kbest_gain[c] = round(round(alone, 2)-round(req(lambda e: e['candidate_persistent'] & e['baseline_lmmse_kbest']), 2), 2)
-    point = int(np.argmin(np.abs(np.asarray(snrs)-alone)))
-    failed = stuck = 0
-    ues[c] = set()
-    for index, ((active, ids, power), _, e) in enumerate(eps):
-        m = active[16:]
-        tb, pos = np.nonzero(e['candidate_persistent'][point, 16:] & m)
-        ues[c] |= {(index, int(ids[16+t, p])) for t, p in zip(tb, pos)}
-        failed += int((e['candidate_persistent'][point, 16:] & m).sum())
-        stuck += int((np.logical_and.reduce([e[r][point, 16:] for r in REAL]) & m).sum())
-        persistent += after_failure(active, ids, e['candidate_persistent'][point])
-    stuck_share[c] = 100*stuck/failed
-claim("decoding failed TBs again with LMMSE + K-Best reduces the required SNR only slightly", max(kbest_gain.values()) < .3,
-      'fallback to LMMSE + K-Best without power control')
-claim("most errors occur on TBs that no receiver without perfect CSI decodes, and almost all follow an error of the same "
-      "UE's previous TB", min(stuck_share.values()) > 85 and 100*np.mean(persistent) > 95, 'errors without power control')
-counts = [len(ues[c]) for c in core]
-with np.load('experiments/20261106_crc_fallback/results/latency.npz') as data:
-    kbest_ratio = np.median(data['latency_ms_baseline_lmmse_kbest'])/np.median(data['latency_ms_candidate_persistent'])
-checked += 1
-if not (round(kbest_ratio) == 7 and 'about seven times the latency' in section):
-    bad += 1; print('CLAIM FAILS LMMSE + K-Best about seven times the latency', kbest_ratio)
-print('fallback without power control', kbest_gain, {c: round(v, 1) for c, v in stuck_share.items()},
-      'persistence', round(100*np.mean(persistent), 2))
+# --------------------------------------------------------------------------------------------- further datasets
+FURTHER = {'first': 'experiments/20261118_further_datasets/results/v2/errors.npz',
+           'second': 'experiments/20261118_further_datasets/results/seed86/errors.npz'}
+if all(glob.glob(path) for path in FURTHER.values()) and 'further independent datasets' in text:
+    names = ['historical_tdl_b100', 'historical_tdl_c300', 'natural_umi', 'natural_uma', 'controlled_topology_change',
+             'schedule_gap_reentry', 'close_los', 'near_far', 'ray_traced_munich']
+    rates, blocks = {}, {}
+    for ds, path in FURTHER.items():
+        data = np.load(path)
+        for c, name in enumerate(names[:data['active'].shape[0]]):
+            mask = data['active'][c, :, 16:]
+            blocks[ds, name] = int(mask.sum())
+            for m in ('candidate_persistent', 'candidate_reset', 'frozen_cold_k8'):
+                rates[ds, name, m] = (data[f'errors_{m}'][c, 0, :, 16:] & mask).sum()/mask.sum()
+    cases = sorted({k[:2] for k in rates})
+    lower = [k for k in cases if rates[k+('candidate_persistent',)] < rates[k+('candidate_reset',)]]
+    same = [k for k in cases if rates[k+('candidate_persistent',)] == rates[k+('candidate_reset',)]]
+    behind = [k for k in cases if rates[k+('frozen_cold_k8',)] < rates[k+('candidate_persistent',)]]
+    ahead = [k for k in cases if rates[k+('candidate_persistent',)] < rates[k+('frozen_cold_k8',)]]
+    claim(f'the memory lowers TBLER in {len(lower)} of the {len(cases)} cases', True, 'further datasets: memory')
+    tdl = ('first', 'historical_tdl_b100')
+    expect(f"from {100*rates[tdl+('candidate_reset',)]:.1f}\\% to {100*rates[tdl+('candidate_persistent',)]:.1f}\\% for a TDL channel",
+           'further datasets: TDL example')
+    claim('for closely spaced LOS UEs on one dataset, TBLER is unchanged', [k[1] for k in same] == ['close_los']
+          and len(lower)+len(same) == len(cases), 'further datasets: unchanged')
+    claim(f'outperforms the Large NRX with $N_{{\\mathrm{{it}}}}=8$ in {len(ahead)} of the {len(cases)} cases', True,
+          'further datasets: ahead of eight iterations')
+    claim('namely for both TDL channels and for the urban macrocell channels on both datasets',
+          set(ahead) == {(ds, name) for ds in FURTHER for name in ('historical_tdl_b100', 'historical_tdl_c300', 'natural_uma')},
+          'further datasets: which cases')
+    example = ('first', 'historical_tdl_c300')
+    expect(f"with a TBLER of {100*rates[example+('candidate_persistent',)]:.1f}\\% instead of {100*rates[example+('frozen_cold_k8',)]:.1f}\\%",
+           'further datasets: example ahead')
+    claim(f'remains ahead in {len(behind)} cases', True, 'further datasets: eight iterations ahead')
+    relative = sorted(behind, key=lambda k: rates[k+('candidate_persistent',)]/rates[k+('frozen_cold_k8',)], reverse=True)
+    claim('most clearly for closely spaced LOS and near-far UEs', all(k[1] in ('close_los', 'near_far') for k in relative[:3]),
+          'further datasets: largest deficits')
+else:
+    print('further datasets: not checked (results or paragraph missing)')
 
-# Power control: operating points, persistence, and the early-retransmission controller.
-EV = 'experiments/20261112_early_retransmission/results/evidence_pc'
-from scipy.optimize import minimize
-
-def pc_files(cond, episodes=range(32)):
-    return [f'{EV}/{cond}/episode_{i:05d}.npz' for i in episodes]
-
-pc_point = {}
-for c in core:
-    fails, n = 0, 0
-    for path in pc_files(c):
-        with np.load(path) as data:
-            a = data['active'][16:]
-            fails = fails+(data['errors'][:, 16:] & a[None]).sum((1, 2)); n += int(a.sum()); grid = data['snr_db']
-    pc_point[c] = float(grid[np.argmin(np.abs(grid-crossing(list(grid), list(fails/n))))])
-
-def pc_rows(cond, episodes):
-    """Controller inputs, failure, and CRC history of every active UE-TB at the operating point."""
-    out = []
-    for path in pc_files(cond, episodes):
-        with np.load(path) as data:
-            k = int(np.flatnonzero(data['snr_db'] == pc_point[cond])[0])
-            names = list(data['features'])
-            ev, act, err, ids = data['evidence'][k], data['active'], data['errors'][k], data['ue_ids']
-            n0 = data['noise_variance'][k]
-        last = {}
-        for tb in range(act.shape[0]):
-            for pos in range(act.shape[1]):
-                if not act[tb, pos]:
-                    continue
-                ue, f = int(ids[tb, pos]), lambda name: float(ev[tb, pos, names.index(name)])
-                prev = last.get(ue)
-                last[ue] = bool(err[tb, pos])
-                if tb < 16:
-                    continue
-                entries = f('memory_entries')
-                logit = lambda p: math.log(min(max(p, 1e-12), 1-1e-12)/(1-min(max(p, 1e-12), 1-1e-12)))
-                out.append(dict(
-                    failed=bool(err[tb, pos]), prev=prev,
-                    previous_failed_flag=float(prev is True), no_previous=float(prev is None),
-                    noise=10*math.log10(n0[tb]), current_strength=10*math.log10(f('ls_power')/(4*f('ls_noise'))),
-                    has_memory=float(entries > 0), entries=entries, newest_age=f('memory_newest_age'),
-                    recent_strength=(10*math.log10(max(f('memory_newest_power'), 1e-12)/max(4*f('memory_newest_noise'), 1e-12))
-                                     if entries > 0 else 0.),
-                    estimate_strength=10*math.log10(f('estimate_power')/(4*f('ls_noise'))),
-                    estimate_error=10*math.log10(f('estimate_error')/f('estimate_power')),
-                    llr_bit_error=logit(f('llr_bit_error')), unsatisfied_checks=math.log1p(f('unsatisfied_checks')),
-                    failed_code_blocks=f('failed_code_blocks'), posterior_bit_error=logit(f('posterior_bit_error'))))
-    return out
-
-pc_all = [r for c in core for r in pc_rows(c, range(32))]
-pc_fit = [r for c in core for r in pc_rows(c, range(16))]
-pc_test = [r for c in core for r in pc_rows(c, range(16, 32))]
-pc_persistent = 100*np.mean([r['prev'] is True for r in pc_all if r['failed']])
-claim("However, only about three quarters of the errors now follow an error of the same UE's previous TB",
-      70 <= pc_persistent <= 80, 'persistence with power control')
-
-# Receivers and CRC fallback with power control: every receiver decoded the same power-controlled episodes.
-RX = 'experiments/20261112_early_retransmission/results/receivers_pc'
-pc_req, pc_kbest, pc_stuck, pc_ues, pc_changed = {}, {}, {}, {}, {}
-fewer = more = 0
-steps = []
-for c in core:
-    eps = []
-    changed = with_entry = 0
-    for i in range(32):
-        name = f'episode_{i:05d}.npz'
-        with np.load(f'{EV}/{c}/{name}') as data:
-            e = {'candidate_persistent': data['errors']}
-            act, grid, fp, ids, gain = (data['active'], data['snr_db'], data['fingerprint'], data['ue_ids'],
-                                        data['power_gain_db'])
-        for m in REAL[1:]:
-            with np.load(f'{RX}/{c}/{m}/{name}') as data:
-                assert np.array_equal(data['fingerprint'], fp) and np.array_equal(data['snr_db'], grid), (c, m, name)
-                e[m] = data['errors']
-        eps.append((act, e, ids))
-        # Power change since the UE's newest memory entry (its last TB within the 8-slot expiry), TBs 17-64.
-        newest = {}
-        for tb in range(act.shape[0]):
-            for pos in range(act.shape[1]):
-                if not act[tb, pos]:
-                    continue
-                ue = int(ids[tb, pos])
-                if tb >= 16 and ue in newest and tb-newest[ue][0] <= 8:
-                    with_entry += 1
-                    step = gain[tb, pos]-newest[ue][1]
-                    if abs(step) > 1e-6:
-                        changed += 1; steps.append(step)
-                newest[ue] = (tb, gain[tb, pos])
-    pc_changed[c] = 100*changed/with_entry
-    k =int(np.flatnonzero(grid == pc_point[c])[0])
-    pc_ues[c] = len({(i, int(ids[16+t, p])) for i, (act, e, ids) in enumerate(eps)
-                     for t, p in zip(*np.nonzero(e['candidate_persistent'][k, 16:] & act[16:]))})
-    for act, e, ids in eps:
-        own, large = (int((e[m][k, 16:] & act[16:]).sum()) for m in ('candidate_persistent', 'frozen_cold_k8'))
-        fewer += own < large; more += own > large
-    eps = [(act, e) for act, e, ids in eps]
-    def pc_crossing(rule):
-        fails, n = np.zeros(len(grid)), 0
-        for act, e in eps:
-            fails += (rule(e)[:, 16:] & act[16:][None]).sum((1, 2)); n += int(act[16:].sum())
-        return crossing(list(grid), list(fails/n))
-    pc_req[c] = {m: round(pc_crossing(lambda e, m=m: e[m]), 2) for m in REAL}
-    pc_kbest[c] = round(pc_req[c]['candidate_persistent']
-                        - round(pc_crossing(lambda e: e['candidate_persistent'] & e['baseline_lmmse_kbest']), 2), 2)
-    k = int(np.flatnonzero(grid == pc_point[c])[0])
-    failed = sum(int((e['candidate_persistent'][k, 16:] & act[16:]).sum()) for act, e in eps)
-    stuck = sum(int((np.logical_and.reduce([e[r][k, 16:] for r in REAL]) & act[16:]).sum()) for act, e in eps)
-    pc_stuck[c] = 100*stuck/failed
-claim("which changed the transmit power since the newest entry for fewer than one in ten TBs with an entry, mostly by "
-      "1\\,dB", max(pc_changed.values()) < 10 and np.mean(np.isclose(np.abs(steps), 1.)) > .5,
-      'power changes since the newest memory entry')
-claim("At the SNR point closest to a TBLER of 10\\%, the errors now stem from many more UEs.",
-      min(pc_ues.values()) > 1.5*max(counts), 'UEs with power control')
-claim("although these differences rest on only a few UEs", max(counts) <= 20 and max(counts) < min(pc_ues.values()),
-      'few UEs without power control')
-print('power control: power changed', {c: round(v, 2) for c, v in pc_changed.items()}, 'UEs', pc_ues,
-      'sequences fewer/more', fewer, more)
-pc_own = [pc_req[c]['candidate_persistent'] for c in core]
-pc_ahead = [round(pc_req[c]['frozen_cold_k8']-pc_req[c]['candidate_persistent'], 2) for c in core]
-pc_memory = [round(pc_req[c]['candidate_reset']-pc_req[c]['candidate_persistent'], 2) for c in core]
-claim("The proposed NRX then even outperforms the Large NRX with $N_{\\mathrm{it}}=8$ in all three conditions",
-      min(pc_ahead) > 0, 'ahead of N_it=8 with power control')
-claim("With closed-loop power control, the proposed NRX even outperforms the released eight-iteration NRX", min(pc_ahead) > 0,
-      'ahead of N_it=8 with power control, summary', ('abstract', 'introduction'))
-claim("and the memory again reduces the required SNR", min(pc_memory) > 0, 'memory gain with power control')
-claim("Decoding failed TBs again with LMMSE + K-Best still barely helps, as most errors still occur on TBs that no "
-      "receiver without perfect CSI decodes", max(pc_kbest.values()) < .1 and min(pc_stuck.values()) > 80,
-      'fallback with power control')
-print('receivers with power control', pc_req, 'ahead of N_it=8', pc_ahead, 'memory', pc_memory,
-      'K-Best fallback', pc_kbest, {c: round(v, 1) for c, v in pc_stuck.items()})
-
-def logistic(rows, inputs):
-    x = np.array([[r[i] for i in inputs] for r in rows]); y = np.array([r['failed'] for r in rows], float)
-    mu, sd = x.mean(0), x.std(0); sd[sd == 0] = 1
-    z = np.c_[np.ones(len(x)), (x-mu)/sd]
-    def objective(w):
-        s = z@w
-        loss = np.sum(np.logaddexp(0, s)-y*s)+.5*np.sum(w[1:]**2)
-        grad = z.T@(1/(1+np.exp(-s))-y)+np.r_[0, w[1:]]
-        return loss, grad
-    w = minimize(objective, np.zeros(z.shape[1]), jac=True, method='L-BFGS-B',
-                 options={'gtol': 1e-12, 'ftol': 1e-15, 'maxiter': 10000}).x
-    return lambda rows2: np.c_[np.ones(len(rows2)), (np.array([[r[i] for i in inputs] for r in rows2])-mu)/sd]@w
-
-def threshold_for(scores, rows, share):
-    ok = np.array([not r['failed'] for r in rows])
-    return np.quantile(scores[ok], 1-share)
-
-failed_test = np.array([r['failed'] for r in pc_test]); first_test = failed_test & np.array([r['prev'] is not True for r in pc_test])
-rule_flags = np.array([r['prev'] is True for r in pc_test])
-rule_budget = np.mean([r['prev'] is True for r in pc_fit if not r['failed']])
-claim(f"requesting a retransmission whenever the UE's previous TB failed catches {100*rule_flags[failed_test].mean():.0f}\\% "
-      "of the errors in the test sequences", 70 <= 100*rule_flags[failed_test].mean() <= 80, 'CRC-history rule with power control')
-CHECKS = [['previous_failed_flag', 'no_previous', 'noise', 'current_strength', 'has_memory', 'recent_strength', 'entries',
-           'newest_age', 'estimate_strength', 'estimate_error']]
-CHECKS.append(CHECKS[0]+['llr_bit_error'])
-CHECKS.append(CHECKS[1]+['unsatisfied_checks', 'failed_code_blocks', 'posterior_bit_error'])
-models = [logistic(pc_fit, inputs) for inputs in CHECKS]
-fit_scores, test_scores = [m(pc_fit) for m in models], [m(pc_test) for m in models]
-ok_fit = np.array([not r['failed'] for r in pc_fit])
-lo, hi = 0., rule_budget
-for _ in range(60):
-    mid = (lo+hi)/2
-    union = np.any([s > threshold_for(s, pc_fit, mid) for s in fit_scores], 0)
-    lo, hi = (lo, mid) if union[ok_fit].mean() > rule_budget else (mid, hi)
-limits = [threshold_for(s, pc_fit, lo) for s in fit_scores]
-first_check = np.full(len(pc_test), -1)
-for i in (2, 1, 0):
-    first_check[test_scores[i] > limits[i]] = i
-caught = first_check >= 0
-ctrl, rule, early = (100*caught[failed_test].mean(), 100*rule_flags[failed_test].mean(),
-                     100*(first_check[failed_test] == 0).mean())
-no_more_alarms = caught[~failed_test].mean() <= rule_flags[~failed_test].mean()
-claim(f"the controller catches {ctrl:.0f}\\% of the errors instead, most of them already after channel "
-      "estimation, without more unneeded retransmissions", early > ctrl/2 and no_more_alarms and ctrl > rule,
-      'early-retransmission controller')
-claim("It also catches almost half of the errors that do not follow an error", 40 <= 100*caught[first_test].mean() < 50,
-      'first errors caught')
-claim("lets the network request most retransmissions before decoding finishes, clearly more than the CRC history alone",
-      ctrl > 50 and ctrl-rule > 5, 'controller summary', ('abstract', 'introduction'))
-claim("clearly more than the CRC history alone and without more unneeded retransmissions", no_more_alarms,
-      'no more unneeded retransmissions, abstract', ('abstract',))
-single = {}
-for label, inputs in (('any', ['noise', 'current_strength']),
-                      ('memory', ['noise', 'current_strength', 'has_memory', 'recent_strength', 'entries', 'newest_age',
-                                  'estimate_strength', 'estimate_error']),
-                      ('llr', ['noise', 'current_strength', 'has_memory', 'recent_strength', 'entries', 'newest_age',
-                               'estimate_strength', 'estimate_error', 'llr_bit_error'])):
-    model = logistic(pc_fit, inputs)
-    flags = model(pc_test) > threshold_for(model(pc_fit), pc_fit, .01)
-    single[label] = 100*flags[failed_test].mean()
-claim("the noise level and LS channel power catch about a quarter of the errors after channel estimation, the memory and "
-      "the error covariance add little, and the LLRs about double the share",
-      20 <= single['any'] <= 30 and single['memory']-single['any'] < 3 and 1.7 <= single['llr']/single['memory'] <= 2.3,
-      'evidence by source')
-print('power control: operating points', pc_point, 'persistence', round(pc_persistent, 2),
-      'rule', round(100*rule_flags[failed_test].mean(), 2), round(100*rule_flags[~failed_test].mean(), 2),
-      'controller', round(100*caught[failed_test].mean(), 2), round(100*caught[~failed_test].mean(), 2),
-      'first', round(100*caught[first_test].mean(), 2), 'single', {k: round(v, 2) for k, v in single.items()})
-# ---- Retrained two-iteration baseline (experiments/20261113_retrained_k2_baseline): own loaders and crossings.
-RT = 'experiments/20261113_retrained_k2_baseline'
-def rt_rates(directories, cond):
-    """Pooled TBLER per SNR over TBs 17-64; the first directory wins on a shared SNR point, which must agree."""
-    table = {}
-    for directory in directories:
-        files = sorted(glob.glob(f'{RT}/results/test/{directory}/{cond}/retrained_k2/episode_*.npz'))
-        assert len(files) == 32, (directory, cond, len(files))
-        stored = SW if directory != 'power_control' else 'experiments/20261112_early_retransmission/results/receivers_pc'
-        counts = {}
-        for path in files:
-            with np.load(path) as data, np.load(f'{stored}/{directory}/{cond}/frozen_cold_k2/{os.path.basename(path)}'
-                                                if directory != 'power_control' else
-                                                f'{stored}/{cond}/frozen_cold_k2/{os.path.basename(path)}') as ref:
-                assert np.array_equal(data['fingerprint'], ref['fingerprint']) and np.array_equal(data['snr_db'], ref['snr_db'])
-                mask = data['active'][16:]
-                for k, snr in enumerate(data['snr_db']):
-                    entry = counts.setdefault(float(snr), [0, 0])
-                    entry[0] += int((data['errors'][k, 16:] & mask).sum()); entry[1] += int(mask.sum())
-        for snr, value in counts.items():
-            if snr in table:
-                assert table[snr] == value, ('shared SNR point disagrees', cond, snr)
-            table.setdefault(snr, value)
-    snrs = sorted(table)
-    return crossing(snrs, [table[s][0]/table[s][1] for s in snrs])
-rt = {c: rt_rates(('sweep', 'sweep_high'), c) for c in core}
-rt_pc = {c: rt_rates(('power_control',), c) for c in core}
-r2 = lambda v: round(v, 2)
-narrow = [r2(r2(required[c]['frozen_cold_k2'])-r2(rt[c])) for c in core]
-lead = [r2(r2(rt[c])-r2(required[c]['candidate_persistent'])) for c in core]
-no_memory_lead = [r2(r2(rt[c])-r2(required[c]['candidate_reset'])) for c in core]
-pc_lead = [r2(r2(rt_pc[c])-pc_req[c]['candidate_persistent']) for c in core]
-claim("Retraining it with $N_{\\mathrm{it}}=2$ recovers only about half a dB of this gap, so it remains at least 0.6\\,dB "
-      "behind the proposed NRX", .4 <= min(narrow) and max(narrow) <= .7 and min(lead) >= .6, 'retrained baseline')
-claim("The proposed NRX with no memory already outperforms this retrained baseline, and the memory adds the rest",
-      min(no_memory_lead) > 0, 'no memory vs retrained baseline')
-claim("it remains clearly ahead of the Large NRX retrained with $N_{\\mathrm{it}}=2$", min(pc_lead) > .5,
-      'retrained baseline with power control')
-claim("performs close to the eight-iteration NRX and at least 0.6\\,dB better than the same NRX retrained with two "
-      "iterations on the same data", max(k8.values()) < .3 and min(lead) >= .6, 'fair comparison, abstract', ('abstract',))
-claim("it performs close to the eight-iteration NRX for urban microcell (UMi) channels, channel changes, and scheduling "
-      "gaps, and it clearly outperforms the same NRX retrained with two iterations on the same data",
-      max(k8.values()) < .3 and min(lead) > .5, 'fair comparison, introduction', ('introduction',))
-# Budget: the baseline's selected checkpoint lies within the 22,000 updates the paper states, and training ran them all.
-best_rt = json.load(open(f'{RT}/results/best.json'))
-history = sum(1 for _ in open('models/retrained_k2_baseline_20261113/history.jsonl'))
-checked += 1
-if not (history == 22000 and best_rt['update'] <= 22000 and
-        'retrain the Large NRX with $N_{\\mathrm{it}}=2$ for the same $2.2\\cdot 10^{4}$ steps' in section):
-    bad += 1; print('MISSING retrained baseline budget', history, best_rt['update'])
-# The memory adds the rest: the no-memory lead and the memory gain sum to the remaining gap in every condition.
-checked += 1
-if not all(abs(no_memory_lead[i]+gap(c, 'candidate_reset')-lead[i]) < .011 for i, c in enumerate(core)):
-    bad += 1; print('CLAIM FAILS the memory adds the rest', no_memory_lead, lead)
-for statement, holds in {
-        'retraining improves the two-iteration NRX in every condition': min(narrow) > 0,
-        'the proposed NRX beats the retrained baseline in every condition, with and without power control':
-            min(lead) > 0 and min(pc_lead) > 0,
-        'the retrained baseline stays behind the Large NRX with N_it=8': all(rt[c] > required[c]['frozen_cold_k8'] for c in core),
-}.items():
-    checked += 1
-    if not holds:
-        bad += 1; print('CLAIM FAILS', statement)
-# Cost of the iteration cut even after retraining (abstract and introduction): the retrained N_it=2 baseline vs N_it=8.
-retrained_cut = [r2(r2(rt[c])-r2(required[c]['frozen_cold_k8'])) for c in core]
-for phrase, where in (("which costs up to 1\\,dB even after retraining for two iterations", 'abstract'),
-                      ("of 10\\% by up to 1\\,dB, even when the NRX is retrained for two iterations", 'introduction')):
-    claim(phrase, .9 <= max(retrained_cut) <= 1. and min(retrained_cut) > .5, f'retrained iteration cut, {where}', (where,))
-
-# ---- Effective SNR (SNR + channel power of the UE in dB), pooled over all sequences, 1-dB bins as for Fig. 3.
-NI = 'experiments/20261114_no_idd_ablation/results/test'
-def effective_curve(cond, method, base=SW):
-    table = {}
-    for directory, skip in (('sweep', 0), ('sweep_high', 1)):
-        files = sorted(glob.glob(f'{SW}/{directory}/{cond}/candidate_persistent/episode_*.npz'))
-        assert len(files) == 32
-        for path in files:
-            other = f'{base}/{directory}/{cond}/{method}/{os.path.basename(path)}'
-            if not os.path.isfile(other):
-                return None
-            with np.load(path) as ref, np.load(other) as data:
-                assert np.array_equal(ref['snr_db'], data['snr_db'])
-                power = 10*np.log10(ref['channel_power'])
-                for k in range(skip, len(data['snr_db'])):
-                    for tb in range(16, 64):
-                        for ue in range(2):
-                            if ref['active'][tb, ue]:
-                                bin_ = math.floor(data['snr_db'][k] + power[tb, ue])
-                                if -10 <= bin_ < 30:
-                                    entry = table.setdefault(bin_, [0, 0])
-                                    entry[0] += int(data['errors'][k, tb, ue]); entry[1] += 1
-    bins = sorted(table)
-    return [b + .5 for b in bins], [table[b][0]/table[b][1] for b in bins]
-nrx = {'frozen_cold_k2': SW, 'frozen_cold_k8': SW, 'retrained_k2': f'{RT}/results/test', 'candidate_reset': SW,
-       'candidate_persistent': SW}
-nrx.update({'candidate_persistent_no_idd': NI, 'candidate_reset_no_idd': NI})
-eff = {c: {m: effective_curve(c, m, b) for m, b in nrx.items()} for c in core}
-eff_req = {c: {m: crossing(*eff[c][m]) for m in nrx} for c in core}
-drop = {c: {m: crossing(*eff[c][m], .05)-crossing(*eff[c][m], .8) for m in nrx} for c in core}
-claim("against which the TBLER of every NRX falls from 80\\% to 5\\% within 4\\,dB",
-      max(v for c in core for v in drop[c].values()) <= 4, 'effective SNR: steep curves')
-eff_lead = [eff_req[c]['retrained_k2']-eff_req[c]['candidate_persistent'] for c in core]
-eff_k8 = [eff_req[c]['frozen_cold_k8']-eff_req[c]['candidate_persistent'] for c in core]
-eff_memory = [eff_req[c]['candidate_reset']-eff_req[c]['candidate_persistent'] for c in core]
-claim("In effective SNR, the proposed NRX requires at least 0.7\\,dB less than the retrained Large NRX and matches or "
-      "outperforms the Large NRX with $N_{\\mathrm{it}}=8$", min(eff_lead) >= .7 and min(eff_k8) > -.1,
-      'effective SNR: retrained baseline and N_it=8')
-claim("and the required effective SNR by more than half a dB", min(eff_memory) > .5, 'effective SNR: memory gain')
-print('effective SNR required', {c: {m: round(v, 2) for m, v in eff_req[c].items()} for c in core})
-print('effective SNR: lead over retrained', [round(v, 2) for v in eff_lead], 'vs k8', [round(v, 2) for v in eff_k8],
-      'memory', [round(v, 2) for v in eff_memory], 'widest 80-5% drop', round(max(v for c in core for v in drop[c].values()), 2))
-
-# ---- Channel change: one UE whose new channel is very weak fails in every TB after the change, for every receiver.
-everyone = ['baseline_lslin_lmmse', 'baseline_lmmse_kbest', 'baseline_perf_csi_kbest', 'frozen_cold_k2', 'frozen_cold_k8',
-            'candidate_reset', 'candidate_persistent']
-floor_ok, culprit = True, None
-for m in everyone:
-    files = sorted(glob.glob(f'{SW}/sweep_high/controlled_topology_change/{m}/episode_*.npz'))
-    fails = np.array([[(np.load(f)['errors'][k, 16:] & np.load(f)['active'][16:]).sum() for f in files]
-                      for k in range(len(np.load(files[0])['snr_db']))])
-    blocks = sum(int(np.load(f)['active'][16:].sum()) for f in files)
-    floor_ok &= fails[-1].sum()/blocks >= .009
-with np.load(f'{SW}/sweep_high/controlled_topology_change/candidate_persistent/episode_00024.npz') as data:
-    after = data['active'][32:, 1]
-    all_power = np.concatenate([10*np.log10(np.load(f)['channel_power'][16:][np.load(f)['active'][16:]])
-                                for f in glob.glob(f'{SW}/sweep_high/controlled_topology_change/candidate_persistent/*.npz')])
-    weak = np.median(10*np.log10(data['channel_power'][32:, 1])) - np.median(all_power)
-for m in everyone:
-    with np.load(f'{SW}/sweep_high/controlled_topology_change/{m}/episode_00024.npz') as data:
-        floor_ok &= bool(data['errors'][:, 32:, 1][:, after].mean(1).min() >= .9)
-claim("For channel change, TBLER stays at about 1\\% or more for all receivers because the new channel of one UE is about "
-      "18\\,dB weaker than the median, so almost all of its TBs after the change fail", floor_ok and -18.5 <= weak <= -17.5,
-      'channel-change floor')
-print('channel-change floor: weak UE', round(float(weak), 1), 'dB below the median TB')
-
-# ---- Complexity: real multiplications per slot (experiments/20261114_no_idd_ablation/results/complexity.json),
-# with the CGNN iteration cross-checked against its weights times the grid positions of both UEs.
-cx = json.load(open('experiments/20261114_no_idd_ablation/results/complexity.json'))
-grid_positions = cx['grid']['subcarriers']*cx['grid']['ofdm_symbols']*cx['grid']['users']
-cgnn = cx['cgnn_iteration']['flops']/2
-checked += 1
-if abs(cgnn/(cx['weights']['cgnn_iteration']*grid_positions)-1) > .02:
-    bad += 1; print('CLAIM FAILS CGNN multiplications vs weights x positions', cgnn, cx['weights']['cgnn_iteration']*grid_positions)
-filt = cx['channel_filter_counted']['real_mult']
-idd = cx['idd_detector']['real_mult']+cx['idd_combining']['real_mult']
-print('multiplications per slot: CGNN iteration', f'{cgnn:.3g}', 'filter', f'{filt:.3g}', 'IDD', f'{idd:.3g}',
-      'share', round((filt+idd)/cgnn, 3))
-# ---- Proposed NRX without IDD (experiments/20261114_no_idd_ablation): same weights, LLRs L straight to the
-# 20-iteration LDPC decoder of all other receivers. Same sequences as the sweep (fingerprints and SNR grids).
-def ni_required(cond, method):
-    table = {}
-    for directory in ('sweep', 'sweep_high'):
-        files = sorted(glob.glob(f'{NI}/{directory}/{cond}/{method}/episode_*.npz'))
-        assert len(files) == 32, (cond, method, directory, len(files))
-        for path in files:
-            with np.load(path) as data, np.load(f'{SW}/{directory}/{cond}/candidate_persistent/{os.path.basename(path)}') as ref:
-                assert np.array_equal(data['fingerprint'], ref['fingerprint']) and np.array_equal(data['snr_db'], ref['snr_db'])
-                assert np.array_equal(data['active'], ref['active']) and int(data['bp_iterations']) == 20
-                mask = data['active'][16:]
-                for k, snr in enumerate(data['snr_db']):
-                    entry = table.setdefault(float(snr), {}).setdefault(directory, [0, 0])
-                    entry[0] += int((data['errors'][k, 16:] & mask).sum()); entry[1] += int(mask.sum())
-    snrs = sorted(table)
-    return crossing(snrs, [table[x].get('sweep', table[x].get('sweep_high'))[0]/table[x].get('sweep', table[x].get('sweep_high'))[1]
-                           for x in snrs])
-ni = {c: {m: ni_required(c, f'{m}_no_idd') for m in ('candidate_persistent', 'candidate_reset')} for c in core}
-ni_memory = [r2(r2(ni[c]['candidate_reset'])-r2(ni[c]['candidate_persistent'])) for c in core]
-ni_lead = [r2(r2(rt[c])-r2(ni[c]['candidate_persistent'])) for c in core]
-ni_no_memory_lead = [r2(r2(rt[c])-r2(ni[c]['candidate_reset'])) for c in core]
-ni_eff_memory = [eff_req[c]['candidate_reset_no_idd']-eff_req[c]['candidate_persistent_no_idd'] for c in core]
-claim("isolates the memory. It reduces the required SNR in all three conditions, by 0.3 to 0.4\\,dB, and the required "
-      "effective SNR by more than half a dB, with and without IDD",
-      all(round(v, 1) in (.3, .4) for v in list(memory_gain.values())+ni_memory) and min(eff_memory+ni_eff_memory) > .5,
-      'memory gain with and without IDD')
-claim("We also evaluate both proposed versions without IDD, i.e., with their LLRs $L$ passed to the LDPC decoder. With IDD, "
-      "they use 18 BP iterations, all others 20", True, 'no-IDD setup (20 BP iterations asserted per file)')
-claim("and its gain remains without IDD", min(ni_memory) > 0 and min(ni_eff_memory) > 0,
-      'no-IDD memory gain, abstract', ('abstract',))
-# Without IDD vs. the released Large NRX with N_it = 3 (required SNR, all three conditions).
-k3 = {c: crossing(*curve(c, 'frozen_cold_k3')) for c in core}
-ni_vs_k3 = [r2(r2(k3[c])-r2(ni[c]['candidate_persistent'])) for c in core]
-ni_no_memory_vs_k3 = [r2(r2(k3[c])-r2(ni[c]['candidate_reset'])) for c in core]
-claim("Without IDD, which leaves the LDPC decoder unchanged, the proposed NRX still outperforms the retrained baseline and "
-      "matches or outperforms the Large NRX with $N_{\\mathrm{it}}=3$ in all three conditions, but its no-memory version does "
-      "neither", min(ni_lead) > 0 and min(ni_vs_k3) >= -.05 and max(ni_no_memory_lead) < 0 and max(ni_no_memory_vs_k3) < -.05,
-      'no IDD vs retrained baseline and N_it=3')
-
-# ---- Latency (experiments/20261114_tensorrt_latency): TensorRT FP16 engines on the A40, batch size one, medians recomputed
-# from the raw samples of time_fused.py (CUDA events, and CUDA graphs as a second view); the filter as one CUDA kernel.
-TRT = 'experiments/20261114_tensorrt_latency/results'
-fused = json.load(open(f'{TRT}/fused.json'))
-with np.load(f'{TRT}/fused_samples.npz') as data:
-    timing = {mode: {k[len(mode)+1:]: float(np.median(data[k])) for k in data.files if k.startswith(mode+'_')}
-              for mode in ('events', 'graph')}
-assert all(len(np.load(f'{TRT}/fused_samples.npz')[k]) >= 2000 for k in np.load(f'{TRT}/fused_samples.npz').files)
-ms = timing['events']
-iteration_ms = {mode: (t['large_k8']-t['large_k2'])/6 for mode, t in timing.items()}
-added = {mode: t['fused']/t['large_k2']-1 for mode, t in timing.items()}
-added_iterations = {mode: (t['fused']-t['large_k2'])/iteration_ms[mode] for mode, t in timing.items()}
-a100_k2 = .27+2*.35  # Wiesmayr et al.: about 270 us fixed and 350 us per iteration on the A100 GPU
-kernel_is_filter = (fused['check']['channel_all_finite'] and fused['check']['sign_agreement_abs_llr_above_1'] == 1.
-                    and fused['check']['channel_max_abs_diff'] <= 1e-4*fused['check']['channel_max_abs'])
-claim("Fig.~\\ref{fig:tradeoff} shows the median of 2{,}000 runs on an NVIDIA A40 GPU. One CGNN iteration takes 0.48\\,ms, "
-      "and the Large NRX with $N_{\\mathrm{it}}=8$ takes three times as long as with $N_{\\mathrm{it}}=2$, similar to the A100 "
-      "GPU in", fused['gpu'] == 'NVIDIA A40' and round(iteration_ms['events'], 2) == .48
-      and round(ms['large_k8']/ms['large_k2']) == 3 and abs(ms['large_k8']/ms['large_k2']-(.27+8*.35)/a100_k2) < .2,
-      'TensorRT: iteration and N_it=8')
-claim("each iteration adds about 350~$\\mu$s to a fixed 270~$\\mu$s", True, 'Wiesmayr A100 values used above',
-      ('related',))
-claim("The proposed NRX then takes less than 3\\% longer than the Large NRX with "
-      "$N_{\\mathrm{it}}=2$, i.e., less than a tenth of a CGNN iteration, at the required SNR of the Large NRX with "
-      "$N_{\\mathrm{it}}=3$", kernel_is_filter and max(added.values()) < .03 and max(added_iterations.values()) < .1
-      and abs(r2(ni['natural_umi']['candidate_persistent'])-r2(k3['natural_umi'])) <= .05, 'TensorRT: filter kernel')
-claim("where the Large NRX with $N_{\\mathrm{it}}=2$ takes about 0.97\\,ms~\\cite{wiesmayr2025realtime}, the proposed NRX "
-      "without IDD stays at about the 1\\,ms budget, which remains to be measured",
-      round(a100_k2, 2) == .97 and .95 <= a100_k2*(1+added['events']) <= 1.03, 'TensorRT: A100 estimate')
-# IDD: GPU kernel time from the profiler (own grouping of the recorded kernels), with the fused pair preparation, whose
-# outputs match the cuSOLVER path to rounding (same decoded bits); and its multiplications.
-idd_profile = json.load(open(f'{TRT}/idd.json'))
-profile = idd_profile['kernels_us_per_slot']
-idd_total = sum(profile.values())/1000
-detector = sum(v for k, v in profile.items() if k.startswith(('DetectorWarp', 'InitializeCorrected')))/1000
-# idd_outputs_reference: original detector kernels and covariance step (cuBLAS products in TF32); the covariance is now
-# one FP32 kernel, so the outputs agree to rounding (same decoded bits). idd_outputs_cusolver: cuSOLVER preparation.
-with np.load(f'{TRT}/idd_outputs_fused.npz') as fused_out, np.load(f'{TRT}/idd_outputs_reference.npz') as reference_out:
-    same_detector = (np.array_equal(fused_out['logits'] > 0, reference_out['logits'] > 0)
-                     and np.array_equal(fused_out['corrected'] > 0, reference_out['corrected'] > 0)
-                     and np.max(np.abs(fused_out['corrected']-reference_out['corrected']))
-                     <= 1e-4*np.max(np.abs(reference_out['corrected'])))
-with np.load(f'{TRT}/idd_outputs_fused.npz') as fused_out, np.load(f'{TRT}/idd_outputs_cusolver.npz') as library_out:
-    same_preparation = (np.array_equal(fused_out['logits'] > 0, library_out['logits'] > 0)
-                        and np.array_equal(fused_out['corrected'] > 0, library_out['corrected'] > 0)
-                        and np.max(np.abs(fused_out['factor']-library_out['factor'])) <= 1e-4*np.max(np.abs(library_out['factor'])))
-claim("IDD requires only $2.2\\cdot 10^{8}$ real multiplications per slot, a tenth of the $2.2\\cdot 10^{9}$ of "
-      "a CGNN iteration, but its CUDA kernels take 0.3\\,ms on the A40 GPU, more than half of it for evaluating all symbol "
-      "pairs. With "
-      "IDD, the proposed NRX is therefore not yet real-time capable",
-      idd_profile['preparation'] == 'fused' and same_preparation and same_detector and round(idd/1e8, 1) == 2.2
-      and round(cgnn/1e9, 1) == 2.2 and round(idd/cgnn, 1) == .1 and round(idd_total, 1) == .3
-      and detector/idd_total > .5, 'IDD multiplications and GPU time')
-claim("but its IDD round is not yet real-time capable. Without IDD, it matches the three-iteration NRX, and its channel "
-      "filter, as one CUDA kernel, adds less than 3\\% to the inference time of the two-iteration NRX",
-      idd_total > .1 and min(ni_vs_k3) >= -.05 and max(added.values()) < .03,  # IDD far exceeds what the budget leaves
-      'two operating points, abstract', ('abstract',))
-claim("Without IDD, which leaves the low-density parity-check (LDPC) decoder unchanged, the memory gain remains, and the NRX "
-      "matches the three-iteration NRX, with less than 3\\% more inference time than the two-iteration NRX when its filter "
-      "runs as one CUDA kernel, whereas IDD is not yet real-time capable",
-      min(ni_memory) > 0 and min(ni_vs_k3) >= -.05 and max(added.values()) < .03 and idd_total > .1,
-      'two operating points, introduction', ('introduction',))
-claim("and, without IDD, matches the three-iteration NRX at less than 3\\% more inference time than the two-iteration NRX", min(ni_vs_k3) >= -.05 and max(added.values()) < .03, 'two operating points, conclusion')
-print('TensorRT medians (events)', {k: round(v, 4) for k, v in ms.items()}, 'iteration', round(iteration_ms['events'], 4),
-      'added', {k: round(100*v, 2) for k, v in added.items()}, '% =', {k: round(v, 3) for k, v in added_iterations.items()},
-      'iterations; A100 estimate', round(a100_k2*(1+added['events']), 3), 'ms; IDD', round(idd_total, 3), 'ms (detector',
-      round(detector, 3), '); no IDD minus N_it=3', ni_vs_k3)
-print('without IDD', {c: {m: round(v, 2) for m, v in ni[c].items()} for c in core}, 'memory', ni_memory,
-      'effective memory', [round(v, 2) for v in ni_eff_memory], 'lead over retrained', ni_lead,
-      'no-memory lead', ni_no_memory_lead, 'filter share', round(filt/cgnn, 4))
-print('retrained baseline', {c: round(v, 2) for c, v in rt.items()}, 'power control', {c: round(v, 2) for c, v in rt_pc.items()},
-      'narrow', narrow, 'lead', lead, 'no memory lead', no_memory_lead, 'pc lead', pc_lead)
-print('RESULT:', 'ALL MATCH' if not bad else f'{bad} MISMATCHES')
+print(f'{checked} checks, {bad} problems')
+raise SystemExit(1 if bad else 0)

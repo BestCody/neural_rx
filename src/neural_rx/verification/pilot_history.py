@@ -53,7 +53,9 @@ def make_decode_step(receiver, model, memory_manager, decoder):
     def decode(y, channel, noise, active, ue_ids, slot, state):
         history = memory_manager.gather(state, ue_ids, slot, active)
         inputs = prepare_cgnn_inputs(receiver, y, channel, active)
-        output, _, _, _, observation, _ = model.decode(inputs, noise, ue_ids, history, decoder, mapping)
+        observation = model.observe(channel, noise)
+        grid, _ = model.detect(inputs, noise, history, observation)
+        output = decoder(mapping.grid_to_coded(grid))
         state = memory_manager.scatter(state, ue_ids, observation, active, slot)
         return output.hard_bits, output.crc_status, state
     return decode

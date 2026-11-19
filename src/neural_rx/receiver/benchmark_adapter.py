@@ -28,7 +28,7 @@ class PilotHistoryBenchmarkAdapter(_ArtifactGuard):
         if int(manifest["inference"]["iterations"]) != 2:
             raise ValueError("Channel memory requires K=2")
         super().__init__(manifest, artifacts)
-        from neural_rx.decoding import OneLayerGridCodeMap, DecoderAssistedTB
+        from neural_rx.decoding import OneLayerGridCodeMap, SoftTBInformationDecoder
         from neural_rx.backbone.core import build_backbone, model_checksum, prepare_cgnn_inputs
         from .pilot_layout import PilotLayout
         from .model import PilotHistoryReceiver, architecture_settings
@@ -48,12 +48,10 @@ class PilotHistoryBenchmarkAdapter(_ArtifactGuard):
             n_size_bwp_override=int(manifest["radio"]["n_size_bwp"]),
         )
         self.receiver = self.e2e._receiver
-        iterations = int(settings['architecture']['ldpc_iterations'])
         grid = self.e2e._transmitters[0].resource_grid
         self.layout = PilotLayout(self.receiver._ls_est, grid, dimensions["neighbor_radius"])
-        self.model = PilotHistoryReceiver(self.receiver._neural_rx._cgnn, self.layout,
-                                        self.e2e._transmitters[0]._mapper,
-                                        **dimensions, name="channel_memory_k2")
+        self.model = PilotHistoryReceiver(self.receiver._neural_rx._cgnn, self.layout, **dimensions,
+                                          name="channel_memory_k2")
         users = int(manifest["radio"]["maximum_active_ues"])
         antennas = int(manifest["radio"]["receive_antennas"])
         y = self.tf.zeros([1, 1, antennas, grid.num_ofdm_symbols, grid.fft_size], self.tf.complex64)
@@ -76,10 +74,9 @@ class PilotHistoryBenchmarkAdapter(_ArtifactGuard):
             capacity=int(policy["capacity"]), history_tbs=self.model.history_tbs,
             expiry_slots=int(policy["expiry_tbs"]),
         )
-        self.decoder = DecoderAssistedTB(
-            self.receiver._tb_encoders[0], self.receiver._tb_decoders[0], iterations,
-            int(settings['architecture']['ldpc_first_iterations']),
-        )
+        tb_decoder = self.receiver._tb_decoders[0]
+        self.bp_iterations = int(tb_decoder._decoder._num_iter)
+        self.decoder = SoftTBInformationDecoder(self.receiver._tb_encoders[0], tb_decoder, self.bp_iterations)
         self._model_checksum = model_checksum
         self._model_hash = model_checksum(self.model)
         self._prepare_inputs = prepare_cgnn_inputs
@@ -107,8 +104,7 @@ class PilotHistoryBenchmarkAdapter(_ArtifactGuard):
             observation = self.model.observe(channel, noise)
             preparation = self.model.prepare([None, None, channel, tf.cast(active, tf.float32)],
                                              observation, history, self.layout)
-            pending, finite = buffer.prepare_stage(observation, head, count, ids, active)
-            return observation, preparation, pending, finite
+            return observation, preparation
 
         @tf.function(reduce_retracing=True, jit_compile=False)
         def execute(y, channel, noise, control, active, head, count):
@@ -116,11 +112,11 @@ class PilotHistoryBenchmarkAdapter(_ArtifactGuard):
             if reset:
                 count = tf.zeros_like(count)
             tables = tuple(v.read_value() for v in (buffer.observations, buffer.timestamps, buffer.ports))
-            observation, preparation, pending, finite = prepare(
-                channel, noise, ids, active, step, head, count, tables)
+            observation, preparation = prepare(channel, noise, ids, active, step, head, count, tables)
             inputs = self._prepare_inputs(self.receiver, y, channel, tf.cast(active, tf.float32))
-            output, _, _, _, observation, _ = self.model.decode(inputs, noise, ids, None, self.decoder,
-                                                            self.grid_map, observation, preparation)
+            grid, _ = self.model.detect(inputs, noise, None, observation, preparation=preparation)
+            pending, finite = buffer.prepare_stage(observation, head, count, ids, active)
+            output = self.decoder(self.grid_map.grid_to_coded(grid))
             logits, hard, crc = checked_decoder_tensors(output)
             with tf.control_dependencies([logits, hard, crc]):
                 next_head, next_count, complete = buffer.commit(pending, finite, step)

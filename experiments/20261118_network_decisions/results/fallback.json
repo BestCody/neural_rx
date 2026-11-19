@@ -1,0 +1,96 @@
+{
+ "no_power_control": {
+  "natural_umi": {
+   "required_snr_db": 7.05,
+   "operating_point_db": 7.0,
+   "fallback_gain_db": {
+    "baseline_lmmse_kbest": 0.23,
+    "frozen_cold_k8": 0.21,
+    "baseline_lslin_lmmse": 0.0,
+    "upper": 0.24
+   },
+   "operating_point_failures": 311,
+   "blocks": 3072,
+   "unfixable_share_of_failures": 0.9389067524115756,
+   "unfixable_also_failed_by_perfect_csi": 0.9863013698630136,
+   "failures_after_failure_of_same_ue": 0.9871382636655949
+  },
+  "controlled_topology_change": {
+   "required_snr_db": 7.02,
+   "operating_point_db": 7.0,
+   "fallback_gain_db": {
+    "baseline_lmmse_kbest": 0.44,
+    "frozen_cold_k8": 0.15,
+    "baseline_lslin_lmmse": 0.0,
+    "upper": 0.47
+   },
+   "operating_point_failures": 309,
+   "blocks": 3072,
+   "unfixable_share_of_failures": 0.9061488673139159,
+   "unfixable_also_failed_by_perfect_csi": 0.875,
+   "failures_after_failure_of_same_ue": 0.970873786407767
+  },
+  "schedule_gap_reentry": {
+   "required_snr_db": 8.12,
+   "operating_point_db": 8.0,
+   "fallback_gain_db": {
+    "baseline_lmmse_kbest": 0.23,
+    "frozen_cold_k8": 0.2,
+    "baseline_lslin_lmmse": 0.0,
+    "upper": 0.3
+   },
+   "operating_point_failures": 276,
+   "blocks": 2725,
+   "unfixable_share_of_failures": 0.9637681159420289,
+   "unfixable_also_failed_by_perfect_csi": 0.8007518796992481,
+   "failures_after_failure_of_same_ue": 0.9528985507246377
+  }
+ },
+ "power_control": {
+  "natural_umi": {
+   "required_snr_db": 1.74,
+   "operating_point_db": 1.5,
+   "fallback_gain_db": {
+    "baseline_lmmse_kbest": 0.03,
+    "frozen_cold_k8": 0.04,
+    "baseline_lslin_lmmse": 0.0,
+    "upper": 0.04
+   },
+   "operating_point_failures": 511,
+   "blocks": 3072,
+   "unfixable_share_of_failures": 0.958904109589041,
+   "unfixable_also_failed_by_perfect_csi": 0.5653061224489796,
+   "failures_after_failure_of_same_ue": 0.8571428571428571
+  },
+  "controlled_topology_change": {
+   "required_snr_db": 2.16,
+   "operating_point_db": 2.0,
+   "fallback_gain_db": {
+    "baseline_lmmse_kbest": 0.05,
+    "frozen_cold_k8": 0.08,
+    "baseline_lslin_lmmse": 0.0,
+    "upper": 0.09
+   },
+   "operating_point_failures": 380,
+   "blocks": 3072,
+   "unfixable_share_of_failures": 0.8894736842105263,
+   "unfixable_also_failed_by_perfect_csi": 0.6863905325443787,
+   "failures_after_failure_of_same_ue": 0.8184210526315789
+  },
+  "schedule_gap_reentry": {
+   "required_snr_db": 2.48,
+   "operating_point_db": 2.5,
+   "fallback_gain_db": {
+    "baseline_lmmse_kbest": 0.13,
+    "frozen_cold_k8": 0.19,
+    "baseline_lslin_lmmse": 0.0,
+    "upper": 0.19
+   },
+   "operating_point_failures": 269,
+   "blocks": 2725,
+   "unfixable_share_of_failures": 0.8847583643122676,
+   "unfixable_also_failed_by_perfect_csi": 0.5882352941176471,
+   "failures_after_failure_of_same_ue": 0.7063197026022305
+  }
+ }
+}

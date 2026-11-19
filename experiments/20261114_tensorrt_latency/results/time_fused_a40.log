@@ -1,0 +1,62 @@
+{
+ "channel_all_finite": true,
+ "channel_max_abs_diff": 0.0013346672058105469,
+ "channel_max_abs": 2.705770254135132,
+ "channel_relative_error_db": -72.13580131530762,
+ "entries_chosen": [
+  [
+   4,
+   4
+  ],
+  [
+   4,
+   4
+  ]
+ ],
+ "gain": [
+  [
+   0.9059000015258789,
+   0.8884999752044678
+  ],
+  [
+   0.9067000150680542,
+   0.9323999881744385
+  ]
+ ],
+ "llr_max_abs_diff": 0.4835205078125,
+ "llr_max_abs": 82.21611785888672,
+ "sign_agreement": 0.9996843434343434,
+ "sign_agreement_abs_llr_above_1": 1.0
+}
+{
+ "gpu": "NVIDIA A40",
+ "median_ms": {
+  "large_k2": 1.4069759845733643,
+  "large_k3": 1.8789759874343872,
+  "large_k8": 4.260863780975342,
+  "proposed": 1.4438400268554688,
+  "filter_only": 0.025599999353289604,
+  "fit_only": 0.19046400487422943
+ },
+ "median_ms_cuda_graph": {
+  "large_k2": 1.3404159545898438,
+  "large_k3": 1.798143982887268,
+  "large_k8": 4.078591823577881,
+  "proposed": 1.369088053703308,
+  "filter_only": 0.023552000522613525,
+  "fit_only": 0.1913440003991127
+ },
+ "derived_median_ms": {
+  "per_cgnn_iteration_ms": 0.4756479660669963,
+  "proposed_minus_k2_ms": 0.03686404228210449,
+  "proposed_over_k2": 1.0262009037014819,
+  "k3_minus_proposed_ms": 0.43513596057891846,
+  "k8_over_k2": 3.0283841570098717
+ },
+ "scaled_to_a100_ms": {
+  "large_k2": 0.97,
+  "large_k3": 1.2954071198052626,
+  "large_k8": 2.9375326322995754,
+  "proposed": 0.9954148765904375
+ }
+}

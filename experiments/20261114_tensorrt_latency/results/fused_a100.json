@@ -1,0 +1,136 @@
+{
+ "gpu": "NVIDIA A100-SXM4-40GB",
+ "tensorrt": "10.3.0",
+ "precision": "fp16",
+ "export": "as Wiesmayr et al.",
+ "kernels": {
+  "architecture": "sm_80",
+  "launches": {
+   "filter_gram": [
+    [
+     495,
+     12,
+     1
+    ],
+    [
+     128,
+     1,
+     1
+    ]
+   ],
+   "filter_solve": [
+    [
+     5,
+     4,
+     1
+    ],
+    [
+     32,
+     1,
+     1
+    ]
+   ],
+   "filter_history": [
+    [
+     792,
+     2,
+     1
+    ],
+    [
+     6,
+     5,
+     1
+    ]
+   ],
+   "filter_predict": [
+    [
+     25,
+     4,
+     1
+    ],
+    [
+     4,
+     16,
+     1
+    ]
+   ],
+   "filter_expand": [
+    [
+     87,
+     2,
+     1
+    ],
+    [
+     256,
+     1,
+     1
+    ]
+   ]
+  }
+ },
+ "check": {
+  "channel_all_finite": true,
+  "channel_max_abs_diff": 0.0013346672058105469,
+  "channel_max_abs": 2.705770254135132,
+  "channel_relative_error_db": -72.13580131530762,
+  "entries_chosen": [
+   [
+    4,
+    4
+   ],
+   [
+    4,
+    4
+   ]
+  ],
+  "gain": [
+   [
+    0.9059000015258789,
+    0.8884999752044678
+   ],
+   [
+    0.9067000150680542,
+    0.9323999881744385
+   ]
+  ],
+  "llr_max_abs_diff": 0.4404563903808594,
+  "llr_max_abs": 82.21611785888672,
+  "sign_agreement": 0.999633612914863,
+  "sign_agreement_abs_llr_above_1": 1.0
+ },
+ "engine_checks": {
+  "large_k2": 1.0,
+  "large_k3": 1.0,
+  "large_k8": 1.0
+ },
+ "median_ms": {
+  "large_k2": 0.7854080200195312,
+  "large_k3": 1.0690560340881348,
+  "large_k8": 2.4289278984069824,
+  "proposed": 0.8151040077209473,
+  "filter_only": 0.028672000393271446,
+  "fit_only": 0.21299199759960175
+ },
+ "median_ms_cuda_graph": {
+  "large_k2": 0.707584023475647,
+  "large_k3": 0.9666560292243958,
+  "large_k8": 2.2364161014556885,
+  "proposed": 0.7290880084037781,
+  "filter_only": 0.025599999353289604,
+  "fit_only": 0.2088959962129593
+ },
+ "derived_median_ms": {
+  "per_cgnn_iteration_ms": 0.2739199797312419,
+  "proposed_minus_k2_ms": 0.029695987701416016,
+  "proposed_over_k2": 1.0378096313565497,
+  "k3_minus_proposed_ms": 0.2539520263671875,
+  "k8_over_k2": 3.0925682403225023
+ },
+ "fp16_layers_forced_to_fp32": {
+  "large_k2": 17,
+  "large_k3": 19,
+  "large_k8": 29,
+  "proposed_cgnn": 17
+ },
+ "samples_per_receiver": 2000
+}

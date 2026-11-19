@@ -31,8 +31,12 @@ def recipe_hash(recipe):
     return hashlib.sha256(json.dumps(recipe, sort_keys=True).encode()).hexdigest()
 
 
-# "cgnn_k2_baseline" trains only the Large NRX's first two CGNN iterations, state initialization, and LLR readout on
-# LS channel estimates and decodes with plain BP: the retrained two-iteration baseline without memory, filter, or IDD.
+# Both variants train the Large NRX's first two CGNN iterations, state initialization, and readouts. "pilot_memory" (the
+# default) trains them behind the channel filter and the pilot memory, which have no trained weights.
+# "cgnn_k2_baseline" trains them on LS channel estimates: the retrained two-iteration network without memory and filter,
+# which starts from the shipped Large NRX weights. The proposed receiver starts from those weights too, or from a
+# trained two-iteration network, so that the memory is added on top of it. Both minimize the same loss
+# (training_execution.py).
 BASELINE = "cgnn_k2_baseline"
 
 
@@ -53,10 +57,13 @@ def validate_recipe(recipe):
         if (not recipe[names] or len(recipe[names]) != len(values) or
                 not np.all(np.isfinite(values)) or np.any(values < 0) or not np.isclose(values.sum(), 1)):
             raise ValueError(f"Invalid sampling distribution: {names}")
-    for key in ("learning_rate", "minimum_learning_rate", "gradient_clip_norm",
-                "coded_loss_weight", "payload_loss_weight", "channel_loss_weight", "reset_weight"):
+    for key in ("learning_rate", "minimum_learning_rate", "gradient_clip_norm"):
         if not np.isfinite(recipe[key]) or recipe[key] <= 0:
             raise ValueError(f"Invalid {key}")
+    if not np.isfinite(recipe["channel_loss_weight"]) or recipe["channel_loss_weight"] < 0:
+        raise ValueError("Invalid channel_loss_weight")
+    if not np.isfinite(recipe["distillation_weight"]) or not 0 <= recipe["distillation_weight"] <= 1:
+        raise ValueError("Invalid distillation_weight")
     if recipe["minimum_learning_rate"] > recipe["learning_rate"] or not 0 < recipe["plateau_factor"] < 1:
         raise ValueError("Invalid plateau learning-rate settings")
     for key in ("effective_examples", "checkpoint_every", "learning_rate_warmup",
@@ -73,13 +80,6 @@ def validate_recipe(recipe):
 def per_user_bce(labels, logits):
     return tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(
         labels=tf.cast(labels, tf.float32), logits=logits), -1)
-
-
-def per_user_payload_loss(labels, logits):
-    negative_margin = -(2*tf.cast(labels, tf.float32)-1)*logits
-    block_loss = tf.reduce_logsumexp(tf.concat([tf.zeros_like(negative_margin[..., :1]), negative_margin], -1), -1)
-    block_loss /= tf.math.log(tf.cast(tf.shape(logits)[-1]+1, tf.float32))
-    return .5*tf.reduce_mean(tf.nn.softplus(negative_margin), -1)+.5*block_loss
 
 
 class TrainingModel:
@@ -99,8 +99,7 @@ class TrainingModel:
         layouts = {width: PilotLayout(e2e._receiver._ls_est, parameters.transmitters[0].resource_grid,
                                      dimensions["neighbor_radius"])
                    for width, (parameters, e2e) in self.contexts.items()}
-        self.model = PilotHistoryReceiver(base, layouts[first], self.contexts[first][0].transmitters[0]._mapper,
-                                        **dimensions, name="channel_memory_k2")
+        self.model = PilotHistoryReceiver(base, layouts[first], **dimensions, name="channel_memory_k2")
         for layout in layouts.values():
             self.model.register_layout(layout)
         tf.keras.utils.set_random_seed(self.seed+1)
@@ -116,19 +115,28 @@ class TrainingModel:
         if file_sha256(initializer) != recipe["initializer_sha256"]:
             raise ValueError("Receiver initialization checksum differs")
         self.variant = receiver_variant(recipe)
-        if self.variant == BASELINE:
-            # build_backbone already loaded the shipped Large NRX weights into the backbone; the baseline starts there.
-            shipped = ROOT/"models/pretrained"/f"{self.contexts[first][0].label}_weights"
-            if initializer.resolve() != shipped.resolve():
-                raise ValueError("The retrained baseline must start from the shipped Large NRX weights")
-        else:
+        # build_backbone already loaded the shipped Large NRX weights into the backbone. The proposed receiver may
+        # instead start from the receiver weights of a trained two-iteration network.
+        shipped = ROOT/"models/pretrained"/f"{self.contexts[first][0].label}_weights"
+        if initializer.resolve() != shipped.resolve():
+            if self.variant == BASELINE or initializer.name != "receiver.weights.h5":
+                raise ValueError("Training starts from the shipped Large NRX weights or, for the proposed receiver, "
+                                 "from the receiver weights of a trained two-iteration network")
+            parent = json.loads((initializer.parent/"manifest.json").read_text())
+            if (parent["binding"]["recipe"].get("receiver_variant") != BASELINE
+                    or parent["update"] != recipe["initializer_parent_updates"]
+                    or parent["files"]["receiver.weights.h5"] != recipe["initializer_sha256"]):
+                raise ValueError("The initializer is not the stated checkpoint of a trained two-iteration network")
             self.model.load_weights(str(initializer))
-            if file_sha256(initializer) != recipe["initializer_sha256"]:
-                raise ValueError("Receiver initialization changed while loading")
-        self.memory_variables, self.backbone_variables = self.model.optimization_variables()
-        if self.variant == BASELINE:
-            self.memory_variables = []
-        self.optimization_variables = self.memory_variables + self.backbone_variables
+        elif recipe["initializer_parent_updates"] != 0:
+            raise ValueError("The shipped weights have no parent updates")
+        # Teacher of the distillation term: the shipped Large NRX with all of its iterations, never trained here.
+        self.teacher = None
+        if recipe["distillation_weight"] > 0:
+            self.teacher = build_backbone(recipe["radio_config"], 2, True,
+                                          n_size_bwp_override=first)[1]._receiver._neural_rx._cgnn
+            self.teacher.num_it = len(self.teacher._iterations)
+        self.optimization_variables = self.model.optimization_variables()
         self.manager = MemoryPolicy(recipe["memory_capacity"], self.model.history_tbs, recipe["expiry_tbs"])
         self.episodes = TrainingEpisodes(self.contexts, recipe, self.seed)
         self.execution = BatchedTrainingExecution(self, detector_batch_tbs, descriptor_chunk_tbs)
@@ -191,8 +199,9 @@ class MemoryTrainer(TrainingModel):
             if result["result_sha256"] != state["development_result"]:
                 raise ValueError("An already consumed development result changed")
             return state
-        if update <= state["development_update"] or update != int(self.step.numpy()):
-            raise ValueError("Development feedback must describe the current checkpoint")
+        # the result may arrive after further updates when the check ran alongside training
+        if update <= state["development_update"] or update > int(self.step.numpy()):
+            raise ValueError("Development feedback must describe a new checkpoint of this run")
         if state["development_bank"] and state["development_bank"] != result["bank_sha256"]:
             raise ValueError("Development data or scoring changed; use a new selection and schedule record")
         counts = result["summary"]["candidate_persistent"]
@@ -245,7 +254,7 @@ class MemoryTrainer(TrainingModel):
                 raise ValueError("Learner shards did not cover the complete update")
             accumulated, metrics = self.merge_gradients(accumulated, metrics,
                 tf.convert_to_tensor(result["gradients"], tf.float32),
-                tf.convert_to_tensor(result["metrics"], tf.float32), tf.constant(len(local)/len(packets)))
+                tf.convert_to_tensor(result["metrics"], tf.float32))
             fingerprints = [None]*len(packets)
             for indices, values in ((local, local_fingerprints), (remote, result["fingerprints"])):
                 if len(indices) != len(values):
@@ -258,11 +267,8 @@ class MemoryTrainer(TrainingModel):
         values = metrics.numpy()
         record = {
             "update": update, "width": width, "loss": float(values[0]),
-            "persistent_coded_bce": float(values[1]), "persistent_payload_loss": float(values[2]),
-            "reset_coded_bce": float(values[3]), "reset_payload_loss": float(values[4]),
-            "persistent_channel_nll": float(values[5]), "reset_channel_nll": float(values[6]),
-            "gradient_norm": float(values[7]), "memory_gradient_norm": float(values[8]),
-            "memory_rms": float(values[9]), "active_user_blocks": den,
+            "gradient_norm": float(values[1]), "bce": float(values[2]), "teacher_bce": float(values[3]),
+            "channel_error": float(values[4]), "active_user_blocks": den,
             "learning_rate": learning_rate,
             "episode_fingerprints": fingerprints, "draws": [p["metadata"] for p in packets],
             "execution": self.execution.settings(),
@@ -274,17 +280,14 @@ class MemoryTrainer(TrainingModel):
         return tf.concat([tf.reshape(v, [-1]) for v in self.optimization_variables], 0)
 
     @tf.function(reduce_retracing=True)
-    def merge_gradients(self, local, local_metrics, remote, remote_metrics, local_weight):
+    def merge_gradients(self, local, local_metrics, remote, remote_metrics):
         sizes = [int(np.prod(v.shape)) for v in self.optimization_variables]
         gradients = tuple(a+tf.reshape(b, a.shape) for a, b in zip(local, tf.split(remote, sizes), strict=True))
         for gradient in gradients:
             tf.debugging.assert_all_finite(gradient, "Nonfinite combined training gradient")
         norm = tf.linalg.global_norm(gradients)
         tf.debugging.assert_all_finite(norm, "Nonfinite combined gradient norm")
-        count = len(self.memory_variables)
-        metrics = tf.concat([local_metrics[:7]+remote_metrics[:7], [norm,
-            tf.linalg.global_norm(gradients[:count]) if count else tf.zeros([]),
-            local_weight*local_metrics[9]+(1-local_weight)*remote_metrics[9]]], 0)
+        metrics = tf.concat([local_metrics[:1]+remote_metrics[:1], [norm], local_metrics[2:]+remote_metrics[2:]], 0)
         return gradients, metrics
 
     def save(self, output):

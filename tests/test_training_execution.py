@@ -10,7 +10,7 @@ import numpy as np
 import tensorflow as tf
 
 from neural_rx.receiver.pilot_history import MemoryPolicy, PilotHistory
-from neural_rx.receiver.training_execution import BatchedTrainingExecution, routing_plan, channel_nll
+from neural_rx.receiver.training_execution import BatchedTrainingExecution, routing_plan
 from neural_rx.verification.pilot_history import ReferenceMemoryManager
 
 
@@ -40,8 +40,7 @@ class TrainingRoutingTests(unittest.TestCase):
             x = generator.tx(bits)*tf.cast(active[:, t, :, None, None, None], tf.complex64)
             y = generator._add_seeded_noise(generator.apply_channel_noiseless([x, channel[:, t]]), no[:, t], 91, t)
             expected.append(dict(bits=bits, y=y, ls=generator.rx.estimate_channel(y, users),
-                coded=generator.tx._tb_encoder(bits), channel_targets=renderer.layout.channel_targets(
-                    generator.rx.preprocess_channel_ground_truth(channel[:, t]))))
+                coded=generator.tx._tb_encoder(bits)))
         pilots_before = np.asarray(generator.tx.pilot_pattern.pilots).copy()
         for batch in (1, 3, 16):
             actual = TrainingRenderer(generator, batch)(channel, active, ids, slots, ebno, 72, 91)
@@ -75,21 +74,19 @@ class TrainingRoutingTests(unittest.TestCase):
                     outputs.append(generator.sample_pool_channel(1, 3, tf.constant(regime)).numpy())
                 np.testing.assert_array_equal(*outputs)
 
-    def test_sharing_rejects_different_paired_futures(self):
-        trainer = SimpleNamespace(manager=MemoryPolicy(4, 7, 8), model=SimpleNamespace(history_tbs=7))
+    def test_prepare_accepts_one_sequence_per_example_only(self):
+        trainer = SimpleNamespace(manager=MemoryPolicy(4, 7, 8), model=SimpleNamespace(history_tbs=7), recipe={})
         execution = BatchedTrainingExecution(trainer)
-        packet = dict(y=np.zeros([2, 4, 1]), ls=np.zeros([2, 4, 1]), bits=np.zeros([2, 4, 1]),
-                      ue_ids=np.tile([[[0, 1]]], [2, 4, 1]), active=np.ones([2, 4, 2]),
-                      coded=np.zeros([2, 4, 1]), channel_targets=np.zeros([2, 4, 1]), no=np.ones([2, 4]),
-                      metadata={"paired_suffix_tbs":2})
-        with mock.patch.object(execution, "describe", return_value=tf.zeros([2, 4, 2, 6, 9])):
-            _, _, den = execution.prepare([packet])
+        def packet(lanes):
+            return dict(y=np.zeros([lanes, 4, 1]), ls=np.zeros([lanes, 4, 1]), bits=np.zeros([lanes, 4, 1]),
+                        ue_ids=np.tile([[[0, 1]]], [lanes, 4, 1]), active=np.ones([lanes, 4, 2]),
+                        coded=np.zeros([lanes, 4, 1]), no=np.ones([lanes, 4]), h=np.zeros([lanes, 4, 1]),
+                        metadata={})
+        with mock.patch.object(execution, "describe", return_value=tf.zeros([1, 4, 2, 6, 9])):
+            _, _, den = execution.prepare([packet(1)])
         self.assertEqual(den, 8.)
-        for key in ("y", "ls", "bits", "coded", "channel_targets"):
-            packet[key][1, 2, 0] = 1
-            with self.assertRaisesRegex(ValueError, "identical future"):
-                execution.prepare([packet])
-            packet[key][1, 2, 0] = 0
+        with self.assertRaisesRegex(ValueError, "one sequence"):
+            execution.prepare([packet(2)])
 
     def test_plan_matches_chronological_reference_with_gaps_reordering_and_real_times(self):
         rng = np.random.RandomState(133)
@@ -128,25 +125,21 @@ class TrainingRoutingTests(unittest.TestCase):
 
 
 class FullHistoryTrainingTests(unittest.TestCase):
-    def test_chunked_gradients_match_sequential_reference_with_both_losses(self):
-        from test_memory_receiver import build_model, inputs, activate_physical_path
-        from neural_rx.receiver.training import per_user_bce, per_user_payload_loss
+    def test_chunked_gradients_match_sequential_reference_with_all_loss_terms(self):
+        from test_memory_receiver import build_model, inputs
+        from neural_rx.receiver.training import per_user_bce
         tf.keras.utils.set_random_seed(205)
         tf32 = tf.config.experimental.tensor_float_32_execution_enabled()
         self.addCleanup(tf.config.experimental.enable_tensor_float_32_execution, tf32)
         tf.config.experimental.enable_tensor_float_32_execution(False)
         model = build_model()
-        activate_physical_path(model, inputs())
-        model.blend_output.assign(tf.random.normal(model.blend_output.shape, stddev=.1))
-        memory_variables, backbone_variables = model.optimization_variables()
-        variables = memory_variables+backbone_variables
-        receiver = SimpleNamespace(_neural_rx=None, _tb_encoders=[None],
-            _tb_decoders=[SimpleNamespace(_decoder=SimpleNamespace(_num_iter=20))])
-        trainer = SimpleNamespace(model=model, variant="pilot_memory", memory_variables=memory_variables,
-            optimization_variables=variables,
+        model(inputs(), tf.constant([.1]))
+        teacher = build_model().base
+        variables = model.optimization_variables()
+        receiver = SimpleNamespace(_neural_rx=None)
+        trainer = SimpleNamespace(model=model, variant="pilot_memory", optimization_variables=variables,
             contexts={1:(None, SimpleNamespace(_receiver=receiver))}, manager=MemoryPolicy(4, 7, 8),
-            settings={"architecture":{"ldpc_iterations":20,"ldpc_first_iterations":8}},
-            recipe={"coded_loss_weight":1., "payload_loss_weight":1., "reset_weight":.5, "channel_loss_weight":.1})
+            recipe={"channel_loss_weight": .3, "distillation_weight": .25}, teacher=teacher)
         layout = model.layouts[(2,12,4)]
         positions = layout.code_positions
         def gather(grid):
@@ -154,24 +147,12 @@ class FullHistoryTrainingTests(unittest.TestCase):
         def mapping(grid):
             return tf.reshape(gather(grid), [tf.shape(grid)[0], 2, -1])
         coded_length = len(positions)*4
-        def payload(llr):
-            return llr[..., :coded_length//2]+.3*tf.tanh(llr[..., coded_length//2:])
-        def to_blocks(x):
-            return tf.reshape(x, [tf.shape(x)[0], 2, -1, 4])
-        def from_blocks(x):
-            return tf.reshape(x, [tf.shape(x)[0], 2, coded_length])
-        decoder = SimpleNamespace(evidence=lambda x: (to_blocks(x), to_blocks(.3*tf.tanh(x)), x,
-                                                      to_blocks(x+.3*tf.tanh(x))),
-            finish=lambda x,state: SimpleNamespace(logits=payload(from_blocks(x))+.1*payload(state)),
-            first=SimpleNamespace(from_code_blocks=from_blocks, llr_limit=20.),
-            symbol_indices=tf.tile(tf.reshape(tf.range(coded_length), [1, -1, 4]), [2, 1, 1]),
-            symbol_signs=tf.ones([2, coded_length//4, 4]))
         code_map = SimpleNamespace(grid_to_coded=mapping)
         def prepare(receiver, y, ls, active):
             return [y, tf.zeros([2, 12, 4, 2]), ls, active, tf.ones([tf.shape(y)[0], 2, 1])]
         rng = np.random.RandomState(27)
         packets = []
-        for length, lanes in ((6, 2), (3, 1)):
+        for length, lanes in ((6, 1), (3, 1)):
             ids = np.tile([[[0, 1]]], [lanes, length, 1]).astype(np.int32)
             ids[:, 1::2] = ids[:, 1::2, ::-1]
             active = np.ones_like(ids, np.float32)
@@ -181,13 +162,9 @@ class FullHistoryTrainingTests(unittest.TestCase):
             coded = rng.randint(2, size=[lanes, length, 2, coded_length]).astype(np.float32)
             bits = coded[..., :coded_length//2].copy()
             noise = np.full([lanes, length], .1, np.float32)
-            if lanes == 2:
-                for value in (y, ls, bits, coded):
-                    value[1, -2:] = value[0, -2:]
-            targets = layout.channel_targets(tf.reshape(ls, [-1, 2, 12, 4, 8]))
-            targets = tf.reshape(targets, [lanes, length, *targets.shape[1:]])
-            packets.append(dict(y=y, ls=ls, bits=bits, no=noise, active=active, ue_ids=ids,
-                                coded=coded, channel_targets=targets, metadata={"paired_suffix_tbs":2}))
+            truth = rng.normal(size=[lanes, length, 2, 12, 4, 8]).astype(np.float32)
+            packets.append(dict(y=y, ls=ls, bits=bits, no=noise, active=active, ue_ids=ids, h=truth,
+                                coded=coded, metadata={}))
         den = sum(p["active"][0].sum() for p in packets)
         with tf.GradientTape() as tape:
             total = tf.constant(0.)
@@ -199,32 +176,33 @@ class FullHistoryTrainingTests(unittest.TestCase):
                     active = packet["active"][:, t]
                     sample = prepare(None, packet["y"][:, t], packet["ls"][:, t], active)
                     history = manager.gather(state, packet["ue_ids"][:, t], t, active)
-                    for weight, saved in ((2/3, history), (1/3, None)):
-                        observation = model.observe(sample[2], packet["no"][:, t])
-                        saved = model.empty_history(observation) if saved is None else saved
-                        output, logits, corrected, posterior, _, estimate = model.decode(sample, packet["no"][:, t],
-                            tf.constant(packet["ue_ids"][:, t]), saved, decoder, code_map, observation)
-                        nll = channel_nll(estimate, packet["channel_targets"][:, t], layout)
-                        coded = packet["coded"][:, t]
-                        loss = ((per_user_bce(coded, logits)+per_user_bce(coded, corrected)
-                                 +per_user_bce(coded, posterior))/3.+
-                                per_user_payload_loss(packet["bits"][:, t], output.logits)+.1*nll)/2
-                        total += weight*tf.reduce_sum(active*loss)/(den*lanes)
+                    observation = model.observe(sample[2], packet["no"][:, t])
+                    grid, _, final = model.detect_state(sample, packet["no"][:, t], history, observation)
+                    logits = code_map.grid_to_coded(grid)
+                    taught = teacher.initialize_state(sample)
+                    for iteration in teacher._iterations:
+                        taught = iteration([taught, sample[1], sample[3]])
+                    soft = tf.sigmoid(code_map.grid_to_coded(teacher._readout_llrs[0](taught)))
+                    truth = packet["h"][:, t]*model.base.input_scale(sample[0])[:, None]
+                    loss = (.75*per_user_bce(packet["coded"][:, t], logits)+.25*per_user_bce(soft, logits)
+                            +.3*tf.reduce_mean(tf.square(model.channel_estimate(final)-truth), [2, 3, 4]))
+                    total += tf.reduce_sum(active*loss)/(den*lanes)
+                    # the memory keeps the LS estimate of the TB
                     state = manager.scatter(state, packet["ue_ids"][:, t], observation, active, t)
         expected = tape.gradient(total, variables, unconnected_gradients=tf.UnconnectedGradients.ZERO)
         with mock.patch('neural_rx.receiver.training_execution.prepare_cgnn_inputs', prepare), \
              mock.patch('neural_rx.receiver.training_execution.OneLayerGridCodeMap',
                         return_value=SimpleNamespace(grid_to_coded=mapping, gather_stream_grid=gather,
-                                                     num_data_symbols=len(positions), bits_per_symbol=4)), \
-             mock.patch('neural_rx.receiver.training_execution.DecoderAssistedTB', return_value=decoder):
+                                                     num_data_symbols=len(positions), bits_per_symbol=4)):
             for batch in (1, 4, 16):
                 execution = BatchedTrainingExecution(trainer, batch)
                 actual, metrics, fingerprints, used_den = execution.run(1, packets)
                 self.assertEqual(used_den, den)
                 np.testing.assert_allclose(metrics[0], total, rtol=1e-5, atol=2e-6)
+                # the filter's fit is poorly conditioned on this one-PRB random data, so float32 rounding shows up
                 for a, b in zip(actual, expected, strict=True):
-                    np.testing.assert_allclose(a, b, rtol=3e-3, atol=3e-6)
-                self.assertGreater(metrics[8], 0.)
+                    np.testing.assert_allclose(a, b, rtol=3e-3, atol=1e-5)
+                self.assertGreater(metrics[1], 0.)
 
 
 if __name__ == '__main__':

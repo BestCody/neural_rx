@@ -94,7 +94,7 @@ def validate_training_binding(saved, current):
         contract = {k: normalize_training_recipe(v) if k == "recipe" else v
                     for k, v in binding.items() if k not in ("sources", "recipe_sha256")}
         contract["execution"] = {k: v for k, v in contract["execution"].items() if k not in
-            ("descriptor_chunk_tbs", "detector_batch_tbs")}
+            ("descriptor_chunk_tbs", "detector_batch_tbs", "detector_batch_scaling")}
         normalized.append(contract)
     if normalized[0] != normalized[1]:
         raise ValueError("Resume recipe, architecture, seed, or execution semantics changed")

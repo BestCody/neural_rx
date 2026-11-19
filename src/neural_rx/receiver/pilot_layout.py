@@ -6,6 +6,10 @@ import numpy as np
 import tensorflow as tf
 
 
+# Units of the offsets between pilots (time, frequency): ms and 100 kHz.
+OFFSET_UNITS = (1e-3, 1e5)   # seconds, Hz
+
+
 class PilotLayout:
     def __init__(self, estimator, resource_grid, neighbor_radius):
         mask = np.asarray(estimator._pilot_pattern.mask, bool)
@@ -112,9 +116,40 @@ class PilotLayout:
                         self.neighbor_indices[current, old, i, start:stop] = selected
                         self.neighbor_valid[current, old, i, start:stop] = (proposed >= 0) & (proposed < len(members))
                         delta = self.coordinates[old, selected]-position
-                        delta *= np.array([symbol_seconds*1000., spacing/1e6], np.float32)
+                        delta *= np.array([symbol_seconds/OFFSET_UNITS[0], spacing/OFFSET_UNITS[1]], np.float32)
                         self.neighbor_delta[current, old, i, start:stop] = delta
                         start = stop
+        # DMRS symbol of each cell, and the cells from which the slopes of a cell's first-order model are taken: the
+        # nearest cell at the neighbouring DMRS symbol (time) and the two neighbours in frequency at its own DMRS
+        # symbol. A missing neighbour is replaced by the cell itself, and a slope without two distinct cells is zero.
+        width, cells = 2*neighbor_radius+1, np.broadcast_to(np.arange(self.count)[None], (self.users, self.count))
+        self.dmrs_symbols = len(times[0])
+        self.cell_symbol = np.stack([np.searchsorted(times[u], self.coordinates[u, :, 0])
+                                     for u in range(self.users)]).astype(np.int32)
+        other = np.where(self.cell_symbol+1 < self.dmrs_symbols, self.cell_symbol+1, np.maximum(self.cell_symbol-1, 0))
+        own_index = self.neighbor_indices[np.arange(self.users), np.arange(self.users)]
+        own_valid = self.neighbor_valid[np.arange(self.users), np.arange(self.users)]
+
+        def neighbor(symbol, offset):
+            column = (symbol*width+neighbor_radius+offset)[..., None]
+            inside = (0 <= neighbor_radius+offset < width)
+            column = np.clip(column, 0, own_index.shape[-1]-1)
+            found = inside & np.take_along_axis(own_valid, column, -1)[..., 0]
+            return np.where(found, np.take_along_axis(own_index, column, -1)[..., 0], cells).astype(np.int32)
+
+        self.slope_cells = np.stack([neighbor(other, 0), neighbor(self.cell_symbol, -1),
+                                     neighbor(self.cell_symbol, 1)], -1)        # [users, cells, (time, low, high)]
+        position = lambda index, axis: np.take_along_axis(self.coordinates[..., axis], index, 1)
+        dt = position(self.slope_cells[..., 0], 0)-self.coordinates[..., 0]
+        df = position(self.slope_cells[..., 2], 1)-position(self.slope_cells[..., 1], 1)
+        inverse = lambda d: np.divide(1., d, out=np.zeros_like(d), where=d != 0)
+        # value and slopes of a cell's model from the estimate at its pilots and the differences to its neighbours:
+        # coefficients = [h + a_t*offset_t + a_f*offset_f, a_t*scale_t, a_f*scale_f] with a_t, a_f the differences
+        # per OFDM symbol and per subcarrier (phi is relative to the centre of the cell's positions, in its scale)
+        offset = self.centers-self.coordinates
+        self.slope_factors = np.stack([offset[..., 0]*inverse(dt), offset[..., 1]*inverse(df),
+                                       self.scales[..., 0]*inverse(dt), self.scales[..., 1]*inverse(df)], -1
+                                      ).astype(np.float32)                     # [users, cells, 4]
         digest = hashlib.sha256()
         for array in (mask, self.pack_indices, self.grid_indices, self.coordinates, self.noise_factors):
             digest.update(array.tobytes())
@@ -152,31 +187,12 @@ class PilotLayout:
         groups = tf.transpose(groups, [1, 0, 2, 3, 4])
         return tf.where(self.group_valid[None, ..., None], groups, tf.zeros_like(groups))
 
-    def channel_targets(self, channel):
-        from .channel_filter import complex_channel
-        groups = complex_channel(self._groups(channel))
-        groups = tf.where(self.target_valid[None, ..., None], groups, 0.)
-        q = tf.cast(self.q_layout, groups.dtype)
-        coefficients = tf.einsum('bucnr,ucnk->bucrk', groups, q)
-        residual = groups-tf.einsum('bucrk,ucnk->bucnr', coefficients, q)
-        count = tf.cast(self.data_counts[None, ..., None, None], groups.dtype)
-        z = tf.math.divide_no_nan(coefficients, tf.sqrt(count))
-        covariance = tf.math.divide_no_nan(tf.einsum('bucnr,bucns->bucrs', residual, tf.math.conj(residual)), count)
-        z = tf.reshape(z, [tf.shape(z)[0], self.users, self.count, 3*(channel.shape[-1]//2)])
-        diagonal = tf.math.real(tf.linalg.diag_part(covariance))
-        off = tf.gather(tf.reshape(covariance, [tf.shape(covariance)[0], self.users, self.count, -1]),
-                        np.flatnonzero(np.triu(np.ones((channel.shape[-1]//2,)*2, bool), 1)), axis=-1)
-        return tf.concat([tf.math.real(z), tf.math.imag(z), diagonal, tf.math.real(off), tf.math.imag(off)], -1)
-
     def _local_geometry(self, symbol_seconds, spacing):
         positions = np.stack(np.meshgrid(np.arange(self.frequency), np.arange(self.symbols), indexing='ij'), -1)
         positions = positions[..., ::-1].reshape(-1, 2).astype(np.float64)
         self.centers = np.zeros((self.users, self.count, 2), np.float32)
         self.scales = np.zeros_like(self.centers)
         phi = np.ones((self.users, self.frequency*self.symbols, 3), np.float64)
-        q = np.zeros((*self.group_indices.shape, 3), np.float64)
-        r = np.zeros((self.users, self.count, 3, 3), np.float64)
-        self.target_valid = np.zeros_like(self.group_valid)
         for u in range(self.users):
             for c in range(self.count):
                 assigned = self.group_indices[u, c, self.group_valid[u, c]]
@@ -187,18 +203,7 @@ class PilotLayout:
                 self.centers[u, c], self.scales[u, c] = center, scale
                 phi[u, assigned, 1:] = np.divide(positions[assigned]-center, scale,
                     out=np.zeros((len(assigned), 2)), where=scale > 0)
-                self.target_valid[u, c, :len(assigned)] = data
-                _, runtime_r = np.linalg.qr(phi[u, fitting]/np.sqrt(len(fitting)), mode='reduced')
-                r[u, c, :runtime_r.shape[0]] = runtime_r
-                if np.any(data):
-                    thin_q, thin_r = np.linalg.qr(phi[u, assigned[data]]/np.sqrt(data.sum()), mode='reduced')
-                    q[u, c, np.flatnonzero(data), :thin_q.shape[1]] = thin_q
-                    r[u, c, :thin_r.shape[0]] = thin_r
         self.phi = phi.astype(np.float32)
-        self.q_layout, self.r_layout = q.astype(np.float32), r.astype(np.float32)
-        self.geometry_features = np.concatenate([
-            (self.centers-self.coordinates)*np.array([symbol_seconds*1000, spacing/1e6]),
-            self.scales*np.array([symbol_seconds*1000, spacing/1e6])], -1).astype(np.float32)
         tf_positions = np.flatnonzero(self.data_mask[0].T.reshape(-1))
         self.code_positions = ((tf_positions % self.frequency)*self.symbols
                                +tf_positions//self.frequency).astype(np.int32)
@@ -220,9 +225,14 @@ class PilotLayout:
         flat = tf.reshape(records, [tf.shape(records)[0], self.users*self.count, *records.shape[3:]])
         return tf.gather(flat, self.joint_flat, axis=1)
 
-    def neighbors(self, records, ports):
-        current = tf.broadcast_to(tf.range(self.users)[None, :, None], tf.shape(ports))
-        addresses = tf.stack([current, ports], -1)
+    def neighbors(self, records, ports, current=None):
+        """The entries of `records` [batch, users, records, cells, ...] at the neighbours of every pilot cell,
+        [batch, users, records, cells, neighbours, ...], whether each neighbour exists, and its offset. `ports`
+        [batch, users, records] is the DMRS port each record was received on, `current` [batch, users] the port whose
+        cells are the centres (default: the port of the UE's place in the current TB)."""
+        if current is None:
+            current = tf.broadcast_to(tf.range(self.users)[None], tf.shape(ports)[:2])
+        addresses = tf.stack([tf.broadcast_to(current[..., None], tf.shape(ports)), ports], -1)
         indices = tf.gather_nd(self.neighbor_indices, addresses)
         selected = tf.gather(records, indices, axis=3, batch_dims=3)
         valid = tf.gather_nd(self.neighbor_valid, addresses)

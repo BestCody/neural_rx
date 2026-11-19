@@ -22,24 +22,23 @@ class MemoryTrainingTest(unittest.TestCase):
 
     def test_history_settings_reject_invalid_episode_lengths_and_gaps(self):
         for changes in ({"episode_tbs": [2], "episode_probabilities": [1.]},
-                        {"episode_tbs": [4], "episode_probabilities": [1.]},
-                        {"schedule_gap_tbs": [0]}, {"paired_suffix_tbs": 0}):
+                        {"schedule_gap_tbs": [0]}):
             with self.subTest(changes=changes), self.assertRaises(ValueError):
                 validate_recipe(dict(self.recipe, **changes))
         validate_recipe(dict(self.recipe, episode_tbs=[8], episode_probabilities=[1.]))
         validate_recipe(dict(self.recipe, schedule_gap_tbs=[100]))
 
     def test_invalid_loss_and_plateau_settings_are_rejected(self):
-        for changes in ({"learning_rate": 0.}, {"payload_loss_weight": 0.},
-                        {"coded_loss_weight": float("nan")}, {"reset_weight": -1.},
+        for changes in ({"learning_rate": 0.}, {"gradient_clip_norm": float("nan")},
+                        {"channel_loss_weight": -1.}, {"distillation_weight": 1.5},
                         {"minimum_learning_rate": 1.}, {"plateau_patience": 0},
                         {"plateau_factor": 1.}, {"learning_rate_warmup": True}):
             with self.subTest(changes=changes), self.assertRaises(ValueError):
                 validate_recipe(dict(self.recipe, **changes))
 
     def test_data_domains_and_updates_have_repeatable_distinct_seeds(self):
-        values=[domain_seed(9,2,3,d) for d in ("channel","payload","noise","schedule","paired_payload","paired_noise")]
-        self.assertEqual(len(set(values)),6)
+        values=[domain_seed(9,2,3,d) for d in ("channel","payload","noise","schedule")]
+        self.assertEqual(len(set(values)),4)
         self.assertEqual(values[0],domain_seed(9,2,3,"channel"))
         self.assertNotEqual(values[0],domain_seed(9,3,3,"channel"))
 
@@ -74,7 +73,7 @@ class MemoryTrainingTest(unittest.TestCase):
         generator = SimpleNamespace(num_scheduled_tx=2, p=SimpleNamespace(pilots=np.zeros([20])),
             _activate_seed_batch=mock.Mock(), sample_pool_channel=mock.Mock(return_value=tf.ones(shape,tf.complex64)),
             gather_scheduled_channel=lambda pool,ids: pool)
-        common = dict(self.recipe, cold_fraction=0., paired_history_fraction=0., episode_tbs=[8],
+        common = dict(self.recipe, episode_tbs=[8],
             episode_probabilities=[1.], channel_families=['uma'], channel_probabilities=[1.],
             power_imbalance_probability=1., power_gap_db=[12.,12.], weak_link_noise_probability=1.)
         episodes = TrainingEpisodes({},common,123)
@@ -180,8 +179,8 @@ class JointUpdateTest(unittest.TestCase):
         tf.config.experimental.enable_op_determinism()
         recipe = json.loads((ROOT/"config/memory_training.json").read_text())
         recipe.update(prbs=[width], prb_probabilities=[1.], episode_tbs=[8], episode_probabilities=[1.],
-                      channel_families=["tdl"], channel_probabilities=[1.], cold_fraction=0.,
-                      paired_history_fraction=0., schedule_probability=0., channel_change_probability=0.)
+                      channel_families=["tdl"], channel_probabilities=[1.],
+                      schedule_probability=0., channel_change_probability=0.)
         tf32 = tf.config.experimental.tensor_float_32_execution_enabled()
         self.addCleanup(tf.config.experimental.enable_tensor_float_32_execution,tf32)
         tf.config.experimental.enable_tensor_float_32_execution(False)
@@ -189,9 +188,6 @@ class JointUpdateTest(unittest.TestCase):
         packets = []
         for index in range(recipe["effective_examples"]):
             plan = trainer.episodes.plan(1,index,width)
-            if index == 0:
-                plan["metadata"]["paired"] = True
-                plan["metadata"]["paired_suffix_tbs"] = 4
             if index == 1:
                 plan["active"][:,2:5,0] = 0
             packets.append(trainer.episodes.render(plan))
@@ -200,20 +196,12 @@ class JointUpdateTest(unittest.TestCase):
             expected = trainer.contexts[width][1]._receiver._tb_encoders[0](
                 tf.reshape(bits,[-1,*bits.shape[2:]]))
             np.testing.assert_array_equal(packet["coded"],tf.reshape(expected,packet["coded"].shape))
-        paired = packets[0]
-        self.assertFalse(np.array_equal(paired["bits"][0,:4],paired["bits"][1,:4]))
-        for key in ("y","ls","bits","coded","no","channel_targets"):
-            np.testing.assert_array_equal(paired[key][0,-4:],paired[key][1,-4:])
-        groups = {"filter":trainer.model.channel_memory.filter.trainable_variables,
-                  "uncertainty":trainer.model.channel_memory.error.trainable_variables,
-                  "correction_gain":[trainer.model.correction_logit],
-                  "source_calibration":[trainer.model.evidence_calibration],
-                  "blend_head":[trainer.model.blend_output, trainer.model.blend_output_bias],
-                  "initializer":trainer.model.base._s_init[0].trainable_variables,
+        first = packets[0]
+        groups = {"initializer":trainer.model.base._s_init[0].trainable_variables,
                   "round1":trainer.model.base._iterations[0].trainable_variables,
                   "round2":trainer.model.base._iterations[1].trainable_variables,
                   "readout":trainer.model.base._readout_llrs[0].trainable_variables}
-        from neural_rx.decoding import OneLayerGridCodeMap, DecoderAssistedTB
+        from neural_rx.decoding import OneLayerGridCodeMap, SoftTBInformationDecoder
         from neural_rx.backbone.core import prepare_cgnn_inputs
         from neural_rx.receiver.pilot_history import PilotHistory
         receiver = trainer.contexts[width][1]._receiver
@@ -223,32 +211,26 @@ class JointUpdateTest(unittest.TestCase):
         for row in np.asarray(mapping.data_indices):
             np.testing.assert_array_equal((row % layout.frequency)*layout.symbols+row//layout.frequency,
                                           layout.code_positions)
-        architecture = trainer.settings['architecture']
-        decoder = DecoderAssistedTB(receiver._tb_encoders[0], receiver._tb_decoders[0],
-                                    architecture['ldpc_iterations'], architecture['ldpc_first_iterations'])
+        decoder = SoftTBInformationDecoder(receiver._tb_encoders[0], receiver._tb_decoders[0],
+                                           int(receiver._tb_decoders[0]._decoder._num_iter))
         length = trainer.model.history_tbs
-        observed = tf.stack([trainer.model.observe(paired['ls'][:, t], paired['no'][:, t]) for t in range(length)], 2)
+        observed = tf.stack([trainer.model.observe(first['ls'][:, t], first['no'][:, t]) for t in range(length)], 2)
         metadata = observed.shape[:3]
         history = PilotHistory(observed,
             tf.broadcast_to(tf.range(length, 0, -1)[None, None], metadata),
             tf.broadcast_to(tf.range(metadata[1])[None, :, None], metadata), tf.ones(metadata, tf.bool))
-        sample = prepare_cgnn_inputs(receiver, paired['y'][:, length], paired['ls'][:, length],
-                                     paired['active'][:, length])
-        from test_memory_receiver import activate_physical_path
-        activate_physical_path(trainer.model, sample)
+        sample = prepare_cgnn_inputs(receiver, first['y'][:, length], first['ls'][:, length],
+                                     first['active'][:, length])
         @tf.function
         def payload_gradients():
             with tf.GradientTape() as tape:
-                output, _, _, _, _, _ = trainer.model.decode(sample, paired['no'][:, length],
-                    paired['ue_ids'][:, length], history, decoder, mapping)
-                logits = output.logits
-                loss = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(labels=paired['bits'][:, length],
+                grid, _ = trainer.model.detect(sample, first['no'][:, length], history)
+                logits = decoder(mapping.grid_to_coded(grid)).logits
+                loss = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(labels=first['bits'][:, length],
                                                                               logits=logits))
             return tape.gradient(loss, trainer.optimization_variables)
         gradients = payload_gradients()
         gradient_map = {id(v): g for v, g in zip(trainer.optimization_variables, gradients, strict=True)}
-        for variable in (trainer.model.blend_kernel, trainer.model.blend_bias):
-            np.testing.assert_array_equal(gradient_map[id(variable)], 0.)
         for name, variables in groups.items():
             with self.subTest(payload_gradient=name, width=width):
                 selected = [gradient_map[id(v)] for v in variables]
@@ -259,8 +241,14 @@ class JointUpdateTest(unittest.TestCase):
         record, gradients = trainer.update(packets)
         self.assertEqual(int(trainer.step.numpy()),1)
         self.assertEqual(int(trainer.optimizer.iterations.numpy()),1)
+        # Adam's first step is the learning rate.
+        for name,variables in groups.items():
+            rate = recipe["learning_rate"]/recipe["learning_rate_warmup"]
+            step = max(float(np.abs(v.numpy()-old).max()) for v,old in zip(variables,before[name], strict=True))
+            with self.subTest(step=name):
+                np.testing.assert_allclose(step,rate,rtol=.25)   # float32 weights resolve the step coarsely
         self.assertEqual(record["active_user_blocks"],sum(float(tf.reduce_sum(p["active"][0])) for p in packets))
-        self.assertGreater(record["memory_gradient_norm"],0.)
+        self.assertGreater(record["gradient_norm"],0.)
         self.assertTrue(all(np.isfinite(g).all() for g in gradients))
         for name,variables in groups.items():
             with self.subTest(component=name):
@@ -283,14 +271,10 @@ class JointUpdateTest(unittest.TestCase):
             for variable,expected in zip(resumed.optimizer.variables(),saved, strict=True):
                 np.testing.assert_array_equal(variable,expected)
             reference, reference_gradients = trainer.update(packets)
-            for variable in (trainer.model.blend_kernel, trainer.model.blend_bias):
-                index = next(i for i,v in enumerate(trainer.optimization_variables) if v is variable)
-                self.assertGreater(float(tf.linalg.norm(reference_gradients[index])), 0.)
             actual, actual_gradients = resumed.update(packets)
             self.assertEqual(reference["episode_fingerprints"],actual["episode_fingerprints"])
             self.assertEqual(int(resumed.optimizer.iterations.numpy()),2)
-            for key in ("loss","persistent_coded_bce","persistent_payload_loss","reset_coded_bce","reset_payload_loss",
-                        "persistent_channel_nll","reset_channel_nll"):
+            for key in ("loss",):
                 np.testing.assert_allclose(actual[key],reference[key],rtol=1e-5,atol=2e-6)
             expected_flat = np.concatenate([np.asarray(g).ravel() for g in reference_gradients])
             actual_flat = np.concatenate([np.asarray(g).ravel() for g in actual_gradients])
@@ -350,6 +334,14 @@ class JointUpdateTest(unittest.TestCase):
             for extra in range(1,recipe["plateau_patience"]+1):
                 trainer.observe_development(feedback(update+1+extra,4,13))
             self.assertAlmostEqual(float(trainer.learning_rate.numpy()),recipe["minimum_learning_rate"],places=12)
+            # a check that ran alongside training: its checkpoint lies behind the current update, never ahead of it
+            late = feedback(update+10,4,13)
+            trainer.step.assign(update+310)
+            self.assertEqual(trainer.observe_development(late)["development_update"],update+10)
+            ahead = feedback(update+2000,4,13)
+            trainer.step.assign(update+1000)
+            with self.assertRaisesRegex(ValueError,"new checkpoint"):
+                trainer.observe_development(ahead)
 
 if __name__ == "__main__":
     unittest.main()

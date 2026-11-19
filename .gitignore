@@ -19,7 +19,7 @@ logs/
 /data/
 /saved_models/
 /wandb/
-# Checkpoints stay out of git; retained_artifacts.json records their SHA-256.
+# Checkpoints stay out of git.
 /models/*
 !/models/pretrained/
 
@@ -41,5 +41,5 @@ logs/
 /experiments/**/*.h5
 /experiments/**/source/models/
 /experiments/**/source_state.patch
-/experiments/20261019_learned_blend_joint_training_6000/run.log
+/experiments/**/logs_modal/
 *.lock

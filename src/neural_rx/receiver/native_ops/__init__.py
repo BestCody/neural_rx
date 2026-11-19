@@ -30,7 +30,7 @@ def _load():
     nvcc = shutil.which('nvcc') or str(cuda/'bin/nvcc')
     devices = tf.config.list_physical_devices('GPU')
     if not devices:
-        raise RuntimeError('Decoder-assisted correction requires a CUDA GPU')
+        raise RuntimeError('The pilot memory requires a CUDA GPU')
     capabilities = sorted({tf.config.experimental.get_device_details(d)['compute_capability'] for d in devices})
     flags, links = tf.sysconfig.get_compile_flags(), tf.sysconfig.get_link_flags()
     libraries = []
@@ -40,7 +40,7 @@ def _load():
                          json.dumps([tf.__version__, flags, links, libraries, capabilities]).encode()).hexdigest()
     cache = Path(os.environ.get('XDG_CACHE_HOME', str(Path.home()/'.cache')))/'neural_rx_native'/key
     cache.mkdir(parents=True, exist_ok=True)
-    library = cache/'pair_correction.so'
+    library = cache/'pilot_memory.so'
     with (cache/'build.lock').open('w') as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)
         if not library.exists():
@@ -63,21 +63,6 @@ def _load():
                     for command in commands:
                         result = subprocess.run(command, stdout=log, stderr=subprocess.STDOUT)
                         if result.returncode:
-                            raise RuntimeError(f'Native correction build failed; see {cache / "build.log"}')
+                            raise RuntimeError(f'Native operation build failed; see {cache / "build.log"}')
                 os.replace(temp/library.name, library)
-    module = tf.load_op_library(str(library))
-    @tf.RegisterGradient('PilotPairCorrection')
-    def gradient(op, incoming):
-        result = module.pilot_pair_correction_grad(*op.inputs, incoming, single_user=op.get_attr('single_user'),
-                                                 llr_limit=op.get_attr('llr_limit'),
-                                                 apply_update=op.get_attr('apply_update'))
-        evidence, base = result[4], result[5]
-        if op.get_attr('apply_update'):
-            evidence *= op.inputs[18][..., None, None]
-            base = incoming+base-evidence
-        hidden = op.inputs[19].shape[1]
-        blend = tf.reduce_sum(result[8], axis=[0, 1])
-        return [*result[:4], evidence, *([None]*10), base, tf.reduce_sum(result[6], axis=[0, 1]),
-                tf.reduce_sum(result[7]), None, tf.reshape(blend[:8*hidden], [8, hidden]),
-                blend[8*hidden:9*hidden], blend[9*hidden:10*hidden], blend[-1]]
-    return module
+    return tf.load_op_library(str(library))

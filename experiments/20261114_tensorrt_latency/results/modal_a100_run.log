@@ -1,0 +1,204 @@
+✓ Initialized. View run at 
+https://modal.com/apps/bestcody/main/ap-sVf4Q1ceKc32pwHCKsgQkn
+Building image im-G5bBItWxCl4Q2SG6w4sZuw
+
+=> Step 0: FROM nvidia/cuda:12.6.3-devel-ubuntu22.04
+Getting image source signatures
+Copying blob sha256:df2824ac310a017894dc4f4c26c50ff01525f48c0d1eda8738822ed4d09550b8
+Copying blob sha256:af813042aa5b3f88f04ca55f2bdba48846781439e69541120f5f3d81dfa77d4f
+Copying blob sha256:6aee6792f0ce4b47d774df27fb918aace91ef8d468dd9a214eba9a845ad52cd9
+Copying blob sha256:16e8a5a726fd0b9296e2ffce9d0b05e2640937b7cb4b97cecbae4c6792e5d6b8
+Copying blob sha256:ed090066e06c7eaa241e8fc89f9ec6272b77d864f132c5f826b0a9a7837b18b9
+Copying blob sha256:150ae9de14cf67d192ab855eb94172865ba70f5b4b2e832ffed3e8f1df6307f5
+Copying blob sha256:6b55bfaf2c7eaa1e25aa2711630648ce7539f32e08d1718de9537ab77523d2ff
+Copying blob sha256:91376825b4324e2abec846fbaaa2042bac4bbe0a97a4cc4f1914e80a297fa7f6
+Copying blob sha256:18ef190c1b6c9d96dbbd26f49ec1548ab03a7746ca5877eed3e8c6d39a8c762e
+Copying blob sha256:6414378b647780fee8fd903ddb9541d134a1947ce092d08bdeb23a54cb3684ac
+Copying blob sha256:835e4741a0ed629c57f53388056767b4f1fad8a94e8513d0a49deb565e276141
+Copying config sha256:6a557088f28cee5b32930262948514028f01f545d81fac917205529b1be86f15
+Writing manifest to image destination
+Unpacking OCI image
+   • unpacking rootfs ...     
+   • ... done                 
+   • unpacked image rootfs: /tmp/task-data/ta-01M7RT2F3QPEV34W7HGDNPHC6B/registry-unpackMhzxMg
+Copied image in 1.76s
+Saving image...
+Image saved, took 5.28s
+
+Built image im-G5bBItWxCl4Q2SG6w4sZuw in 71.37s
+
+
+Building image im-0WfDTpNcRXhIKt3GsByriw
+
+=> Step 0: FROM base
+
+=> Step 1: COPY /python/. /usr/local
+
+=> Step 2: ENV TERMINFO_DIRS=/etc/terminfo:/lib/terminfo:/usr/share/terminfo:/usr/lib/terminfo
+Saving image...
+Image saved, took 3.11s
+
+Built image im-0WfDTpNcRXhIKt3GsByriw in 6.62s
+
+
+Building image im-3Hnzx1DJB8GlEgxaF13iRA
+
+=> Step 0: FROM base
+
+=> Step 1: RUN python -m pip install cuda-python==12.4.0 numpy==1.26.4 tensorrt-cu12==10.3.0
+Looking in indexes: http://pypi-mirror.modal.local:5555/simple
+Collecting cuda-python==12.4.0
+  Downloading cuda_python-12.4.0-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl.metadata (12 kB)
+Collecting numpy==1.26.4
+  Downloading numpy-1.26.4-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl.metadata (61 kB)
+Collecting tensorrt-cu12==10.3.0
+  Downloading tensorrt-cu12-10.3.0.tar.gz (18 kB)
+  Installing build dependencies: started
+  Installing build dependencies: finished with status 'done'
+  Getting requirements to build wheel: started
+  Getting requirements to build wheel: finished with status 'done'
+  Installing backend dependencies: started
+  Installing backend dependencies: finished with status 'done'
+  Preparing metadata (pyproject.toml): started
+  Preparing metadata (pyproject.toml): finished with status 'done'
+Downloading cuda_python-12.4.0-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (25.4 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 25.4/25.4 MB 10.1 MB/s  0:00:02
+Downloading numpy-1.26.4-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (18.3 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 18.3/18.3 MB 734.5 MB/s  0:00:00
+Building wheels for collected packages: tensorrt-cu12
+  Building wheel for tensorrt-cu12 (pyproject.toml): started
+  Building wheel for tensorrt-cu12 (pyproject.toml): finished with status 'done'
+  Created wheel for tensorrt-cu12: filename=tensorrt_cu12-10.3.0-py2.py3-none-any.whl size=17651 sha256=b8335e89795d726599bfb05ec268a100b4f888cf76a2659061e59d2b4a7e8863
+  Stored in directory: /tmp/pip-ephem-wheel-cache-nzrwej60/wheels/5f/65/ec/ab3fb04d1a86affcc026df903c4d70c479fae0c093662cf888
+Successfully built tensorrt-cu12
+Installing collected packages: cuda-python, tensorrt-cu12, numpy
+
+Successfully installed cuda-python-12.4.0 numpy-1.26.4 tensorrt-cu12-10.3.0
+
+[notice] A new release of pip is available: 26.2.2 -> 26.3
+[notice] To update, run: pip install --upgrade pip
+Saving image...
+Image saved, took 2.76s
+
+Built image im-3Hnzx1DJB8GlEgxaF13iRA in 54.07s
+
+
+Building image im-laOKOWSCm3XptGy4Q69KbR
+
+=> Step 0: FROM base
+
+=> Step 1: ENV PYTHONUNBUFFERED=1
+Saving image...
+Image saved, took 623.21ms
+
+Built image im-laOKOWSCm3XptGy4Q69KbR in 1.84s
+
+
+✓ Created objects.
+├── ✓ Uploaded 
+│   /home/h3lou/neural_rx/experiments/20261114_tensorrt_latency/modal_a100.py
+├── ✓ Uploaded 
+│   /home/h3lou/neural_rx/experiments/20261114_tensorrt_latency/build/reference.
+│   npz
+├── ✓ Uploaded 
+│   /home/h3lou/neural_rx/experiments/20261114_tensorrt_latency/build/filter_tab
+│   les.npz
+├── ✓ Uploaded 
+│   /home/h3lou/neural_rx/experiments/20261114_tensorrt_latency/build/proposed_c
+│   gnn.onnx
+├── ✓ Uploaded 
+│   /home/h3lou/neural_rx/experiments/20261114_tensorrt_latency/build/large_k8.o
+│   nnx
+├── ✓ Uploaded 
+│   /home/h3lou/neural_rx/experiments/20261114_tensorrt_latency/build/large_k3.o
+│   nnx
+├── ✓ Uploaded 
+│   /home/h3lou/neural_rx/experiments/20261114_tensorrt_latency/build/large_k2.o
+│   nnx
+├── ✓ Uploaded 
+│   /home/h3lou/neural_rx/experiments/20261114_tensorrt_latency/filter_kernels.p
+│   y
+├── ✓ Uploaded 
+│   /home/h3lou/neural_rx/experiments/20261114_tensorrt_latency/fitted_filter.cu
+├── ✓ Uploaded 
+│   /home/h3lou/neural_rx/experiments/20261114_tensorrt_latency/time_fused.py
+├── ✓ Uploaded 
+│   /home/h3lou/neural_rx/experiments/20261114_tensorrt_latency/time_trt.py
+└── ✓ Created Function measure.
+
+==========
+== CUDA ==
+==========
+
+CUDA Version 12.6.3
+
+Container image Copyright (c) 2016-2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+
+This container image and its contents are governed by the NVIDIA Deep Learning Container License.
+By pulling and using the container, you accept the terms and conditions of this license:
+https://developer.nvidia.com/ngc/nvidia-deep-learning-container-license
+
+A copy of this license is made available in this container at /NGC-DL-CONTAINER-LICENSE for your convenience.
+
+NVIDIA A100-SXM4-40GB, 610.57.04, 40960 MiB
+model name	: unknown
+{
+ "channel_all_finite": true,
+ "channel_max_abs_diff": 0.0013346672058105469,
+ "channel_max_abs": 2.705770254135132,
+ "channel_relative_error_db": -72.13580131530762,
+ "entries_chosen": [
+  [
+   4,
+   4
+  ],
+  [
+   4,
+   4
+  ]
+ ],
+ "gain": [
+  [
+   0.9059000015258789,
+   0.8884999752044678
+  ],
+  [
+   0.9067000150680542,
+   0.9323999881744385
+  ]
+ ],
+ "llr_max_abs_diff": 0.4404563903808594,
+ "llr_max_abs": 82.21611785888672,
+ "sign_agreement": 0.999633612914863,
+ "sign_agreement_abs_llr_above_1": 1.0
+}
+{
+ "gpu": "NVIDIA A100-SXM4-40GB",
+ "median_ms": {
+  "large_k2": 0.7854080200195312,
+  "large_k3": 1.0690560340881348,
+  "large_k8": 2.4289278984069824,
+  "proposed": 0.8151040077209473,
+  "filter_only": 0.028672000393271446,
+  "fit_only": 0.21299199759960175
+ },
+ "median_ms_cuda_graph": {
+  "large_k2": 0.707584023475647,
+  "large_k3": 0.9666560292243958,
+  "large_k8": 2.2364161014556885,
+  "proposed": 0.7290880084037781,
+  "filter_only": 0.025599999353289604,
+  "fit_only": 0.2088959962129593
+ },
+ "derived_median_ms": {
+  "per_cgnn_iteration_ms": 0.2739199797312419,
+  "proposed_minus_k2_ms": 0.029695987701416016,
+  "proposed_over_k2": 1.0378096313565497,
+  "k3_minus_proposed_ms": 0.2539520263671875,
+  "k8_over_k2": 3.0925682403225023
+ }
+}
+
+Stopping app - local entrypoint completed.
+✓ App completed. View run at 
+https://modal.com/apps/bestcody/main/ap-sVf4Q1ceKc32pwHCKsgQkn

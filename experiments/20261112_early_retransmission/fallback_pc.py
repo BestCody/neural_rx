@@ -1,7 +1,7 @@
 """Receivers and CRC-triggered fallback with closed-loop power control, replayed exactly from per-TB results.
 
 All receivers decoded identical power-controlled episodes (run_receivers_pc.py, log_evidence.py --power-control).
-As in experiments/20261106_crc_fallback, the proposed NRX's memory is written from pilots only, so re-decoding a
+The proposed NRX's memory is written from pilots only, so re-decoding a
 TB with another receiver after a CRC failure does not change later TBs and can be evaluated from the error flags.
 Scored on TBs 17-64 of active UEs, at the SNR point closest to the proposed NRX's 10% TBLER where a point is needed.
 """

@@ -1,0 +1,56 @@
+2026-11-18 03:24:35.069984: E external/local_xla/xla/stream_executor/cuda/cuda_dnn.cc:9261] Unable to register cuDNN factory: Attempting to register factory for plugin cuDNN when one has already been registered
+2026-11-18 03:24:35.070046: E external/local_xla/xla/stream_executor/cuda/cuda_fft.cc:607] Unable to register cuFFT factory: Attempting to register factory for plugin cuFFT when one has already been registered
+2026-11-18 03:24:35.071318: E external/local_xla/xla/stream_executor/cuda/cuda_blas.cc:1515] Unable to register cuBLAS factory: Attempting to register factory for plugin cuBLAS when one has already been registered
+WARNING: All log messages before absl::InitializeLog() is called are written to STDERR
+I0000 00:00:1794972296.777320  707206 device_compiler.h:186] Compiled cluster using XLA!  This line is logged at most once for the lifetime of the process.
+WARNING:tensorflow:Model's `__init__()` arguments contain non-serializable objects. Please implement a `get_config()` method in the subclassed Model for proper saving and loading. Defaulting to empty config.
+WARNING:tensorflow:Model's `__init__()` arguments contain non-serializable objects. Please implement a `get_config()` method in the subclassed Model for proper saving and loading. Defaulting to empty config.
+WARNING:tensorflow:Model's `__init__()` arguments contain non-serializable objects. Please implement a `get_config()` method in the subclassed Model for proper saving and loading. Defaulting to empty config.
+WARNING:tensorflow:Model's `__init__()` arguments contain non-serializable objects. Please implement a `get_config()` method in the subclassed Model for proper saving and loading. Defaulting to empty config.
+Evaluating the first 2 port sets.
+Loading DoubleTDL with low correlation.
+Evaluating the first 2 port sets.
+Loading DoubleTDL with low correlation.
+Evaluating the first 2 port sets.
+Loading DoubleTDL with low correlation.
+Evaluating the first 2 port sets.
+Loading DoubleTDL with low correlation.
+Evaluating the first 2 port sets.
+Loading DoubleTDL with low correlation.
+{
+ "slot": {
+  "condition": "natural_umi",
+  "setting": "sweep",
+  "episode": 0,
+  "tb": 24,
+  "snr_db": 7.0
+ },
+ "record_check": {
+  "max_abs_diff": 2.7418136596679688e-06,
+  "max_abs": 2.6346874237060547
+ },
+ "proposed_check": {
+  "channel_max_abs_diff": 4.76837158203125e-07,
+  "channel_max_abs": 2.7421042919158936,
+  "llr_max_abs_diff": 8.0108642578125e-05,
+  "llr_max_abs": 77.4723129272461,
+  "llr_sign_agreement": 1.0
+ },
+ "proposed_cgnn_check": {
+  "llr_max_abs_diff": 0.0
+ },
+ "large_k2_check": {
+  "llr_max_abs_diff": 0.0
+ },
+ "large_k3_check": {
+  "llr_max_abs_diff": 0.0
+ },
+ "large_k8_check": {
+  "llr_max_abs_diff": 0.0
+ },
+ "weights": {
+  "large_k2": 134594,
+  "large_k3": 183668,
+  "large_k8": 429038
+ }
+}

@@ -48,7 +48,6 @@ select = ["E", "F", "W", "B"]
 # Audited: these closures capture loop variables but are always called, passed to
 # tf.cond, or traced by tf.function within the same iteration, so no stale binding.
 # Default-argument binding is avoided because it changes tf.function signatures.
-"src/neural_rx/receiver/decoder_correction.py" = ["B023"]
 "tests/test_memory_execution.py" = ["B023"]
 "tests/test_memory_receiver.py" = ["B023"]
 "tests/test_memory_training.py" = ["B023"]

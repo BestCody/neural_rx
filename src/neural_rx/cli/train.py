@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import ExitStack, nullcontext
 import fcntl
 import json
@@ -31,7 +32,10 @@ def parser():
     return p
 
 
-def run_training(args, *, evaluation_points=(), evaluate=None):
+def run_training(args, *, evaluation_points=(), evaluate=None, evaluation_delay=0):
+    """evaluation_delay: with 0, training waits for each development check. Otherwise the check of a development
+    checkpoint runs while training continues, and its result reaches the learning-rate schedule exactly that many
+    updates after the checkpoint (training waits there if the check is not finished), so a run stays reproducible."""
     recipe = json.loads(args.recipe.read_text())
     stop = requested_updates(args.steps)
     points = sorted(set(evaluation_points))
@@ -39,6 +43,9 @@ def run_training(args, *, evaluation_points=(), evaluate=None):
         raise ValueError("Development updates must lie inside the requested training budget")
     if points and evaluate is None:
         raise ValueError("Development updates require an evaluator")
+    if (type(evaluation_delay) is not int or evaluation_delay < 0
+            or any(later-earlier <= evaluation_delay for earlier, later in zip(points, points[1:]))):
+        raise ValueError("A development result must be used before the next development update")
     resolve_preparation(args, recipe["effective_examples"])
     configure_gpu(args.gpu)
     from neural_rx.receiver.training import MemoryTrainer
@@ -75,20 +82,35 @@ def run_training(args, *, evaluation_points=(), evaluate=None):
         try:
             from neural_rx.receiver.training_prefetch import EpisodePrefetch
 
-            def observe():
-                step = int(trainer.step.numpy())
+            checks = ThreadPoolExecutor(max_workers=1)
+
+            def launch(step):
                 checkpoint = output/f"checkpoint_{step:06d}"
-                atomic_json(output/"run.json", dict(run, status="evaluating", last_completed_update=step,
-                                                   schedule=trainer.schedule_state()))
-                result = evaluate(checkpoint)
+                return step, checkpoint, checks.submit(evaluate, checkpoint)
+
+            def observe(pending):
+                step, checkpoint, check = pending
+                atomic_json(output/"run.json", dict(run, status="evaluating", schedule=trainer.schedule_state(),
+                                                   last_completed_update=int(trainer.step.numpy())))
+                result = check.result()
                 if Path(result["checkpoint"]).resolve() != checkpoint:
                     raise ValueError("Development feedback evaluated a different checkpoint")
                 trainer.observe_development(result)
-                atomic_json(output/"run.json", dict(run, last_completed_update=step,
+                atomic_json(output/"run.json", dict(run, last_completed_update=int(trainer.step.numpy()),
                                                    schedule=trainer.schedule_state()))
 
-            if int(trainer.step.numpy()) in points:
-                observe()
+            def use_due(pending):
+                """Feed a development result to the schedule once training is evaluation_delay updates past it."""
+                if pending is not None and int(trainer.step.numpy()) >= min(pending[0]+evaluation_delay, stop):
+                    observe(pending)
+                    return None
+                return pending
+
+            # the development update at or before the restored update whose result the schedule has not seen yet
+            reached = [point for point in points if point <= int(trainer.step.numpy())]
+            pending = (launch(reached[-1]) if reached
+                       and trainer.schedule_state()["development_update"] < reached[-1] else None)
+            pending = use_due(pending)
             boundaries = sorted({stop, *(point for point in points if point > int(trainer.step.numpy()))})
             with (output/"history.jsonl").open("a", buffering=1) as log:
                 for boundary in boundaries:
@@ -118,9 +140,12 @@ def run_training(args, *, evaluation_points=(), evaluate=None):
                                 os.fsync(log.fileno())
                                 trainer.save(output)
                             atomic_json(output/"progress.json", record)
+                            pending = use_due(pending)
                     trainer.replica = None
                     if boundary in points:
-                        observe()
+                        pending = use_due(launch(boundary))
+            if pending is not None:
+                observe(pending)
             atomic_json(output/"completion.json", {"status": "complete", "updates": stop,
                         "checkpoint": str(output/f"checkpoint_{stop:06d}"), "schedule": trainer.schedule_state()})
             atomic_json(output/"run.json", dict(run, status="complete", last_completed_update=stop,
