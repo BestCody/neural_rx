@@ -19,6 +19,7 @@ PC = 'experiments/20261112_early_retransmission/results/receivers_pc'  # stored 
 NET = 'experiments/20261118_network_decisions/results'
 TRT = 'experiments/20261114_tensorrt_latency/results'
 OURS = ('pilot_memory', 'pilot_memory_emptied', 'neural_rx_k2_trained')
+EXTRA = ('pilot_memory_current_tb', 'filter_kbest', 'wiener_kbest')            # same folder as OURS
 STORED = ('baseline_lslin_lmmse', 'baseline_lmmse_kbest', 'baseline_perf_csi_kbest', 'frozen_cold_k2', 'frozen_cold_k3',
           'frozen_cold_k8')
 CORE = ['natural_umi', 'controlled_topology_change', 'schedule_gap_reentry']
@@ -48,8 +49,8 @@ def claim(phrase, holds, label):
 
 def directories(setting, method):
     if setting == 'pc':
-        return [f'{NEW}/power_control' if method in OURS else PC]
-    return [f'{NEW if method in OURS else SW}/{d}' for d in ('sweep', 'sweep_high')]
+        return [f'{NEW}/power_control' if method in OURS+EXTRA else PC]
+    return [f'{NEW if method in OURS+EXTRA else SW}/{d}' for d in ('sweep', 'sweep_high')]
 
 
 def errors(setting, cond, method, combine=None):
@@ -127,11 +128,37 @@ claim('outperforms LMMSE + K-Best in all three conditions', min(gap('pc', 'basel
       'power control: LMMSE + K-Best')
 expect(f'The memory contributes {span(pc_memory)}\\,dB', 'power control: memory')
 both = lead+pc_lead
-claim(f'requires {min(both):.2f} to {max(both):.2f}\\,dB less SNR than the same NRX retrained with two iterations', True, 'abstract lead')
+claim(f'requires {min(both):.2f} to {max(both):.2f}\\,dB less SNR than the same NRX without the memory, retrained with two iterations', True, 'abstract lead')
 claim(f'stays within {max(behind+pc_behind):.2f}\\,dB of the eight-iteration NRX', True, 'abstract eight iterations')
-claim('outperforms the three-iteration NRX in all cases', min(three+pc_three) > 0, 'abstract three iterations')
+claim('outperforms the three-iteration NRX in all three test conditions', min(three+pc_three) > 0, 'abstract three iterations')
+claim('outperforms stateless NRXs with up to three iterations',
+      min(gap(s, m, 'pilot_memory')[i] for s in required for m in ('frozen_cold_k2', 'frozen_cold_k3', 'neural_rx_k2_trained') for i in range(3)) > 0,
+      'introduction: stateless NRXs')
+claim('the proposed NRX recovers most of the accuracy that the cut from eight iterations costs',
+      all(required[s][c]['frozen_cold_k2']-required[s][c]['pilot_memory'] > .5*(required[s][c]['frozen_cold_k2']-required[s][c]['frozen_cold_k8'])
+          for s in required for c in CORE), 'introduction: most of the accuracy')
 claim('by up to 1\\,dB, even when the NRX is retrained for two iterations',
       .9 <= max(gap('no', 'neural_rx_k2_trained', 'frozen_cold_k8')) <= 1.05, 'introduction')
+
+# ------------------------------------------- ablation with the current TB only; the filter with a classical receiver
+for s in required:
+    for c in CORE:
+        for m in EXTRA:
+            required[s][c][m] = round(crossing(*errors(s, c, m)), 2)
+current_only = gap('no', 'pilot_memory_current_tb', 'pilot_memory_emptied')
+expect(f'the proposed NRX requires {span(current_only)}\\,dB more than with its memory emptied', 'current TB only')
+claim('The gain stems from the earlier slots', min(current_only+gap('pc', 'pilot_memory_current_tb', 'pilot_memory_emptied')) >= 0,
+      'no gain without earlier slots')
+filter_gain = gap('no', 'baseline_lmmse_kbest', 'filter_kbest')
+expect(f'they reduce its required SNR by {span(filter_gain)}\\,dB.', 'filter with K-Best')
+over_wiener, wiener_gain = gap('no', 'wiener_kbest', 'filter_kbest'), gap('no', 'baseline_lmmse_kbest', 'wiener_kbest')
+expect(f'This classical estimator trails the channel filter by {span([over_wiener[0], over_wiener[2]])}\\,dB for UMi and scheduling gaps '
+       f'and by {over_wiener[1]:.2f}\\,dB for channel change, where it even falls {-wiener_gain[1]:.2f}\\,dB behind LMMSE + K-Best',
+       'classical multi-slot estimator')
+pc_gain, pc_over = gap('pc', 'baseline_lmmse_kbest', 'filter_kbest'), gap('pc', 'wiener_kbest', 'filter_kbest')
+expect(f'the channel filter reduces the required SNR by at most {max(pc_gain):.2f}\\,dB', 'power control: filter with K-Best')
+claim('is ahead of the classical multi-slot estimator except for scheduling gaps', pc_over[0] > 0 and pc_over[1] > 0 and pc_over[2] < 0,
+      'power control: classical estimator')
 
 # ------------------------------------------------------------------------- effective SNR and Doppler groups (UMi)
 def effective(cond, method, group=None, edges=np.arange(-10., 30.5, 1.)):
@@ -173,7 +200,18 @@ expect(f'the proposed NRX requires {span([eff[c]["neural_rx_k2_trained"]-eff[c][
 doppler = {g: {m: effective('natural_umi', m, g, np.arange(-6., 14.)) for m in OURS} for g in range(3)}
 gains = [doppler[g]['pilot_memory_emptied']-doppler[g]['pilot_memory'] for g in range(3)]
 expect(f'it rises from {gains[0]:.2f}\\,dB at Doppler shifts below 50\\,Hz to {gains[2]:.2f}\\,dB above 175\\,Hz', 'Doppler gain')
-claim('The gain of the memory grows with the channel speed', gains[0] < gains[1] < gains[2], 'Doppler order')
+claim('The gain of the memory grows with the Doppler shift', gains[0] < gains[1] < gains[2], 'Doppler order')
+
+# ------------------------------------------------------------------------------------- TBs and training length
+counts = []
+for cond in CORE:
+    files = sorted(glob.glob(f'{NEW}/sweep/{cond}/pilot_memory/episode_*.npz'))
+    assert len(files) == 32
+    counts.append(sum(int(np.load(path)['active'][16:].sum()) for path in files))
+expect(f'over {min(counts):,} to {max(counts):,} TBs per condition and SNR point'.replace(',', '{,}'), 'TBs per SNR point')
+stage1 = json.load(open('experiments/20261117_neural_rx_training/results/best.json'))
+later = [v for update, v in stage1['development'].items() if int(update) > stage1['update']]
+claim('whose validation TBLER had stopped improving', len(later) >= 3 and min(later) >= stage1['core_tbler'], 'stage 1 trained out')
 
 # --------------------------------------------------------------------------------------------------- latency
 aw = np.load(f'{TRT}/fused_a100_samples.npz')
@@ -189,7 +227,7 @@ claim(f'The proposed NRX takes {ms["proposed"]:.2f}\\,ms, i.e., {ms["proposed"]-
       '$N_{\\mathrm{it}}=2$, and thus meets the 1\\,ms budget', ms['proposed'] < 1, 'time of the proposed NRX')
 expect(f'are computed before the slot arrives, which takes {ms["fit_only"]:.2f}\\,ms', 'time before the slot')
 for phrase in ('It meets the 1\\,ms real-time budget, which the three-iteration NRX exceeds',
-               'by which the proposed NRX remains real-time capable, whereas the three-iteration NRX exceeds the 1\\,ms budget',
+               'show that it remains real-time capable, whereas the three-iteration NRX exceeds the 1\\,ms budget',
                'by which it remains real-time capable, unlike the three-iteration NRX'):
     claim(phrase, ms['proposed'] < 1 < ms['large_k3'], 'real time')
 
@@ -240,11 +278,11 @@ claim(f'flags {100*step["false_alarm"]:.1f}\\% of the correct TBs in the test se
 expect(f'It also catches {round(100*step["caught_first_failures"])}\\% of the errors that do not follow an error', 'first failures')
 claim('catch about a fifth of the errors after channel estimation',
       .17 <= single['check 1, any receiver: noise and current channel strength']['caught'] <= .23, 'fifth')
-claim('the memory state and the filtered estimate add little',
+claim('the memory state and the refined estimate add little',
       single['check 1, + filtered estimate']['caught']-single['check 1, any receiver: noise and current channel strength']['caught'] < .03, 'adds little')
 expect(f'the LLRs raise the share to {round(100*single["check 2, + LLRs after detection"]["caught"])}\\%, and the parity checks to '
        f'{round(100*single["check 3, + parity checks after 8 BP iterations"]["caught"])}\\%', 'LLRs and parity checks')
-claim(f'request {round(100*step["caught"])}\\% of the retransmissions before decoding finishes, compared with {round(100*controller["rule"]["caught"])}\\% for the CRC history alone',
+claim(f'request {round(100*step["caught"])}\\% of the needed retransmissions before decoding finishes, compared with {round(100*controller["rule"]["caught"])}\\% for the CRC history alone',
       True, 'abstract controller')
 
 # --------------------------------------------------------------------------------------------- further datasets
@@ -274,12 +312,15 @@ if all(glob.glob(path) for path in FURTHER.values()) and 'further independent da
           and len(lower)+len(same) == len(cases), 'further datasets: unchanged')
     claim(f'outperforms the Large NRX with $N_{{\\mathrm{{it}}}}=8$ in {len(ahead)} of the {len(cases)} cases', True,
           'further datasets: ahead of eight iterations')
-    claim('namely for both TDL channels and for the urban macrocell channels on both datasets',
+    claim('namely for both TDL channels and for the UMa channels on both datasets',
           set(ahead) == {(ds, name) for ds in FURTHER for name in ('historical_tdl_b100', 'historical_tdl_c300', 'natural_uma')},
           'further datasets: which cases')
     example = ('first', 'historical_tdl_c300')
     expect(f"with a TBLER of {100*rates[example+('candidate_persistent',)]:.1f}\\% instead of {100*rates[example+('frozen_cold_k8',)]:.1f}\\%",
            'further datasets: example ahead')
+    claim('Without its memory, it is behind the Large NRX with $N_{\\mathrm{it}}=8$ in all six',
+          len(ahead) == 6 and all(rates[k+('frozen_cold_k8',)] < rates[k+('candidate_reset',)] for k in ahead),
+          'further datasets: behind without the memory')
     claim(f'remains ahead in {len(behind)} cases', True, 'further datasets: eight iterations ahead')
     relative = sorted(behind, key=lambda k: rates[k+('candidate_persistent',)]/rates[k+('frozen_cold_k8',)], reverse=True)
     claim('most clearly for closely spaced LOS and near-far UEs', all(k[1] in ('close_los', 'near_far') for k in relative[:3]),

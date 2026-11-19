@@ -1,6 +1,6 @@
 \section{Related Work}
-On an NVIDIA A100 GPU with TensorRT, the latency of the CGNN receiver of
-\citet{cammerer2023neural} grows with its depth: each iteration adds about
+On an NVIDIA A100 GPU with TensorRT, the latency of the NRX of
+\citet{cammerer2023neural} grows with the number of iterations: each adds about
 350~$\mu$s to a fixed 270~$\mu$s~\cite{wiesmayr2025realtime}. Several remedies
 recover part of the accuracy lost to fewer iterations. Site-specific fine-tuning lets a
 two-iteration receiver outperform an untuned eight-iteration receiver on
@@ -22,7 +22,7 @@ Pooling pilots across time is an established way to improve channel estimates.
 Two-dimensional Wiener filtering weights pilots by their time--frequency
 correlation~\cite{hoeher1997wiener}, Kalman tracking propagates an estimate and
 its error covariance between blocks~\cite{komninakis2002kalman}, and 5G NR
-Release~17 standardizes joint estimation over several PUSCH slots as DMRS
+Release~17 standardizes joint channel estimation over several PUSCH slots as DMRS
 bundling~\cite{3gpp38830,3gpp38214}. Bundling requires a channel that stays correlated over the
 window and a user whose transmit phase stays continuous. Learned
 predictors exploit the same temporal structure with recurrent, state-space and
@@ -30,12 +30,12 @@ transformer models over past channel
 estimates~\cite{mattu2022deep,mohsin2025continual,luo2025cpmamba,lagona2026transformer,gizzini2021talstm},
 and a hypernetwork can set the parameters of a Kalman
 tracker~\cite{pratik2021hkf}. These works, however, target channel prediction or
-tracking; none conditions a neural multi-user receiver on stored pilot history.
-Adaptive filters estimate such weights from the observations
-themselves~\cite{haykin2002adaptive}. Our channel filter follows this
-principle: it fits its weights by least squares on the stored pilots instead of
-deriving them from channel statistics, and it provides the input of an NRX
-rather than of a conventional detector.
+tracking. None of them conditions a multi-user NRX on stored pilot history.
+Whereas a Wiener filter derives its weights from known channel statistics, an
+adaptive filter estimates them from the observations
+themselves~\cite{haykin2002adaptive}. Our channel filter is of this kind: it
+fits its weights by least squares on the stored pilots, and its output is the
+input of an NRX rather than of a conventional detector.
 
 Within learned receivers, earlier slots enter mainly through the weights.
 Online schemes retrain on decoder-recovered labels, on symbol decisions, or when
@@ -44,7 +44,7 @@ fires~\cite{fischer2022adaptive,finish2022symbol,uzlaner2025asynchronous}, or
 track a posterior over the weights~\cite{gusakov2026online}. They pay in label
 delay~\cite{fischer2022adaptive}, in compute that
 grows at least quadratically with the number of weights~\cite{gusakov2026online},
-and in error propagation when decisions serve as labels or
+and in error propagation when the model's own decisions later serve as labels or
 references~\cite{fischer2022adaptive,fan2025defined}. Long-term statistics such
 as time-averaged channel covariances~\cite{liu2026universal,wiesmayr2026impact}
 remain valid across scheduling gaps but adapt slowly after a user change and do
@@ -64,7 +64,7 @@ uncoded.
 \label{fig:architecture}
 \end{figure*}
 
-Despite these advances, no prior 5G NR multi-user MIMO neural receiver carries
+Despite these advances, no prior MU-MIMO NRX for 5G NR carries
 channel estimates across slots to recover the accuracy lost to fewer
 iterations. Unlike online adaptation, our receiver keeps its trained weights fixed and
 stores only LS channel estimates, so it

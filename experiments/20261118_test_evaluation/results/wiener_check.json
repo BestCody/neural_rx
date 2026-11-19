@@ -1,0 +1,23 @@
+{
+ "natural_umi": {
+  "wiener_slot_kbest_db": 6.842495610082027,
+  "lmmse_kbest_db": 6.863097192268352,
+  "difference_db": -0.020601582186325018,
+  "largest_tbler_difference": 0.00423177083333337,
+  "snr_points": 15
+ },
+ "controlled_topology_change": {
+  "wiener_slot_kbest_db": 6.59299192117881,
+  "lmmse_kbest_db": 6.624412489351118,
+  "difference_db": -0.031420568172308094,
+  "largest_tbler_difference": 0.001953125,
+  "snr_points": 15
+ },
+ "schedule_gap_reentry": {
+  "wiener_slot_kbest_db": 8.342296885737833,
+  "lmmse_kbest_db": 8.295391058891912,
+  "difference_db": 0.04690582684592037,
+  "largest_tbler_difference": 0.004403669724770687,
+  "snr_points": 15
+ }
+}

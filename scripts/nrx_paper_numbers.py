@@ -173,6 +173,32 @@ def further():
     report["memory_unchanged"] = sum(row["proposed"] == row["no_memory"] for row in cases)
     report["large_k8_ahead"] = sum(row["large_k8"] < row["proposed"] for row in cases)
     report["proposed_ahead"] = sum(row["proposed"] < row["large_k8"] for row in cases)
+    # of the cases in which the proposed NRX is ahead: those in which it is also ahead without its memory
+    report["ahead_without_memory"] = sum(row["no_memory"] < row["large_k8"] for row in cases
+                                         if row["proposed"] < row["large_k8"])
+    return report
+
+
+def classical():
+    """The pilot memory and channel filter with K-Best detection, a classical LMMSE estimator over several slots, and
+    the ablation with the current TB only (experiments/20261118_test_evaluation: filter_kbest_summary.py,
+    current_tb.py)."""
+    kbest = json.loads((TRAINED/"filter_kbest.json").read_text())
+    current = json.loads((TRAINED/"current_tb.json").read_text())
+    report = {}
+    for setting in ("no_power_control", "power_control"):
+        report[setting] = {}
+        for c in CORE:
+            r = kbest[setting][c]["required_snr_db"]
+            q = current[setting][c]["required_snr_db"]
+            report[setting][c] = {
+                "filter_kbest_db": r["filter_kbest"], "wiener_kbest_db": r["wiener_kbest"],
+                "filter_gain_over_lmmse_kbest_db": difference(r["baseline_lmmse_kbest"], r["filter_kbest"]),
+                "filter_kbest_ahead_of_proposed_db": difference(r["pilot_memory"], r["filter_kbest"]),
+                "filter_ahead_of_wiener_db": difference(r["wiener_kbest"], r["filter_kbest"]),
+                "wiener_gain_over_lmmse_kbest_db": difference(r["baseline_lmmse_kbest"], r["wiener_kbest"]),
+                "proposed_ahead_of_wiener_kbest_db": difference(r["wiener_kbest"], r["pilot_memory"]),
+                "current_tb_only_minus_emptied_db": difference(q["pilot_memory_current_tb"], q["pilot_memory_emptied"])}
     return report
 
 
@@ -184,7 +210,7 @@ def collect():
     entries = settings["history_tbs"]-settings["fit_tbs"]
     return {"required_snr_db": table, "gains": gains, "blocks": blocks, "effective_snr": effective_snr(),
             "doppler": doppler(), "latency": latency(), "training": training(), "network": network(),
-            "further_datasets": further(),
+            "further_datasets": further(), "classical": classical(),
             "weights": {"large_nrx_two_iterations": export["large_k2"], "large_nrx_three_iterations": export["large_k3"],
                         "large_nrx_eight_iterations": export["large_k8"], "proposed": export["large_k2"]},
             # as the text states them, in units of 1e5

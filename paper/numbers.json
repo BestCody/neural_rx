@@ -529,7 +529,74 @@
   "memory_lowers_tbler": 16,
   "memory_unchanged": 1,
   "large_k8_ahead": 10,
-  "proposed_ahead": 6
+  "proposed_ahead": 6,
+  "ahead_without_memory": 0
+ },
+ "classical": {
+  "no_power_control": {
+   "natural_umi": {
+    "filter_kbest_db": 6.710775773005896,
+    "wiener_kbest_db": 6.770248070342217,
+    "filter_gain_over_lmmse_kbest_db": 0.15,
+    "filter_kbest_ahead_of_proposed_db": 0.34,
+    "filter_ahead_of_wiener_db": 0.06,
+    "wiener_gain_over_lmmse_kbest_db": 0.09,
+    "proposed_ahead_of_wiener_kbest_db": -0.28,
+    "current_tb_only_minus_emptied_db": 0.19
+   },
+   "controlled_topology_change": {
+    "filter_kbest_db": 6.382931844746066,
+    "wiener_kbest_db": 7.1846344109066305,
+    "filter_gain_over_lmmse_kbest_db": 0.24,
+    "filter_kbest_ahead_of_proposed_db": 0.64,
+    "filter_ahead_of_wiener_db": 0.8,
+    "wiener_gain_over_lmmse_kbest_db": -0.56,
+    "proposed_ahead_of_wiener_kbest_db": 0.16,
+    "current_tb_only_minus_emptied_db": 0.12
+   },
+   "schedule_gap_reentry": {
+    "filter_kbest_db": 7.869377269282091,
+    "wiener_kbest_db": 7.9647934094998,
+    "filter_gain_over_lmmse_kbest_db": 0.43,
+    "filter_kbest_ahead_of_proposed_db": 0.25,
+    "filter_ahead_of_wiener_db": 0.09,
+    "wiener_gain_over_lmmse_kbest_db": 0.34,
+    "proposed_ahead_of_wiener_kbest_db": -0.16,
+    "current_tb_only_minus_emptied_db": 0.02
+   }
+  },
+  "power_control": {
+   "natural_umi": {
+    "filter_kbest_db": 1.6443617895067408,
+    "wiener_kbest_db": 1.7792895950547385,
+    "filter_gain_over_lmmse_kbest_db": 0.25,
+    "filter_kbest_ahead_of_proposed_db": 0.1,
+    "filter_ahead_of_wiener_db": 0.14,
+    "wiener_gain_over_lmmse_kbest_db": 0.11,
+    "proposed_ahead_of_wiener_kbest_db": 0.04,
+    "current_tb_only_minus_emptied_db": 0.09
+   },
+   "controlled_topology_change": {
+    "filter_kbest_db": 2.0974921273357365,
+    "wiener_kbest_db": 2.1921989574495995,
+    "filter_gain_over_lmmse_kbest_db": 0.08,
+    "filter_kbest_ahead_of_proposed_db": 0.06,
+    "filter_ahead_of_wiener_db": 0.09,
+    "wiener_gain_over_lmmse_kbest_db": -0.01,
+    "proposed_ahead_of_wiener_kbest_db": 0.03,
+    "current_tb_only_minus_emptied_db": 0.1
+   },
+   "schedule_gap_reentry": {
+    "filter_kbest_db": 2.688708037706529,
+    "wiener_kbest_db": 2.5770106902250363,
+    "filter_gain_over_lmmse_kbest_db": -0.01,
+    "filter_kbest_ahead_of_proposed_db": -0.21,
+    "filter_ahead_of_wiener_db": -0.11,
+    "wiener_gain_over_lmmse_kbest_db": 0.1,
+    "proposed_ahead_of_wiener_kbest_db": 0.1,
+    "current_tb_only_minus_emptied_db": 0.08
+   }
+  }
  },
  "weights": {
   "large_nrx_two_iterations": 134594,

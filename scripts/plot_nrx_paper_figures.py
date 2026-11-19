@@ -66,8 +66,8 @@ def architecture():
     for (x, width, *_), following in zip(chain, chain[1:], strict=False):
         arrow((x+width, middle), (following[0], middle))
     block(.095, top, .07, "LS Est.")
-    block(.095, bottom, .1, "Pilot Memory", GREEN, True)
-    block(.215, bottom, .115, "Channel Filter", GREEN, True)
+    block(.095, bottom, .1, "Pilot Memory", PINK, True)            # as "New in this work" in the legend
+    block(.215, bottom, .115, "Channel Filter", PINK, True)
 
     # The received slot enters the LS estimator and StateInit.
     ax.text(.037, middle, "Received\nslot", ha="center", va="center", fontsize=6.5)

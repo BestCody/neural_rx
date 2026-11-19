@@ -5,6 +5,15 @@ Receivers (results/<setting>/<condition>/<name>/episode_NNNNN.npz):
                          src/neural_rx/benchmark/tbler_sweep.py
   pilot_memory_emptied   the same weights with the memory emptied before every TB
   neural_rx_k2_trained   neural_rx with two iterations after stage 1, models/neural_rx_k2_20261117
+  pilot_memory_current_tb  ablation, not decoded by default: the proposed receiver's weights, but the filter predicts
+                         each pilot from the current TB only. Its memory holds just the TBs on which the filter's
+                         weights are fitted, so no estimate of an earlier slot enters the prediction; the fitted
+                         smoothing within the slot and the first-order model between the pilots remain.
+  filter_kbest           comparison, not decoded by default: the proposed receiver's memory and channel filter in
+                         front of the classical K-Best detector instead of the two CGNN iterations (filter_kbest.py)
+  wiener_kbest           comparison, not decoded by default: the same memory and detector with a classical LMMSE
+                         estimator over the current and the stored TBs, from known statistics (wiener.py)
+  wiener_slot_kbest      the same estimator on the current TB only, as a check against the sweep's LMMSE + K-Best
 
 The episodes are those every other receiver decoded: the sweep without power control (grids "sweep" and
 "sweep_high" of experiments/20261104_tbler_sweep) and the power-controlled episodes of
@@ -28,7 +37,11 @@ SWEEP = ROOT/"experiments/20261104_tbler_sweep/results"
 PC = ROOT/"experiments/20261112_early_retransmission"
 NEURAL_RX = ROOT/"models/neural_rx_k2_20261117/checkpoint_011000"
 RECEIVERS = {"pilot_memory": "candidate_persistent", "pilot_memory_emptied": "candidate_reset",
-             "neural_rx_k2_trained": "frozen_cold_k2"}
+             "neural_rx_k2_trained": "frozen_cold_k2", "pilot_memory_current_tb": "candidate_persistent",
+             "filter_kbest": "candidate_persistent", "wiener_kbest": "candidate_persistent",
+             "wiener_slot_kbest": "candidate_persistent"}
+ESTIMATORS = {"filter_kbest": "filter", "wiener_kbest": "wiener", "wiener_slot_kbest": "wiener_slot"}
+DEFAULT = ("pilot_memory", "pilot_memory_emptied", "neural_rx_k2_trained")
 
 
 def main():
@@ -39,7 +52,7 @@ def main():
     parser.add_argument("--first-episode", type=int, default=0)
     parser.add_argument("--last-episode", type=int, default=32)
     parser.add_argument("--output-dir", type=Path, default=HERE/"results")
-    parser.add_argument("--receivers", nargs="+", choices=tuple(RECEIVERS), default=list(RECEIVERS))
+    parser.add_argument("--receivers", nargs="+", choices=tuple(RECEIVERS), default=list(DEFAULT))
     args = parser.parse_args()
     os.environ["CUDA_VISIBLE_DEVICES"] = str(args.gpu)
     os.environ.setdefault("TF_CPP_MIN_LOG_LEVEL", "2")
@@ -71,7 +84,20 @@ def main():
 
     receivers, identity = {}, {}
     for name, method in chosen.items():
-        receivers[name] = sweep.make_receiver(method, protocol)
+        if name == "pilot_memory_current_tb":
+            from neural_rx.receiver import model
+            settings = model.architecture_settings
+            model.architecture_settings = lambda s: dict(settings(s), history_tbs=settings(s)["fit_tbs"])
+            try:
+                receivers[name] = sweep.make_receiver(method, protocol)
+            finally:
+                model.architecture_settings = settings
+            assert receivers[name].model.history_tbs == receivers[name].model.channel_filter.fit_tbs
+        elif name in ESTIMATORS:
+            from filter_kbest import FilterKBest
+            receivers[name] = FilterKBest(sweep, protocol, tf, ESTIMATORS[name], args.condition, sweep.SCORING_START)
+        else:
+            receivers[name] = sweep.make_receiver(method, protocol)
         checkpoint = NEURAL_RX if method == "frozen_cold_k2" else MEMORY
         saved = json.loads((checkpoint/"manifest.json").read_text())
         weights = checkpoint/("nrx_weights.pkl" if method == "frozen_cold_k2" else "receiver.weights.h5")
@@ -99,6 +125,8 @@ def main():
         report = {}
         for receiver, path in outputs.items():
             errors, disagreement = sweep.decode_episode(RECEIVERS[receiver], receivers[receiver], episode, None)
+            if receiver in ESTIMATORS:      # like the sweep's stateless receivers: not detected before the scored TBs
+                errors[:, :sweep.SCORING_START], disagreement[:, :sweep.SCORING_START] = False, False
             sweep._atomic_savez(path, errors=errors, crc_disagreement=disagreement, active=episode.active,
                                 ue_ids=episode.ue_ids, snr_db=stored["snr_db"], fingerprint=stored["fingerprint"],
                                 weights_sha256=identity[receiver][0], update=identity[receiver][1])
