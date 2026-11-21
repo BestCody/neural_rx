@@ -46,11 +46,15 @@ ROOT=$(cd ../.. && pwd)
 MPS=""
 pid=$(cat "$ROOT/.mps/pipe/nvidia-cuda-mps-control.pid" 2>/dev/null) && kill -0 "$pid" 2>/dev/null \
     && MPS="CUDA_MPS_PIPE_DIRECTORY=$ROOT/.mps/pipe CUDA_MPS_LOG_DIRECTORY=$ROOT/.mps/log"
-PER_GPU=${PER_GPU:-2}                           # processes per GPU; episodes 0-15 on GPU 0, 16-31 on GPU 1
-for gpu in 0 1; do
+PER_GPU=${PER_GPU:-2}                           # processes per GPU
+GPUS=${GPUS:-"0 1"}                             # the 32 episodes are split evenly over these GPUs' processes
+set -- $GPUS
+workers=$(( $# * PER_GPU )) index=0
+for gpu in $GPUS; do
     for part in $(seq 0 $((PER_GPU-1))); do
-        first=$((16*gpu+16*part/PER_GPU)) last=$((16*gpu+16*(part+1)/PER_GPU))
+        first=$((32*index/workers)) last=$((32*(index+1)/workers))
         tmux new-session -d -s "extra_$gpu$part" "$MPS RECEIVERS='$RECEIVERS' SETTINGS='$SETTINGS' CONDITIONS='$CONDITIONS' ./run_extra.sh worker $gpu $first $last >> logs/extra_$gpu$part.log 2>&1"
+        index=$((index+1))
     done
 done
 tmux ls

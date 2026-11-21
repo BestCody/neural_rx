@@ -194,13 +194,15 @@ sequences of 64 slots per condition, 2x4 MU-MIMO, 16-QAM (MCS 14), 132 PRBs; PC 
 
 Median TensorRT 10.3 FP16 inference time on an NVIDIA A100 (export as in the code release of Wiesmayr et al., network
 only, 2,000 runs; `experiments/20261114_tensorrt_latency/results/fused_a100.json`, measured on a rented GPU with
-`modal_a100.py`): Large NRX with 2 / 3 / 8 iterations 0.79 / 1.07 / 2.43 ms, proposed NRX 0.82 ms. So the proposed NRX
-meets the 1 ms budget and the Large NRX with 3 iterations does not. On the server's A40 (`results/fused_a40.json`):
-1.41 / 1.88 / 4.26 ms and 1.44 ms. The channel filter runs as CUDA kernels (`fitted_filter.cu`, launched by
-`filter_kernels.py`): what only depends on the memory, i.e. the fit of the weights and the memory's part of the
-predictions, is computed before the slot (0.21 ms on the A100); the rest runs on the slot in front of the network
-(0.03 ms). `time_fused.py` checks the kernels against the TensorFlow receiver and also times every receiver as a CUDA
-graph, without the host's time to launch the kernels (A100: 0.71 / 0.97 / 2.24 ms and 0.73 ms; not used in the paper).
+`modal_a100.py`): Large NRX with 2 / 3 / 8 iterations 0.79 / 1.07 / 2.46 ms, proposed NRX 0.81 ms. Including the
+computation for the next slot (fit and the memory's part of the predictions, 0.11 ms), all GPU work per slot is
+0.91 ms; with that computation running at the same time on a second stream, the slot takes 0.88 ms. So the proposed
+NRX meets the 1 ms budget either way, and the Large NRX with 3 iterations does not. On the server's A40
+(`results/fused_a40.json`): 1.41 / 1.89 / 4.26 ms, proposed 1.44 ms, 1.52 ms including the fit. The channel filter
+runs as CUDA kernels (`fitted_filter.cu`, launched by `filter_kernels.py`): before the slot filter_gram (normal
+equations, added up from slices of cells), filter_solve (Gauss-Jordan, in one warp's registers up to 31 unknowns) and
+filter_history; on the slot filter_predict and filter_expand (0.02 ms). `time_fused.py` checks the kernels against
+the TensorFlow receiver and also times every receiver as a CUDA graph, without the host's time to launch the kernels.
 `make_a100_bundle.sh` and `run_a100.sh` repeat the measurement on another machine.
 
 On two further datasets at a fixed SNR per condition (17 cases: TDL-B100, TDL-C300, UMi, UMa, channel change,
@@ -215,8 +217,9 @@ in 6 of the 17 cases (TDL-B100, TDL-C300 and UMa on both datasets) and behind in
 | Stage 2: proposed receiver on top of stage 1 | `experiments/20261118_no_teacher_training` | `./run.sh start` (runs until `./run.sh stop`); its first 2,048 updates were made on rented GPUs with `modal_app.py` and brought here with `bring_home.sh` | `results/best.json`, `models/pilot_memory_no_teacher_20261118/` |
 | Test sequences, with and without power control | `experiments/20261118_test_evaluation` | `RECEIVERS="pilot_memory pilot_memory_emptied" ./run.sh` (the stage-1 results are kept), `python fill_missing.py` if a process ran out of GPU memory, then `python summarize.py`, `python doppler.py` | `results/summary.json`, `results/doppler.json` |
 | Ablation and classical comparisons on the test sequences (filter from the current TB only; memory and filter with K-Best; classical LMMSE over several slots with K-Best) | `experiments/20261118_test_evaluation` | `python slot_correlation.py` (statistics across slots), `RECEIVERS="pilot_memory_current_tb filter_kbest wiener_kbest wiener_slot_kbest" ./run_extra.sh`, then `python current_tb.py`, `python filter_kbest_summary.py`, `python wiener_check.py` | `results/current_tb.json`, `results/filter_kbest.json`, `results/wiener_check.json` |
+| Power control with a random phase jump at every power step | `experiments/20261118_test_evaluation` | `RECEIVERS="pilot_memory pilot_memory_emptied neural_rx_k2_trained" SETTINGS=power_control_phase ./run_extra.sh` (phase jumps in `experiments/20261112_early_retransmission/phase_jumps.py`), `python phase_steps.py --condition <condition>` (the jumps of all pool UEs), then `python phase_jumps_summary.py` | `results/phase_jumps.json` |
 | Latency | `experiments/20261114_tensorrt_latency` | `python export.py` (neural_rx env), then on an A100 `modal run modal_a100.py` (or `./make_a100_bundle.sh` and `run_a100.sh` there); on the server `~/venvs/tensorrt/bin/python time_fused.py --tag a40` | `results/fused_a100.json` (paper), `results/fused_a40.json` |
-| Network decisions: fallback and early retransmission | `experiments/20261118_network_decisions` | `./run.sh`, then `./run.sh analyze` | `results/fallback.json`, `results/controller.json` |
+| Network decisions: fallback and early retransmission | `experiments/20261118_network_decisions` | `./run.sh`, then `./run.sh analyze`; for the stateless retrained NRX, `./run_stateless.sh` (its evidence, checked against its stored decoding), then `python compare_receivers.py` | `results/fallback.json`, `results/controller.json`, `results/compare_receivers.json` |
 | Two further datasets at fixed SNRs | `experiments/20261118_further_datasets` | `./run.sh` | `results/v2/results.json`, `results/seed86/results.json` |
 | Paper numbers, checks, figures | `scripts/` | `python scripts/nrx_paper_numbers.py --check paper/main.tex --allowed 0.25 0.05 2.14 0.01 38.901 5.1 4.8 10.3`, `python scripts/nrx_paper_recheck.py`, `python scripts/plot_nrx_paper_figures.py` | `paper/numbers.json`, `paper/figures/` |
 

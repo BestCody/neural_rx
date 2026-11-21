@@ -4,7 +4,11 @@ The proposed NRX is the kernels that apply the filter (filter_predict, filter_ex
 refined channel into the input buffer of the TensorRT engine of the two CGNN iterations (build/proposed_cgnn.onnx,
 FP16 like the other engines), followed by that engine, all on one CUDA stream. The filter's weights and the part of
 its predictions that comes from the memory only depend on earlier slots; they are computed before the slot
-(filter_gram, filter_solve, filter_history) and timed separately.
+(filter_gram, filter_solve, filter_history, "fit_only"). Two further measurements include that fit:
+  proposed_and_fit     the slot's filter and network, then the fit for the next slot, one after the other on one
+                       stream: all GPU work per slot
+  proposed_overlapped  the slot's filter and network while the fit for the next slot runs on a second stream, with
+                       its own buffers (as with double buffering): the slot's latency under that contention
 
 Checks: the kernels' refined channel against the TensorFlow receiver (export.py; the buffer is filled with NaN first,
 so every grid position must be written), and the LLRs of kernels + engine against the TensorFlow LLRs. Timing as in
@@ -78,19 +82,39 @@ def main():
                                          self.addresses["channel"], self.stream)
             self.kernels.fit()                      # what the memory gives the slot, as it exists when it arrives
             call(cudart.cudaStreamSynchronize(self.stream))
+            if part == "overlap":                   # the next slot's fit: own stream, own buffers
+                self.side = call(cudart.cudaStreamCreate())
+                self.next = FilterKernels(np, cuda, cudart, cubin.read_bytes(), tables, feeds("filter"),
+                                          self.addresses["channel"], self.side)
+                flags = cudart.cudaEventDisableTiming
+                self.fork, self.join = (call(cudart.cudaEventCreateWithFlags(flags)) for _ in range(2))
 
         def enqueue(self):
             if self.part == "fit":
                 self.kernels.fit()
                 return True
+            if self.part == "overlap":              # fork the next slot's fit onto the side stream, join at the end
+                call(cudart.cudaEventRecord(self.fork, self.stream))
+                call(cudart.cudaStreamWaitEvent(self.side, self.fork, 0))
+                self.next.fit()
+                call(cudart.cudaEventRecord(self.join, self.side))
             self.kernels.apply()
-            return True if self.part == "filter" else self.context.execute_async_v3(self.stream)
+            if self.part == "filter":
+                return True
+            done = self.context.execute_async_v3(self.stream)
+            if self.part == "total":
+                self.kernels.fit()                  # recomputes the same weights from the same memory
+            if self.part == "overlap":
+                call(cudart.cudaStreamWaitEvent(self.stream, self.join, 0))
+            return done
 
     engines = {name: Engine(trt, cudart, np, runtime, build(trt, logger, name+suffix, "fp16"), feeds(name))
                for name in ("large_k2", "large_k3", "large_k8")}
     engines["proposed"] = Proposed()
     engines["filter_only"] = Proposed("filter")
     engines["fit_only"] = Proposed("fit")
+    engines["proposed_and_fit"] = Proposed("total")
+    engines["proposed_overlapped"] = Proposed("overlap")
     report = {"gpu": properties.name.decode().rstrip("\x00"), "tensorrt": trt.__version__, "precision": "fp16",
               "export": "channels first" if args.channels_first else "as Wiesmayr et al.",
               "kernels": {"architecture": architecture,
@@ -146,12 +170,15 @@ def main():
     per_iteration = (values["large_k8"]-values["large_k2"])/6
     report["derived_median_ms"] = {
         "per_cgnn_iteration_ms": per_iteration, "proposed_minus_k2_ms": values["proposed"]-values["large_k2"],
+        "proposed_and_fit_minus_k2_ms": values["proposed_and_fit"]-values["large_k2"],
+        "overlap_slowdown_ms": values["proposed_overlapped"]-values["proposed"],
         "proposed_over_k2": values["proposed"]/values["large_k2"], "k3_minus_proposed_ms": values["large_k3"]-values["proposed"],
         "k8_over_k2": values["large_k8"]/values["large_k2"]}
     if "A100" not in report["gpu"]:
         # this GPU's times scaled by the ratio of the two GPUs for the Large NRX with N_it = 2 (not a measurement)
         ratio = A100_K2_MS/values["large_k2"]
-        report["scaled_to_a100_ms"] = {name: ratio*values[name] for name in ("large_k2", "large_k3", "large_k8", "proposed")}
+        report["scaled_to_a100_ms"] = {name: ratio*values[name] for name in ("large_k2", "large_k3", "large_k8", "proposed",
+                                                                            "proposed_and_fit", "proposed_overlapped")}
     report["fp16_layers_forced_to_fp32"] = FORCED
     report["samples_per_receiver"] = args.rounds*args.per_round
     (HERE/f"results/fused{suffix}{tag}.json").write_text(json.dumps(report, indent=1))

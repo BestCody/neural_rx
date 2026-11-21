@@ -358,15 +358,17 @@
  "latency": {
   "gpu": "NVIDIA A100-SXM4-40GB",
   "tensorrt": "10.3.0",
-  "large_k2_ms": 0.7854080200195312,
-  "large_k3_ms": 1.0690560340881348,
-  "large_k8_ms": 2.4289278984069824,
-  "cgnn_iteration_ms": 0.2739199797312419,
-  "k8_over_k2": 3.0925682403225023,
-  "proposed_ms": 0.8151040077209473,
-  "proposed_minus_k2_ms": 0.029695987701416016,
-  "before_slot_ms": 0.21299199759960175,
-  "samples": 2000
+  "large_k2_ms": 0.7895039916038513,
+  "large_k3_ms": 1.070080041885376,
+  "large_k8_ms": 2.456576108932495,
+  "cgnn_iteration_ms": 0.2778453528881073,
+  "k8_over_k2": 3.111543621131087,
+  "proposed_ms": 0.809984028339386,
+  "proposed_minus_k2_ms": 0.020480036735534668,
+  "before_slot_ms": 0.11468800157308578,
+  "samples": 2000,
+  "proposed_and_fit_ms": 0.9103360176086426,
+  "proposed_overlapped_ms": 0.8796160221099854
  },
  "training": {
   "retrained_updates": 11000,
@@ -433,6 +435,22 @@
    },
    "test_ue_tbs": 4408,
    "test_failures": 512
+  },
+  "receivers": {
+   "proposed": {
+    "caught_share": 0.96875,
+    "rule_caught_share": 0.794921875,
+    "failures_per_100": 11.61524500907441,
+    "late_per_100": 0.3629764065335753,
+    "false_alarm_share": 0.023613963039014373
+   },
+   "stateless": {
+    "caught_share": 0.9027355623100304,
+    "rule_caught_share": 0.8206686930091185,
+    "failures_per_100": 22.391107078039926,
+    "late_per_100": 2.1778584392014517,
+    "false_alarm_share": 0.02747734580532008
+   }
   }
  },
  "further_datasets": {
@@ -595,6 +613,38 @@
     "wiener_gain_over_lmmse_kbest_db": 0.1,
     "proposed_ahead_of_wiener_kbest_db": 0.1,
     "current_tb_only_minus_emptied_db": 0.08
+   }
+  }
+ },
+ "phase_jumps": {
+  "natural_umi": {
+   "memory_gain_db": 0.81,
+   "lead_over_retrained_db": 0.71,
+   "jump_share": 0.032552083333333336,
+   "tbler_near_jumps": {
+    "pilot_memory": 0.04710144927536232,
+    "pilot_memory_emptied": 0.22826086956521738,
+    "neural_rx_k2_trained": 0.18478260869565216
+   }
+  },
+  "controlled_topology_change": {
+   "memory_gain_db": 0.71,
+   "lead_over_retrained_db": 0.59,
+   "jump_share": 0.09700520833333333,
+   "tbler_near_jumps": {
+    "pilot_memory": 0.17157712305025996,
+    "pilot_memory_emptied": 0.2738301559792028,
+    "neural_rx_k2_trained": 0.24783362218370883
+   }
+  },
+  "schedule_gap_reentry": {
+   "memory_gain_db": 0.64,
+   "lead_over_retrained_db": 0.53,
+   "jump_share": 0.07192660550458715,
+   "tbler_near_jumps": {
+    "pilot_memory": 0.10572687224669604,
+    "pilot_memory_emptied": 0.1960352422907489,
+    "neural_rx_k2_trained": 0.18502202643171806
    }
   }
  },

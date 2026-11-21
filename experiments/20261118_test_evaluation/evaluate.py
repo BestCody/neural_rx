@@ -17,7 +17,8 @@ Receivers (results/<setting>/<condition>/<name>/episode_NNNNN.npz):
 
 The episodes are those every other receiver decoded: the sweep without power control (grids "sweep" and
 "sweep_high" of experiments/20261104_tbler_sweep) and the power-controlled episodes of
-experiments/20261112_early_retransmission ("power_control"). Each episode is regenerated once on the SNR grid of the
+experiments/20261112_early_retransmission ("power_control"), and the same with a random phase jump at every power
+step ("power_control_phase", phase_jumps.py). Each episode is regenerated once on the SNR grid of the
 stored Large NRX (N_it=2) result, must have the same fingerprint, and is decoded by all three receivers.
 
     evaluate.py --gpu 0 --setting sweep --condition natural_umi --first-episode 0 --last-episode 16
@@ -47,7 +48,8 @@ DEFAULT = ("pilot_memory", "pilot_memory_emptied", "neural_rx_k2_trained")
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--gpu", type=int, default=0)
-    parser.add_argument("--setting", choices=("sweep", "sweep_high", "power_control"), required=True)
+    parser.add_argument("--setting", choices=("sweep", "sweep_high", "power_control", "power_control_phase"),
+                        required=True)
     parser.add_argument("--condition", required=True)
     parser.add_argument("--first-episode", type=int, default=0)
     parser.add_argument("--last-episode", type=int, default=32)
@@ -69,9 +71,11 @@ def main():
     sweep.configure_runtime()
     MEMORY = sweep.CHECKPOINT
     chosen = {name: RECEIVERS[name] for name in args.receivers}
-    if args.setting == "power_control":
+    if args.setting in ("power_control", "power_control_phase"):
         sys.path.insert(0, str(PC))
         from power_control import SETTINGS, PowerControlBank
+        if args.setting == "power_control_phase":
+            from phase_jumps import PhaseJumpBank as PowerControlBank
         anchors = json.loads(sweep.ANCHORS.read_text())["conditions"]
         protocol, plan = protocol_and_plan("confirmation", sweep.PRBS, 32, anchors, protocol_path=sweep.PROTOCOL)
         parameters = Parameters(sweep.CONFIG, training=False, num_tx_eval=2, n_size_bwp_override=sweep.PRBS)
@@ -115,12 +119,17 @@ def main():
         if not outputs:
             continue
         with np.load(reference/name, allow_pickle=False) as data:
-            stored = {key: data[key] for key in ("snr_db", "fingerprint")}
+            stored = {key: data[key] for key in ("snr_db", "fingerprint", "active", "ue_ids") if key in data.files}
         job = dict(base_job, snr_db=[float(value) for value in stored["snr_db"]])
         started = time.perf_counter()
         episode = validate_episode(bank.generate(job, index), protocol, job)
-        if not np.array_equal(np.asarray(episode.fingerprint), stored["fingerprint"]):
+        phase_steps = getattr(bank, "last_phase_steps", None)
+        # With phase jumps the received signal differs on purpose, so only the schedule can be compared.
+        if phase_steps is None and not np.array_equal(np.asarray(episode.fingerprint), stored["fingerprint"]):
             raise RuntimeError(f"{args.setting}/{args.condition}/{name}: episode differs from the stored results")
+        if phase_steps is not None and not (np.array_equal(episode.active, stored["active"])
+                                            and np.array_equal(episode.ue_ids, stored["ue_ids"])):
+            raise RuntimeError(f"{args.setting}/{args.condition}/{name}: schedule differs from the stored results")
         generated = time.perf_counter()-started
         report = {}
         for receiver, path in outputs.items():
@@ -128,7 +137,8 @@ def main():
             if receiver in ESTIMATORS:      # like the sweep's stateless receivers: not detected before the scored TBs
                 errors[:, :sweep.SCORING_START], disagreement[:, :sweep.SCORING_START] = False, False
             sweep._atomic_savez(path, errors=errors, crc_disagreement=disagreement, active=episode.active,
-                                ue_ids=episode.ue_ids, snr_db=stored["snr_db"], fingerprint=stored["fingerprint"],
+                                ue_ids=episode.ue_ids, snr_db=stored["snr_db"], fingerprint=np.asarray(episode.fingerprint),
+                                **({} if phase_steps is None else {"phase_steps": phase_steps}),
                                 weights_sha256=identity[receiver][0], update=identity[receiver][1])
             report[receiver] = errors[:, sweep.SCORING_START:].sum((1, 2)).tolist()
         print(json.dumps({"setting": args.setting, "condition": args.condition, "episode": index,

@@ -1,0 +1,95 @@
+{
+ "natural_umi": {
+  "required_snr_db": {
+   "pilot_memory": 1.7482225014694481,
+   "pilot_memory_emptied": 2.558030245355464,
+   "neural_rx_k2_trained": 2.4587088940308455
+  },
+  "required_snr_db_without_jumps": {
+   "pilot_memory": 1.7361755493204074,
+   "pilot_memory_emptied": 2.542230032761659,
+   "neural_rx_k2_trained": 2.4525815573929823
+  },
+  "memory_gain_db": 0.8098077438860158,
+  "memory_gain_db_without_jumps": 0.8060544834412517,
+  "lead_over_retrained_db": 0.7104863925613973,
+  "lead_over_retrained_db_without_jumps": 0.7164060080725749,
+  "phase_jumps": 100,
+  "scheduled_ue_tbs": 3072,
+  "phase_jump_share": 0.032552083333333336,
+  "tbler_snr_db": 2.0,
+  "ue_tbs_near_jumps": 276,
+  "tbler_near_jumps": {
+   "pilot_memory": 0.04710144927536232,
+   "pilot_memory_emptied": 0.22826086956521738,
+   "neural_rx_k2_trained": 0.18478260869565216
+  },
+  "tbler_elsewhere": {
+   "pilot_memory": 0.05793991416309013,
+   "pilot_memory_emptied": 0.24177396280400573,
+   "neural_rx_k2_trained": 0.21566523605150215
+  }
+ },
+ "controlled_topology_change": {
+  "required_snr_db": {
+   "pilot_memory": 2.180411255645503,
+   "pilot_memory_emptied": 2.8938542102041964,
+   "neural_rx_k2_trained": 2.7653661801137037
+  },
+  "required_snr_db_without_jumps": {
+   "pilot_memory": 2.163116178927329,
+   "pilot_memory_emptied": 2.896918672965402,
+   "neural_rx_k2_trained": 2.7705276292252394
+  },
+  "memory_gain_db": 0.7134429545586936,
+  "memory_gain_db_without_jumps": 0.733802494038073,
+  "lead_over_retrained_db": 0.5849549244682009,
+  "lead_over_retrained_db_without_jumps": 0.6074114502979104,
+  "phase_jumps": 298,
+  "scheduled_ue_tbs": 3072,
+  "phase_jump_share": 0.09700520833333333,
+  "tbler_snr_db": 2.0,
+  "ue_tbs_near_jumps": 577,
+  "tbler_near_jumps": {
+   "pilot_memory": 0.17157712305025996,
+   "pilot_memory_emptied": 0.2738301559792028,
+   "neural_rx_k2_trained": 0.24783362218370883
+  },
+  "tbler_elsewhere": {
+   "pilot_memory": 0.11503006012024049,
+   "pilot_memory_emptied": 0.2593186372745491,
+   "neural_rx_k2_trained": 0.22605210420841684
+  }
+ },
+ "schedule_gap_reentry": {
+  "required_snr_db": {
+   "pilot_memory": 2.458004246631191,
+   "pilot_memory_emptied": 3.095441062945848,
+   "neural_rx_k2_trained": 2.992818999962042
+  },
+  "required_snr_db_without_jumps": {
+   "pilot_memory": 2.479894853591706,
+   "pilot_memory_emptied": 3.1077497414944912,
+   "neural_rx_k2_trained": 2.988123786813497
+  },
+  "memory_gain_db": 0.6374368163146573,
+  "memory_gain_db_without_jumps": 0.6278548879027852,
+  "lead_over_retrained_db": 0.5348147533308509,
+  "lead_over_retrained_db_without_jumps": 0.5082289332217909,
+  "phase_jumps": 196,
+  "scheduled_ue_tbs": 2725,
+  "phase_jump_share": 0.07192660550458715,
+  "tbler_snr_db": 2.5,
+  "ue_tbs_near_jumps": 454,
+  "tbler_near_jumps": {
+   "pilot_memory": 0.10572687224669604,
+   "pilot_memory_emptied": 0.1960352422907489,
+   "neural_rx_k2_trained": 0.18502202643171806
+  },
+  "tbler_elsewhere": {
+   "pilot_memory": 0.095112285336856,
+   "pilot_memory_emptied": 0.14927344782034346,
+   "neural_rx_k2_trained": 0.13826508146191105
+  }
+ }
+}

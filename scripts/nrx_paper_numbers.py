@@ -115,7 +115,10 @@ def latency():
             "large_k2_ms": m["large_k2"], "large_k3_ms": m["large_k3"], "large_k8_ms": m["large_k8"],
             "cgnn_iteration_ms": (m["large_k8"]-m["large_k2"])/6, "k8_over_k2": m["large_k8"]/m["large_k2"],
             "proposed_ms": m["proposed"], "proposed_minus_k2_ms": m["proposed"]-m["large_k2"],
-            "before_slot_ms": m["fit_only"], "samples": data["samples_per_receiver"]}
+            "before_slot_ms": m["fit_only"], "samples": data["samples_per_receiver"],
+            # all GPU work per slot (the slot, then the fit for the next one), and the slot's latency while that fit
+            # runs at the same time on a second stream
+            "proposed_and_fit_ms": m["proposed_and_fit"], "proposed_overlapped_ms": m["proposed_overlapped"]}
 
 
 def training():
@@ -136,6 +139,7 @@ def network():
     """Fallback after a CRC failure and the early-retransmission controller (experiments/20261118_network_decisions)."""
     fallback = json.loads((NETWORK/"fallback.json").read_text())
     controller = json.loads((NETWORK/"controller.json").read_text())
+    compare = json.loads((NETWORK/"compare_receivers.json").read_text())   # proposed vs stateless, no memory state
     step = controller["step_by_step"]["CRC history and receiver evidence, budget of the rule"]
     single = controller["single_check"]
     return {"fallback": {setting: {c: {"kbest_gain_db": r["fallback_gain_db"]["baseline_lmmse_kbest"],
@@ -147,7 +151,10 @@ def network():
                            "caught_first_failures": step["caught_first_failures"],
                            "caught_at_check_1_of_caught": step["caught_at"]["check 1"]/step["caught"],
                            "single_check_caught": {name: value["caught"] for name, value in single.items()},
-                           "test_ue_tbs": controller["test"]["ue_tbs"], "test_failures": controller["test"]["failures"]}}
+                           "test_ue_tbs": controller["test"]["ue_tbs"], "test_failures": controller["test"]["failures"]},
+            "receivers": {name: {key: r[key] for key in ("caught_share", "rule_caught_share", "failures_per_100",
+                                                         "late_per_100", "false_alarm_share")}
+                          for name, r in compare["receivers"].items()}}
 
 
 def further():
@@ -202,6 +209,18 @@ def classical():
     return report
 
 
+def phase_jumps():
+    """Power control with a random phase jump at every power step (experiments/20261118_test_evaluation:
+    phase_jumps_summary.py): the memory's gain, the share of scored TBs after a jump, and the TBLER near jumps."""
+    report = {}
+    for c, r in json.loads((TRAINED/"phase_jumps.json").read_text()).items():
+        q = r["required_snr_db"]
+        report[c] = {"memory_gain_db": difference(q["pilot_memory_emptied"], q["pilot_memory"]),
+                     "lead_over_retrained_db": difference(q["neural_rx_k2_trained"], q["pilot_memory"]),
+                     "jump_share": r["phase_jump_share"], "tbler_near_jumps": r["tbler_near_jumps"]}
+    return report
+
+
 def collect():
     table, gains, blocks = required_snr()
     export = json.loads((TENSORRT/"export.json").read_text())["weights"]
@@ -210,7 +229,7 @@ def collect():
     entries = settings["history_tbs"]-settings["fit_tbs"]
     return {"required_snr_db": table, "gains": gains, "blocks": blocks, "effective_snr": effective_snr(),
             "doppler": doppler(), "latency": latency(), "training": training(), "network": network(),
-            "further_datasets": further(), "classical": classical(),
+            "further_datasets": further(), "classical": classical(), "phase_jumps": phase_jumps(),
             "weights": {"large_nrx_two_iterations": export["large_k2"], "large_nrx_three_iterations": export["large_k3"],
                         "large_nrx_eight_iterations": export["large_k8"], "proposed": export["large_k2"]},
             # as the text states them, in units of 1e5

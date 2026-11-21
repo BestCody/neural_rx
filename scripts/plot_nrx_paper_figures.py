@@ -123,12 +123,12 @@ def snr_and_latency(summary, latency):
     fig, left = plt.subplots(figsize=(3.3, 1.6))
     right = left.twinx()
     left.plot(list(iterations), [umi[m]["snr_at_10pct_db"] for m in iterations.values()], color="#ff7f00",
-              linestyle=":", marker=".", linewidth=1.05, label="Large NRX")
+              linestyle=":", marker=".", linewidth=1.05, label="Large NRX (SNR)")
     # Same architecture as the Large NRX with N_it=2, so only its required SNR is shown.
     left.plot([2], [umi["neural_rx_k2_trained"]["snr_at_10pct_db"]], color="#a65628", marker="^", markersize=4.5,
-              linestyle="none", label="Large NRX retrained, $N_{\\mathrm{it}}=2$")
+              linestyle="none", label="Large NRX retrained, $N_{\\mathrm{it}}=2$ (SNR)")
     left.plot([2], [umi["pilot_memory"]["snr_at_10pct_db"]], color=PINK, marker="*", markersize=7,
-              linestyle="none", label="Proposed NRX")
+              linestyle="none", label="Proposed NRX (SNR)")
     right.plot(list(engines), [latency[e] for e in engines.values()], color="#1f78b4", marker="s",
                markersize=3, linewidth=1.05, label="Large NRX latency")
     # Hollow and larger, so the Large NRX's marker at N_it = 2 stays visible next to it.

@@ -12,11 +12,13 @@ from time_trt import call
 
 class FilterKernels:
     FIELDS = ("ls", "noise", "memory", "age", "ports", "valid", "active", "pack", "noise_factors", "neighbor_index",
-              "neighbor_valid", "neighbor_delta", "cell_symbol", "symbol_cells", "slope_cells", "cell_of_position",
-              "time_factor", "frequency_factor", "pair_row", "pair_column", "gram", "rhs", "weights", "available",
-              "memory_part", "prediction", "sums", "choice", "gain", "out")
+              "neighbor_valid", "neighbor_delta", "cell_symbol", "symbol_cells", "own_neighbors", "position_cells",
+              "position_packs", "time_factor", "frequency_factor", "pair_row", "pair_column", "gram", "rhs", "weights",
+              "available", "memory_part", "prediction", "sums", "choice", "gain", "out")
+    ACCUMULATORS, MAX_RECORDS, MAX_NEIGHBORS = 4, 16, 8      # as in fitted_filter.cu
 
-    def __init__(self, np, cuda, cudart, cubin, tables, feeds, output, stream, group_cells=16, expand_threads=256):
+    def __init__(self, np, cuda, cudart, cubin, tables, feeds, output, stream, group_cells=16, expand_threads=256,
+                 gram_chunk=8, gram_threads=256, solve_threads=256):
         self.np, self.cuda, self.cudart = np, cuda, cudart
         call(cuda.cuInit(0))
         self.module = call(cuda.cuModuleLoadData(cubin))
@@ -35,13 +37,28 @@ class FilterKernels:
         rows, columns = np.triu_indices(inputs)
         if (memory.shape != (1, users, history, cells, 2*antennas+1) or feeds["h_hat_ls"].shape[1] != users
                 or np.prod(feeds["h_hat_ls"].shape[2:4]) != positions or feeds["h_hat_ls"].shape[-1] != 2*antennas
-                or fit_tbs > 16 or entries < 0):
+                or entries < 0):
             raise ValueError("tables and inputs do not match")
+        if (history > self.MAX_RECORDS or neighbors > self.MAX_NEIGHBORS or inputs+1 > solve_threads
+                or len(rows)+inputs > self.ACCUMULATORS*gram_threads):
+            raise ValueError("sizes beyond the kernels' limits")
+        # tables that only depend on the pilot layout: each neighbor's grid position in the current TB (port u,
+        # without the cell itself), and per grid position its four cells and their grid positions
+        index, valid, delta = tables["neighbor_index"], tables["neighbor_valid"], tables["neighbor_delta"]
+        own = np.full((users, cells, neighbors), -1, np.int64)
+        for u in range(users):
+            keep = valid[u, u].astype(bool) & ~np.all(delta[u, u] == 0, -1)
+            own[u] = np.where(keep, tables["pack"][u][index[u, u]], -1)
+        cell_of_position, slope_cells = tables["cell_of_position"], tables["slope_cells"]
+        position_cells = np.concatenate([cell_of_position[..., None],
+                                         np.take_along_axis(slope_cells, cell_of_position[..., None], 1)], -1)
+        position_packs = np.stack([np.take_along_axis(tables["pack"], position_cells[..., q], 1) for q in range(4)], -1)
         f32, i32 = np.float32, np.int32
+        gram_splits = -(-symbol_cells//gram_chunk)  # filter_gram: one block per chunk of a DMRS symbol's cells
         self.sizes = dict(users=users, cells=cells, positions=positions, antennas=antennas, history=history,
                           neighbors=neighbors, symbols=symbols, symbol_cells_count=symbol_cells, entries=entries,
-                          fit_tbs=fit_tbs, pairs=len(rows), groups=groups)
-        self.shapes = {"gram": (users, symbols, fit_tbs, len(rows), 2), "rhs": (users, symbols, fit_tbs, inputs, 2),
+                          fit_tbs=fit_tbs, pairs=len(rows), groups=groups, splits=gram_splits, chunk=gram_chunk)
+        self.shapes = {"normal": (users, symbols, fit_tbs, len(rows)+inputs, 2),
                        "weights": (users, symbols, entries+1, inputs, 2), "available": (users, symbols, entries+1),
                        "memory_part": (users, cells, entries+1, 2*antennas),
                        "prediction": (users, cells, entries+1, 2*antennas), "sums": (users, symbols, groups, entries+2),
@@ -58,13 +75,17 @@ class FilterKernels:
             "neighbor_delta": self._upload(tables["neighbor_delta"], f32),
             "cell_symbol": self._upload(tables["cell_symbol"], i32),
             "symbol_cells": self._upload(tables["symbol_cells"], i32),
-            "slope_cells": self._upload(tables["slope_cells"], i32),
-            "cell_of_position": self._upload(tables["cell_of_position"], i32),
+            "own_neighbors": self._upload(own, i32), "position_cells": self._upload(position_cells, i32),
+            "position_packs": self._upload(position_packs, i32),
             "time_factor": self._upload(tables["time_factor"], f32),
             "frequency_factor": self._upload(tables["frequency_factor"], f32),
             "pair_row": self._upload(rows, i32), "pair_column": self._upload(columns, i32), "out": output}
         for name, shape in self.shapes.items():
             self.pointers[name] = self._upload(np.zeros(shape, self.types.get(name, f32)), self.types.get(name, f32))
+        # one buffer for the Gram matrices and right-hand sides, so a single memset zeroes both before each fit
+        self.pointers["gram"] = int(self.pointers["normal"])
+        self.pointers["rhs"] = int(self.pointers["normal"])+users*symbols*fit_tbs*len(rows)*8
+        self.normal_words = int(np.prod(self.shapes["normal"]))
         # the kernels' context: every field is 8 bytes
         words = np.zeros(len(self.FIELDS)+len(self.sizes)+1, np.uint64)
         words[:len(self.FIELDS)] = [int(self.pointers[name]) for name in self.FIELDS]
@@ -73,15 +94,16 @@ class FilterKernels:
         self.context = words                        # passed to the kernels by value
         self.params = np.array([self.context.ctypes.data], np.uint64)
         self.stream = cuda.CUstream(int(stream))
-        solver = 1 << int(np.ceil(np.log2(inputs+1)))
         self.launches = {
-            "filter_gram": ((len(rows)+inputs, users*symbols*fit_tbs, 1), (128, 1, 1), 128*8),
-            "filter_solve": ((entries+1, users*symbols, 1), (solver, 1, 1), (inputs*(inputs+1)+2*inputs+1)*8),
-            "filter_history": ((cells, users, 1), (neighbors, entries+1, 1), inputs*antennas*8),
+            "filter_gram": ((gram_splits, users*symbols*fit_tbs, 1), (gram_threads, 1, 1),
+                            gram_chunk*antennas*(inputs+1)*8),
+            "filter_solve": ((entries+1, users*symbols, 1), (32, max(solve_threads//32, 1), 1),
+                             (inputs*(inputs+1)+2*inputs+1)*8),
+            "filter_history": ((cells, users, 1), (neighbors, max(entries, 1), 1), inputs*antennas*8),
             "filter_predict": ((groups, users*symbols, 1), (antennas, group_cells, 1),
-                               antennas*group_cells*(neighbors*8+(entries+2)*4)),
+                               antennas*group_cells*(entries+2)*4),
             "filter_expand": ((-(-positions//expand_threads), users, 1), (expand_threads, 1, 1),
-                              symbols*(entries+4)*4)}
+                              (symbols*(entries+2)*(groups+1)+2*symbols)*4)}
 
     def _upload(self, array, dtype):
         array = self.np.ascontiguousarray(array, dtype)
@@ -96,6 +118,7 @@ class FilterKernels:
                                       self.params.ctypes.data, 0))
 
     def fit(self):
+        call(self.cuda.cuMemsetD32Async(self.pointers["normal"], 0, self.normal_words, self.stream))
         self._launch("filter_gram")
         self._launch("filter_solve")
         self._launch("filter_history")

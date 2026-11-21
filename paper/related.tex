@@ -1,7 +1,7 @@
 \section{Related Work}
 On an NVIDIA A100 GPU with TensorRT, the latency of the NRX of
-\citet{cammerer2023neural} grows with the number of iterations: each adds about
-350~$\mu$s to a fixed 270~$\mu$s~\cite{wiesmayr2025realtime}. Several remedies
+\citet{cammerer2023neural} grows linearly with the number of
+iterations~\cite{wiesmayr2025realtime}. Several remedies
 recover part of the accuracy lost to fewer iterations. Site-specific fine-tuning lets a
 two-iteration receiver outperform an untuned eight-iteration receiver on
 single-user over-the-air recordings at two indoor sites~\cite{baytekin2026site},
@@ -60,7 +60,7 @@ uncoded.
 \begin{figure*}[t]
 \centering
 \includegraphics[width=\textwidth]{figures/receiver_architecture.pdf}
-\caption{Proposed NRX for 5G NR PUSCH. The channel filter refines the LS estimate with the pilot memory before \texttt{StateInit}; its weights are fitted on the memory.}
+\caption{Proposed NRX for 5G NR PUSCH. The channel filter refines the LS estimate with the pilot memory before \texttt{StateInit}; its weights are fitted on the memory. The channel readout used only in training is not shown.}
 \label{fig:architecture}
 \end{figure*}
 
@@ -68,5 +68,5 @@ Despite these advances, no prior MU-MIMO NRX for 5G NR carries
 channel estimates across slots to recover the accuracy lost to fewer
 iterations. Unlike online adaptation, our receiver keeps its trained weights fixed and
 stores only LS channel estimates, so it
-needs no labels and no decoder feedback. Like DMRS bundling, it assumes phase
-continuity across the stored slots.
+needs no labels and no decoder feedback. Unlike DMRS bundling, it requires neither power
+consistency nor phase continuity across the stored slots.

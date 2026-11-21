@@ -48,6 +48,9 @@ def claim(phrase, holds, label):
 
 
 def directories(setting, method):
+    if setting == 'phase':                       # power control with a phase jump at every power step
+        assert method in OURS
+        return [f'{NEW}/power_control_phase']
     if setting == 'pc':
         return [f'{NEW}/power_control' if method in OURS+EXTRA else PC]
     return [f'{NEW if method in OURS+EXTRA else SW}/{d}' for d in ('sweep', 'sweep_high')]
@@ -127,14 +130,28 @@ claim('is on par with it for UMi', abs(pc_behind[0]) <= .05, 'power control: UMi
 claim('outperforms LMMSE + K-Best in all three conditions', min(gap('pc', 'baseline_lmmse_kbest', 'pilot_memory')) > 0,
       'power control: LMMSE + K-Best')
 expect(f'The memory contributes {span(pc_memory)}\\,dB', 'power control: memory')
+phase_required = {c: {m: round(crossing(*errors('phase', c, m)), 2) for m in OURS} for c in CORE}
+phase_memory = [round(phase_required[c]['pilot_memory_emptied']-phase_required[c]['pilot_memory'], 2) for c in CORE]
+phase_lead = [round(phase_required[c]['neural_rx_k2_trained']-phase_required[c]['pilot_memory'], 2) for c in CORE]
+jumps = json.load(open(f'{NEW}/phase_jumps.json'))
+shares = sorted(100*jumps[c]['phase_jump_share'] for c in CORE)
+expect(f'With a uniformly distributed phase jump at every power step, which occurs before {shares[0]:.1f}\\% to '
+       f'{shares[-1]:.1f}\\% of the scored TBs, the memory still contributes {span(phase_memory)}\\,dB', 'phase jumps: memory')
+claim("on each UE's first three TBs after a jump, the proposed NRX fails less often than the retrained Large NRX in all three conditions",
+      all(jumps[c]['tbler_near_jumps']['pilot_memory'] < jumps[c]['tbler_near_jumps']['neural_rx_k2_trained'] for c in CORE),
+      'phase jumps: TBs after a jump')
+claim('it requires neither power consistency nor phase continuity across the stored slots',
+      min(pc_memory) > .5 and min(phase_memory) > .5 and min(phase_lead) > .4, 'related work: power and phase')
+claim('and keeps its memory gain with a phase jump at every power step',
+      all(abs(a-b) <= .05 for a, b in zip(phase_memory, pc_memory)), 'conclusion: phase jumps')
 both = lead+pc_lead
-claim(f'requires {min(both):.2f} to {max(both):.2f}\\,dB less SNR than the same NRX without the memory, retrained with two iterations', True, 'abstract lead')
-claim(f'stays within {max(behind+pc_behind):.2f}\\,dB of the eight-iteration NRX', True, 'abstract eight iterations')
-claim('outperforms the three-iteration NRX in all three test conditions', min(three+pc_three) > 0, 'abstract three iterations')
-claim('outperforms stateless NRXs with up to three iterations',
-      min(gap(s, m, 'pilot_memory')[i] for s in required for m in ('frozen_cold_k2', 'frozen_cold_k3', 'neural_rx_k2_trained') for i in range(3)) > 0,
+claim(f'requires {min(both):.2f} to {max(both):.2f}\\,dB less SNR than a stateless two-iteration NRX retrained on the same data', True, 'abstract lead')
+claim(f'stays within {max(behind+pc_behind):.2f}\\,dB of the released eight-iteration NRX', True, 'abstract eight iterations')
+claim('outperforms the released three-iteration NRX in all three test conditions', min(three+pc_three) > 0, 'abstract three iterations')
+claim('outperforms the released NRXs with up to three iterations',
+      min(gap(s, m, 'pilot_memory')[i] for s in required for m in ('frozen_cold_k2', 'frozen_cold_k3') for i in range(3)) > 0,
       'introduction: stateless NRXs')
-claim('the proposed NRX recovers most of the accuracy that the cut from eight iterations costs',
+claim('With two iterations, it recovers most of the accuracy that the cut from eight iterations costs',
       all(required[s][c]['frozen_cold_k2']-required[s][c]['pilot_memory'] > .5*(required[s][c]['frozen_cold_k2']-required[s][c]['frozen_cold_k8'])
           for s in required for c in CORE), 'introduction: most of the accuracy')
 claim('by up to 1\\,dB, even when the NRX is retrained for two iterations',
@@ -156,8 +173,8 @@ expect(f'This classical estimator trails the channel filter by {span([over_wiene
        f'and by {over_wiener[1]:.2f}\\,dB for channel change, where it even falls {-wiener_gain[1]:.2f}\\,dB behind LMMSE + K-Best',
        'classical multi-slot estimator')
 pc_gain, pc_over = gap('pc', 'baseline_lmmse_kbest', 'filter_kbest'), gap('pc', 'wiener_kbest', 'filter_kbest')
-expect(f'the channel filter reduces the required SNR by at most {max(pc_gain):.2f}\\,dB', 'power control: filter with K-Best')
-claim('is ahead of the classical multi-slot estimator except for scheduling gaps', pc_over[0] > 0 and pc_over[1] > 0 and pc_over[2] < 0,
+expect(f'the channel filter gains at most {max(pc_gain):.2f}\\,dB', 'power control: filter with K-Best')
+claim('leads the classical estimator except for scheduling gaps', pc_over[0] > 0 and pc_over[1] > 0 and pc_over[2] < 0,
       'power control: classical estimator')
 
 # ------------------------------------------------------------------------- effective SNR and Doppler groups (UMi)
@@ -215,16 +232,20 @@ claim('whose validation TBLER had stopped improving', len(later) >= 3 and min(la
 
 # --------------------------------------------------------------------------------------------------- latency
 aw = np.load(f'{TRT}/fused_a100_samples.npz')
-ms = {k: float(np.median(aw[f'events_{k}'])) for k in ('large_k2', 'large_k3', 'large_k8', 'proposed', 'fit_only')}
+ms = {k: float(np.median(aw[f'events_{k}'])) for k in ('large_k2', 'large_k3', 'large_k8', 'proposed', 'fit_only',
+                                                        'proposed_and_fit', 'proposed_overlapped')}
 claim('median of 2{,}000 runs on an NVIDIA A100 GPU', 'A100' in json.load(open(f'{TRT}/fused_a100.json'))['gpu']
       and all(len(aw[f'events_{k}']) == 2000 for k in ms), 'GPU and number of runs')
 claim('with TensorRT~10.3 in FP16', json.load(open(f'{TRT}/fused_a100.json'))['tensorrt'].startswith('10.3.'), 'TensorRT version')
 expect(f'takes {ms["large_k2"]:.2f}\\,ms, each further CGNN iteration adds {(ms["large_k8"]-ms["large_k2"])/6:.2f}\\,ms', 'iteration time')
 claim('takes three times as long as $N_{\\mathrm{it}}=2$', 2.8 < ms['large_k8']/ms['large_k2'] < 3.3, 'eight vs two')
-claim(f'$N_{{\\mathrm{{it}}}}=2$ meets the 1\\,ms budget, which $N_{{\\mathrm{{it}}}}=3$ exceeds with {ms["large_k3"]:.2f}\\,ms',
+claim(f'$N_{{\\mathrm{{it}}}}=2$ meets the 1\\,ms budget, which $N_{{\\mathrm{{it}}}}=3$ exceeds ({ms["large_k3"]:.2f}\\,ms)',
       ms['large_k2'] < 1 < ms['large_k3'], 'budget of the Large NRX')
 claim(f'The proposed NRX takes {ms["proposed"]:.2f}\\,ms, i.e., {ms["proposed"]-ms["large_k2"]:.2f}\\,ms more than the Large NRX with '
-      '$N_{\\mathrm{it}}=2$, and thus meets the 1\\,ms budget', ms['proposed'] < 1, 'time of the proposed NRX')
+      '$N_{\\mathrm{it}}=2$', ms['proposed'] < 1, 'time of the proposed NRX')
+claim(f'the GPU work per slot is {ms["proposed_and_fit"]:.2f}\\,ms, and if it runs at the same time as the slot, the slot takes '
+      f'{ms["proposed_overlapped"]:.2f}\\,ms. The proposed NRX thus meets the 1\\,ms budget in either case',
+      max(ms['proposed'], ms['proposed_and_fit'], ms['proposed_overlapped']) < 1, 'budget including the fit')
 expect(f'are computed before the slot arrives, which takes {ms["fit_only"]:.2f}\\,ms', 'time before the slot')
 for phrase in ('It meets the 1\\,ms real-time budget, which the three-iteration NRX exceeds',
                'show that it remains real-time capable, whereas the three-iteration NRX exceeds the 1\\,ms budget',
@@ -272,7 +293,7 @@ step = controller['step_by_step']['CRC history and receiver evidence, budget of 
 single = controller['single_check']
 expect(f'catches {round(100*controller["rule"]["caught"])}\\% of the errors in the test sequences', 'rule')
 expect(f'the controller catches {round(100*step["caught"])}\\% of the errors instead', 'controller')
-claim('about four fifths of them already after channel estimation', .75 <= step['caught_at']['check 1']/step['caught'] <= .85, 'check 1 share')
+claim('about four fifths of them already at the first check', .75 <= step['caught_at']['check 1']/step['caught'] <= .85, 'check 1 share')
 claim(f'flags {100*step["false_alarm"]:.1f}\\% of the correct TBs in the test sequences, as does this rule',
       f'{100*step["false_alarm"]:.1f}' == f'{100*controller["rule"]["false_alarm"]:.1f}', 'false alarms')
 expect(f'It also catches {round(100*step["caught_first_failures"])}\\% of the errors that do not follow an error', 'first failures')
@@ -282,6 +303,17 @@ claim('the memory state and the refined estimate add little',
       single['check 1, + filtered estimate']['caught']-single['check 1, any receiver: noise and current channel strength']['caught'] < .03, 'adds little')
 expect(f'the LLRs raise the share to {round(100*single["check 2, + LLRs after detection"]["caught"])}\\%, and the parity checks to '
        f'{round(100*single["check 3, + parity checks after 8 BP iterations"]["caught"])}\\%', 'LLRs and parity checks')
+compare = json.load(open(f'{NET}/compare_receivers.json'))['receivers']
+ours, stateless = compare['proposed'], compare['stateless']
+expect(f'Without the memory state, the controller still catches {round(100*ours["caught_share"])}\\% of the errors of the proposed NRX, '
+       f'and {round(100*stateless["caught_share"])}\\% of those of the stateless NRX retrained with $N_{{\\text{{it}}}}=2$, against '
+       f'{round(100*stateless["rule_caught_share"])}\\% for the rule', 'controller on the stateless NRX')
+claim('As that NRX fails about twice as often at the same SNR points',
+      1.8 <= stateless['failures_per_100']/ours['failures_per_100'] <= 2.2, 'twice as many failures')
+expect(f'{stateless["late_per_100"]:.1f} errors per 100 TBs remain for retransmission after the CRC fails, against '
+       f'{ours["late_per_100"]:.1f} with the proposed NRX', 'late retransmissions')
+claim('leaving six times fewer for after the CRC fails than with a stateless NRX',
+      round(stateless['late_per_100']/ours['late_per_100']) == 6, 'six times fewer late')
 claim(f'request {round(100*step["caught"])}\\% of the needed retransmissions before decoding finishes, compared with {round(100*controller["rule"]["caught"])}\\% for the CRC history alone',
       True, 'abstract controller')
 
@@ -318,7 +350,7 @@ if all(glob.glob(path) for path in FURTHER.values()) and 'further independent da
     example = ('first', 'historical_tdl_c300')
     expect(f"with a TBLER of {100*rates[example+('candidate_persistent',)]:.1f}\\% instead of {100*rates[example+('frozen_cold_k8',)]:.1f}\\%",
            'further datasets: example ahead')
-    claim('Without its memory, it is behind the Large NRX with $N_{\\mathrm{it}}=8$ in all six',
+    claim('Without its memory, it is behind in all six',
           len(ahead) == 6 and all(rates[k+('frozen_cold_k8',)] < rates[k+('candidate_reset',)] for k in ahead),
           'further datasets: behind without the memory')
     claim(f'remains ahead in {len(behind)} cases', True, 'further datasets: eight iterations ahead')

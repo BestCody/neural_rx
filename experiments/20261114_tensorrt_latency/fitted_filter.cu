@@ -3,10 +3,13 @@
 // them and time_fused.py checks their output against the TensorFlow receiver.
 //
 // Before the slot arrives (only the memory is needed):
-//   filter_gram   normal equations of each of the newest entries: one block per (UE, DMRS symbol, entry) and per
-//                 element of the upper triangle of the Gram matrix or of the right-hand side
-//   filter_solve  for each number K of entries used (0..entries): sums the normal equations of the stored TBs that
-//                 have all K lagged entries, adds the ridge term, and solves by Gauss-Jordan elimination
+//   filter_gram     normal equations of each of the newest entries, in parts: one block per (UE, DMRS symbol, entry,
+//                   slice of the symbol's cells) loads the slice's inputs and targets into shared memory, each thread
+//                   accumulates its elements of the Gram matrix and of the right-hand side, and adds them to the
+//                   entry's normal equations, which the host zeroes before (FilterKernels.fit)
+//   filter_solve    one block per (UE, DMRS symbol, number K of entries used): sums the normal equations of the
+//                   stored TBs that have all K lagged entries, adds the ridge term, and solves by Gauss-Jordan
+//                   elimination, in registers of one warp up to 31 unknowns
 //   filter_history  one block per (UE, pilot cell): the part of every K's prediction that comes from the entries
 // On the slot (timed with the network):
 //   filter_predict  one block per (UE, DMRS symbol, group of the symbol's cells), one thread per (cell, antenna): adds
@@ -17,8 +20,17 @@
 //                   prediction against the LS estimate; then the first-order model of the position's cell from the
 //                   refined estimates of the cell and of its neighbors in time and frequency
 //
+// Lookups that only depend on the pilot layout are tables prepared on the host (own_neighbors, position_cells,
+// position_packs), so a kernel reaches every estimate with at most two dependent memory reads.
+//
 // All sizes are fields of the context, which the kernels receive by value; every field is 8 bytes, so the host fills
-// it as an array of 64-bit words.
+// it as an array of 64-bit words. Limits the host checks: history <= 16, neighbors <= 8, inputs+1 <= solve threads,
+// pairs+inputs <= ACCUMULATORS * gram threads.
+
+#define ACCUMULATORS 4
+#define MAX_RECORDS 16
+#define MAX_NEIGHBORS 8
+#define WARP 32
 
 struct Context {
     const float* ls;                    // [U, P, 2B] LS estimate on the grid (nearest-pilot interpolation)
@@ -35,13 +47,16 @@ struct Context {
     const float* neighbor_delta;        // [U, U, C, N, 2] offset in time and frequency
     const int* cell_symbol;             // [U, C] DMRS symbol of each cell
     const int* symbol_cells;            // [U, S, C/S] cells of each DMRS symbol
-    const int* slope_cells;             // [U, C, 3] cell at the other DMRS symbol, lower and upper neighbor in frequency
-    const int* cell_of_position;        // [U, P]
+    const int* own_neighbors;           // [U, C, N] grid position of each neighbor in the current TB, -1 if none or the
+                                        // cell itself
+    const int* position_cells;          // [U, P, 4] the position's cell, its cell on the other DMRS symbol, its lower
+                                        // and upper neighbor in frequency
+    const int* position_packs;          // [U, P, 4] grid positions of these cells' LS estimates
     const float* time_factor;           // [U, P] offset of the position, in units of the difference to the other symbol
     const float* frequency_factor;      // [U, P] the same for the difference between the frequency neighbors
     const int* pair_row;                // [pairs] upper triangle of the Gram matrix
     const int* pair_column;             // [pairs]
-    float2* gram;                       // [U, S, R, pairs]
+    float2* gram;                       // [U, S, R, pairs] normal equations, added up from parts (zeroed by the host)
     float2* rhs;                        // [U, S, R, M]
     float2* weights;                    // [U, S, E+1, M] zero beyond the inputs a K uses
     int* available;                     // [U, S, E+1] whether a K has a fit
@@ -52,7 +67,8 @@ struct Context {
     int* choice;                        // [U, S] chosen K
     float* gain;                        // [U, S] weight of the prediction; 0 without a fit
     float* out;                         // [U, P, 2B]
-    long long users, cells, positions, antennas, history, neighbors, symbols, symbol_cells_count, entries, fit_tbs, pairs, groups;
+    long long users, cells, positions, antennas, history, neighbors, symbols, symbol_cells_count, entries, fit_tbs, pairs,
+              groups, splits, chunk;
     double ridge;
 };
 
@@ -65,108 +81,143 @@ __device__ __forceinline__ float2 divide(float2 a, float2 b) {
     return make_float2((a.x*b.x+a.y*b.y)/d, (a.y*b.x-a.x*b.y)/d);
 }
 
-// The estimate [2B] of neighbor n of cell c in one record, or null if it does not enter. The record is the current
-// TB (entry < 0, received on port u) or memory entry `entry`; `centre` is the port whose cells are the centres, and
-// `own` marks the record of the cell itself, whose central neighbor is left out.
-__device__ __forceinline__ const float* neighbor(const Context& x, int u, int centre, int entry, bool own, int c, int n) {
-    const int users = x.users, cells = x.cells, width = 2*x.antennas;
-    int port = u;
-    if (entry >= 0) {
-        if (x.valid[u*x.history+entry] <= .5f) return nullptr;
-        port = x.ports[u*x.history+entry];
-        if (port < 0 || port >= users) return nullptr;
-    }
-    const long base = (((long)centre*users+port)*cells+c)*x.neighbors+n;
-    if (x.neighbor_valid[base] == 0) return nullptr;
-    if (own && x.neighbor_delta[2*base] == 0.f && x.neighbor_delta[2*base+1] == 0.f) return nullptr;
-    const int index = x.neighbor_index[base];
-    return entry < 0 ? x.ls+((long)u*x.positions+x.pack[u*cells+index])*width
-                     : x.memory+(((long)u*x.history+entry)*cells+index)*(width+1);
-}
-
-// The memory entry that is `lag` TBs older than entry `target`, or -1.
-__device__ __forceinline__ int lagged(const Context& x, int u, int target, int lag) {
-    const int wanted = x.age[u*x.history+target]+lag;
-    for (int j = 0; j < x.history; ++j)
-        if (x.valid[u*x.history+j] > .5f && x.age[u*x.history+j] == wanted) return j;
-    return -1;
-}
-
-// Record k (0: the target itself, k >= 1: the entry as much older than it as the current TB's kth newest entry is
-// older than the current TB) of the normal equations of memory entry `target`; -1 if it does not exist.
-__device__ __forceinline__ int fit_record(const Context& x, int u, int target, int k) {
-    if (k == 0) return target;
-    if (x.valid[u*x.history+k-1] <= .5f) return -1;
-    return lagged(x, u, target, x.age[u*x.history+k-1]);
-}
-
-extern "C" __global__ void filter_gram(const Context x) {
-    const int inputs = (x.entries+1)*x.neighbors, antennas = x.antennas, threads = blockDim.x, tid = threadIdx.x;
-    const int item = blockIdx.x, r = blockIdx.y % x.fit_tbs, s = (blockIdx.y/x.fit_tbs) % x.symbols;
-    const int u = blockIdx.y/(x.fit_tbs*x.symbols);
-    extern __shared__ float2 partial[];
-    const bool right = item >= x.pairs;                          // an element of the right-hand side
-    const int i = right ? item-x.pairs : x.pair_row[item], j = right ? 0 : x.pair_column[item];
-    const bool usable = x.active[u] > .5f && x.valid[u*x.history+r] > .5f;
-    float2 sum = make_float2(0.f, 0.f);
-    if (usable) {
-        const int centre = x.ports[u*x.history+r];
-        const int ri = fit_record(x, u, r, i/x.neighbors), rj = right ? r : fit_record(x, u, r, j/x.neighbors);
-        if (ri >= 0 && rj >= 0 && centre >= 0 && centre < x.users) {
-            const int* cells = x.symbol_cells+((long)centre*x.symbols+s)*x.symbol_cells_count;
-            for (int q = tid; q < x.symbol_cells_count; q += threads) {
-                const int c = cells[q];
-                const float* a = neighbor(x, u, centre, ri, i < x.neighbors, c, i % x.neighbors);
-                const float* b = right ? x.memory+(((long)u*x.history+r)*x.cells+c)*(2*antennas+1)
-                                       : neighbor(x, u, centre, rj, j < x.neighbors, c, j % x.neighbors);
-                if (a == nullptr || b == nullptr) continue;
-                for (int v = 0; v < antennas; ++v) {
-                    const float2 p = conjugate_multiply(make_float2(a[v], a[antennas+v]), make_float2(b[v], b[antennas+v]));
-                    sum.x += p.x; sum.y += p.y;
-                }
-            }
+// A UE's memory metadata in shared memory: for each entry its age, and its DMRS port if the entry is valid and on a
+// known port (else -1). load() is called by all threads of a block, followed by __syncthreads().
+struct Entries {
+    int age[MAX_RECORDS], port[MAX_RECORDS];
+    __device__ void load(const Context& x, int u) {
+        for (int j = threadIdx.y*blockDim.x+threadIdx.x; j < x.history; j += blockDim.x*blockDim.y) {
+            const int p = x.ports[u*x.history+j];
+            age[j] = x.age[u*x.history+j];
+            port[j] = x.valid[u*x.history+j] > .5f && p >= 0 && p < x.users ? p : -1;
         }
     }
-    partial[tid] = sum;
+    // The entry that is `lag` TBs older than entry `target`, or -1.
+    __device__ int lagged(int history, int target, int lag) const {
+        for (int j = 0; j < history; ++j)
+            if (port[j] >= 0 && age[j] == age[target]+lag) return j;
+        return -1;
+    }
+    // Record k (0: the target itself, k >= 1: the entry as much older than it as the current TB's kth newest entry is
+    // older than the current TB) of the normal equations of entry `target`; -1 if it does not exist.
+    __device__ int fit_record(int history, int target, int k) const {
+        if (k == 0) return target;
+        return port[k-1] >= 0 ? lagged(history, target, age[k-1]) : -1;
+    }
+};
+
+extern "C" __global__ void filter_gram(const Context x) {
+    // grid: (splits, UEs x DMRS symbols x newest entries); block: any number of threads
+    const int inputs = (x.entries+1)*x.neighbors, antennas = x.antennas, width = 2*antennas;
+    const int threads = blockDim.x, tid = threadIdx.x, numbers = x.entries+1, columns = inputs+1;
+    const int split = blockIdx.x, r = blockIdx.y % x.fit_tbs, s = (blockIdx.y/x.fit_tbs) % x.symbols;
+    const int u = blockIdx.y/(x.fit_tbs*x.symbols);
+    __shared__ Entries memory;
+    __shared__ int record[MAX_RECORDS], record_port[MAX_RECORDS], centre;
+    extern __shared__ float2 slice[];                            // [rows of a chunk, inputs+1], the target last
+    memory.load(x, u);
     __syncthreads();
-    if (tid == 0) {
-        float2 total = make_float2(0.f, 0.f);
-        for (int t = 0; t < threads; ++t) { total.x += partial[t].x; total.y += partial[t].y; }
-        const long block = ((long)u*x.symbols+s)*x.fit_tbs+r;
-        if (right) x.rhs[block*inputs+i] = total; else x.gram[block*x.pairs+item] = total;
+    if (tid < numbers) {
+        const int target = x.active[u] > .5f ? memory.port[r] : -1;
+        const int entry = target >= 0 ? memory.fit_record(x.history, r, tid) : -1;
+        record_port[tid] = entry >= 0 ? memory.port[entry] : -1;
+        record[tid] = record_port[tid] >= 0 ? entry : -1;
+        if (tid == 0) centre = target;
+    }
+    __syncthreads();
+    // the elements this thread accumulates: the upper triangle of the Gram matrix, then the right-hand side
+    const int elements = x.pairs+inputs;
+    int left[ACCUMULATORS], right[ACCUMULATORS];
+    float2 total[ACCUMULATORS];
+    for (int a = 0; a < ACCUMULATORS; ++a) {
+        const int e = tid+a*threads;
+        left[a] = e < x.pairs ? x.pair_row[e] : e < elements ? e-x.pairs : -1;
+        right[a] = e < x.pairs ? x.pair_column[e] : inputs;
+        total[a] = make_float2(0.f, 0.f);
+    }
+    const int count = x.symbol_cells_count, first = (int)((long)count*split/x.splits);
+    const int last = (int)((long)count*(split+1)/x.splits);
+    const int chunk = (int)x.chunk;                              // cells per chunk (the host sizes shared memory)
+    if (centre >= 0) {
+        const int* cells = x.symbol_cells+((long)centre*x.symbols+s)*count;
+        for (int start = first; start < last; start += chunk) {
+            const int held = min(chunk, last-start);
+            for (int item = tid; item < held*columns; item += threads) {
+                const int local = item/columns, i = item % columns, c = cells[start+local];
+                const float* source = nullptr;
+                if (i == inputs) source = x.memory+(((long)u*x.history+r)*x.cells+c)*(width+1);
+                else {
+                    const int k = i/x.neighbors, n = i % x.neighbors;
+                    if (record[k] >= 0) {
+                        const long base = (((long)centre*x.users+record_port[k])*x.cells+c)*x.neighbors+n;
+                        const bool own = k == 0 && x.neighbor_delta[2*base] == 0.f && x.neighbor_delta[2*base+1] == 0.f;
+                        if (x.neighbor_valid[base] != 0 && !own)
+                            source = x.memory+(((long)u*x.history+record[k])*x.cells+x.neighbor_index[base])*(width+1);
+                    }
+                }
+                for (int v = 0; v < antennas; ++v)
+                    slice[(local*antennas+v)*columns+i] = source ? make_float2(source[v], source[antennas+v])
+                                                                 : make_float2(0.f, 0.f);
+            }
+            __syncthreads();
+            for (int a = 0; a < ACCUMULATORS; ++a) {
+                if (left[a] < 0) continue;
+                float2 sum = total[a];
+                for (int row = 0; row < held*antennas; ++row) {
+                    const float2 p = conjugate_multiply(slice[row*columns+left[a]], slice[row*columns+right[a]]);
+                    sum.x += p.x; sum.y += p.y;
+                }
+                total[a] = sum;
+            }
+            __syncthreads();
+        }
+    }
+    if (centre < 0) return;
+    const long target = ((long)u*x.symbols+s)*x.fit_tbs+r;      // the parts are added up (the host zeroes them first)
+    for (int a = 0; a < ACCUMULATORS; ++a) {
+        const int e = tid+a*threads;
+        float2* sum = e < x.pairs ? x.gram+target*x.pairs+e : e < elements ? x.rhs+target*inputs+e-x.pairs : nullptr;
+        if (sum) { atomicAdd(&sum->x, total[a].x); atomicAdd(&sum->y, total[a].y); }
     }
 }
 
 extern "C" __global__ void filter_solve(const Context x) {
-    const int inputs = (x.entries+1)*x.neighbors, tid = threadIdx.x;
+    // grid: (numbers of entries used, UEs x DMRS symbols); block: (columns, rows) of at least inputs+1 threads
+    const int inputs = (x.entries+1)*x.neighbors, tid = threadIdx.y*blockDim.x+threadIdx.x, threads = blockDim.x*blockDim.y;
     const int number = blockIdx.x, s = blockIdx.y % x.symbols, u = blockIdx.y/x.symbols;
     const int size = (number+1)*x.neighbors, columns = size+1;
     extern __shared__ float2 shared[];
     float2* system = shared;                                     // [size, size+1], the right-hand side last
     float2* row = system+inputs*(inputs+1);                      // [size+1]
     float2* column = row+inputs+1;                               // [size]
+    __shared__ Entries memory;
+    __shared__ bool complete[MAX_RECORDS], fitted;
+    memory.load(x, u);
+    __syncthreads();
     // entries whose normal equations have all of these lags, and whether the current TB has these entries
-    bool fitted = false, complete[16];                           // fit_tbs <= 16 (checked by the host)
-    for (int r = 0; r < x.fit_tbs && r < 16; ++r) {
-        complete[r] = x.active[u] > .5f && x.valid[u*x.history+r] > .5f;
-        for (int k = 1; k <= number && complete[r]; ++k) complete[r] = fit_record(x, u, r, k) >= 0;
-        fitted = fitted || complete[r];
+    if (tid < x.fit_tbs) {
+        bool all = x.active[u] > .5f && memory.port[tid] >= 0;
+        for (int k = 1; k <= number && all; ++k) all = memory.fit_record(x.history, tid, k) >= 0;
+        complete[tid] = all;
     }
-    for (int k = 0; k < number; ++k) fitted = fitted && x.valid[u*x.history+k] > .5f;
-    for (int e = tid; e < size*columns; e += blockDim.x) {
+    __syncthreads();
+    if (tid == 0) {
+        bool any = false;
+        for (int r = 0; r < x.fit_tbs; ++r) any = any || complete[r];
+        for (int k = 0; k < number; ++k) any = any && memory.port[k] >= 0;
+        fitted = any;
+    }
+    __syncthreads();
+    for (int e = tid; e < size*columns; e += threads) {
         const int i = e/columns, j = e % columns;
+        const int a = i < j ? i : j, b = i < j ? j : i;          // stored: row a <= column b
+        const long pair = (long)a*inputs-(long)a*(a-1)/2+(b-a);
         float2 value = make_float2(0.f, 0.f);
-        for (int r = 0; r < x.fit_tbs && r < 16; ++r) {
+        for (int r = 0; r < x.fit_tbs; ++r) {
             if (!complete[r]) continue;
             const long block = ((long)u*x.symbols+s)*x.fit_tbs+r;
-            float2 term;
-            if (j == size) term = x.rhs[block*inputs+i];
-            else {
-                const int a = i < j ? i : j, b = i < j ? j : i;          // stored: row a <= column b
-                term = x.gram[block*x.pairs+(long)a*inputs-(long)a*(a-1)/2+(b-a)];
-                if (i > j) term.y = -term.y;
-            }
-            value.x += term.x; value.y += term.y;
+            const float2 term = j == size ? x.rhs[block*inputs+i] : x.gram[block*x.pairs+pair];
+            value.x += term.x; value.y += j != size && i > j ? -term.y : term.y;
         }
         system[e] = value;
     }
@@ -178,33 +229,73 @@ extern "C" __global__ void filter_solve(const Context x) {
         for (int i = 0; i < size; ++i) system[i*columns+i].x += loading;
     }
     __syncthreads();
-    for (int k = 0; k < size; ++k) {                             // Gauss-Jordan; positive definite, so no pivoting
-        const float2 pivot = system[k*columns+k];
-        for (int j = tid; j < columns; j += blockDim.x) row[j] = divide(system[k*columns+j], pivot);
-        for (int i = tid; i < size; i += blockDim.x) column[i] = system[i*columns+k];
-        __syncthreads();
-        for (int j = tid; j < columns; j += blockDim.x)
-            for (int i = 0; i < size; ++i) {
-                float2 factor = make_float2(-column[i].x, -column[i].y);
-                if (i == k) factor.x += 1.f;
-                const float2 change = multiply(factor, row[j]);
-                system[i*columns+j].x += change.x; system[i*columns+j].y += change.y;
+    // Gauss-Jordan; positive definite, so no pivoting. Up to 31 unknowns, one warp keeps the system in registers, a
+    // column per lane, and passes the pivot column by shuffles; larger systems use shared memory.
+    if (columns <= WARP) {
+        if (tid < WARP) {
+            const int j = tid;
+            float2 a[WARP];                                      // column j of the system
+            #pragma unroll
+            for (int i = 0; i < WARP; ++i) a[i] = i < size && j < columns ? system[i*columns+j] : make_float2(0.f, 0.f);
+            for (int k = 0; k < size; ++k) {
+                float2 mine = make_float2(0.f, 0.f);              // this lane's element in row k
+                #pragma unroll
+                for (int i = 0; i < WARP; ++i) if (i == k) mine = a[i];
+                const float2 pivot = make_float2(__shfl_sync(0xffffffffu, mine.x, k), __shfl_sync(0xffffffffu, mine.y, k));
+                const float2 value = divide(mine, pivot);
+                #pragma unroll
+                for (int i = 0; i < WARP; ++i) {                 // rows beyond the system are zero and stay so
+                    const float2 factor = make_float2(__shfl_sync(0xffffffffu, a[i].x, k), __shfl_sync(0xffffffffu, a[i].y, k));
+                    if (i == k) a[i] = value;
+                    else { const float2 change = multiply(factor, value); a[i].x -= change.x; a[i].y -= change.y; }
+                }
             }
+            #pragma unroll
+            for (int i = 0; i < WARP; ++i) if (i < size && j < columns) system[i*columns+j] = a[i];
+        }
+        __syncthreads();
+    }
+    else for (int k = 0; k < size; ++k) {
+        if (tid < columns) row[tid] = divide(system[k*columns+tid], system[k*columns+k]);
+        if (tid < size) column[tid] = system[tid*columns+k];
+        __syncthreads();
+        for (int j = k+threadIdx.x; j < columns; j += blockDim.x) {
+            const float2 value = row[j];
+            for (int i = threadIdx.y; i < size; i += blockDim.y) {
+                float2* element = system+i*columns+j;
+                if (i == k) *element = value;
+                else {
+                    const float2 change = multiply(column[i], value);
+                    element->x -= change.x; element->y -= change.y;
+                }
+            }
+        }
         __syncthreads();
     }
     const long block = ((long)u*x.symbols+s)*(x.entries+1)+number;
-    for (int i = tid; i < inputs; i += blockDim.x)
+    for (int i = tid; i < inputs; i += threads)
         x.weights[block*inputs+i] = fitted && i < size ? system[i*columns+size] : make_float2(0.f, 0.f);
     if (tid == 0) x.available[block] = fitted ? 1 : 0;
 }
 
 extern "C" __global__ void filter_history(const Context x) {
-    // grid: (cells, UEs); block: neighbors x (entries+1) threads
+    // grid: (cells, UEs); block: neighbors x entries threads
     const int u = blockIdx.y, c = blockIdx.x, threads = blockDim.x*blockDim.y, tid = threadIdx.y*blockDim.x+threadIdx.x;
     const int antennas = x.antennas, width = 2*antennas, inputs = (x.entries+1)*x.neighbors, numbers = x.entries+1;
     extern __shared__ float2 value[];                            // [inputs, B]; the current TB's inputs stay unused
+    __shared__ Entries memory;
+    memory.load(x, u);
+    __syncthreads();
+    const int* port = memory.port;
+    const bool active = x.active[u] > .5f;
     for (int j = x.neighbors+tid; j < inputs; j += threads) {
-        const float* source = x.active[u] > .5f ? neighbor(x, u, u, j/x.neighbors-1, false, c, j % x.neighbors) : nullptr;
+        const int entry = j/x.neighbors-1, n = j % x.neighbors;
+        const float* source = nullptr;
+        if (active && port[entry] >= 0) {
+            const long base = (((long)u*x.users+port[entry])*x.cells+c)*x.neighbors+n;
+            if (x.neighbor_valid[base] != 0)
+                source = x.memory+(((long)u*x.history+entry)*x.cells+x.neighbor_index[base])*(width+1);
+        }
         for (int v = 0; v < antennas; ++v)
             value[j*antennas+v] = source ? make_float2(source[v], source[antennas+v]) : make_float2(0.f, 0.f);
     }
@@ -229,28 +320,35 @@ extern "C" __global__ void filter_predict(const Context x) {
     const int threads = blockDim.x*blockDim.y, tid = threadIdx.y*blockDim.x+threadIdx.x, width = 2*antennas;
     const int numbers = x.entries+1, inputs = numbers*x.neighbors;
     const int q = blockIdx.x*blockDim.y+threadIdx.y;             // the cell's place among the cells of its DMRS symbol
-    extern __shared__ float2 shared[];
-    float2* value = shared+tid*x.neighbors;                      // [neighbors] the thread's inputs
-    float* difference = reinterpret_cast<float*>(shared+threads*x.neighbors);      // [numbers+1, threads]
+    extern __shared__ float difference[];                        // [numbers+1, threads]
     if (q < x.symbol_cells_count && v < antennas) {
         const int c = x.symbol_cells[((long)u*x.symbols+s)*x.symbol_cells_count+q];
         const bool active = x.active[u] > .5f;
-        for (int n = 0; n < x.neighbors; ++n) {
-            const float* source = active ? neighbor(x, u, u, -1, true, c, n) : nullptr;
-            value[n] = source ? make_float2(source[v], source[antennas+v]) : make_float2(0.f, 0.f);
+        int position[MAX_NEIGHBORS];
+        float2 value[MAX_NEIGHBORS];
+        #pragma unroll
+        for (int n = 0; n < MAX_NEIGHBORS; ++n)
+            position[n] = n < x.neighbors && active ? x.own_neighbors[((long)u*x.cells+c)*x.neighbors+n] : -1;
+        #pragma unroll
+        for (int n = 0; n < MAX_NEIGHBORS; ++n) {
+            const float* source = x.ls+((long)u*x.positions+max(position[n], 0))*width;
+            value[n] = position[n] >= 0 ? make_float2(source[v], source[antennas+v]) : make_float2(0.f, 0.f);
         }
         const float* own = x.ls+((long)u*x.positions+x.pack[u*x.cells+c])*width;
+        const float2 mine = make_float2(own[v], own[antennas+v]);
         const float* part = x.memory_part+((long)u*x.cells+c)*numbers*width;
         float* target = x.prediction+((long)u*x.cells+c)*numbers*width;
         for (int number = 0; number < numbers; ++number) {
             const float2* w = x.weights+(((long)u*x.symbols+s)*numbers+number)*inputs;
             float2 sum = make_float2(part[number*width+v], part[number*width+antennas+v]);
-            for (int n = 0; n < x.neighbors; ++n) {
+            #pragma unroll
+            for (int n = 0; n < MAX_NEIGHBORS; ++n) {
+                if (n >= x.neighbors) break;
                 const float2 p = multiply(w[n], value[n]);
                 sum.x += p.x; sum.y += p.y;
             }
             target[number*width+v] = sum.x; target[number*width+antennas+v] = sum.y;
-            const float dr = own[v]-sum.x, di = own[antennas+v]-sum.y;
+            const float dr = mine.x-sum.x, di = mine.y-sum.y;
             difference[number*threads+tid] = dr*dr+di*di;
         }
         difference[numbers*threads+tid] = v == 0 ? fmaxf(x.noise[0]*x.noise_factors[u*x.cells+c], 0.f) : 0.f;
@@ -269,12 +367,17 @@ extern "C" __global__ void filter_expand(const Context x) {
     // grid: (blocks of positions, UEs)
     const int u = blockIdx.y, threads = blockDim.x, tid = threadIdx.x, numbers = x.entries+1, width = 2*x.antennas;
     const int rows = x.symbols*(numbers+1);                      // per DMRS symbol: one sum per K, and the noise
-    extern __shared__ float total[];                             // [rows]
+    extern __shared__ float parts[];                             // [rows, groups]
+    float* total = parts+rows*x.groups;                          // [rows]
     float* decided = total+rows;                                 // [symbols, 2]: chosen K, weight of the prediction
+    for (int item = tid; item < rows*x.groups; item += threads) {   // all groups' sums of this UE, in parallel
+        const int row = item/x.groups, g = item % x.groups;
+        parts[item] = x.sums[(((long)u*x.symbols+row/(numbers+1))*x.groups+g)*(numbers+1)+row % (numbers+1)];
+    }
+    __syncthreads();
     for (int row = tid; row < rows; row += threads) {
-        const float* sums = x.sums+((long)u*x.symbols+row/(numbers+1))*x.groups*(numbers+1)+row % (numbers+1);
         float sum = 0.f;
-        for (int g = 0; g < x.groups; ++g) sum += sums[g*(numbers+1)];
+        for (int g = 0; g < x.groups; ++g) sum += parts[row*x.groups+g];
         total[row] = sum;
     }
     __syncthreads();
@@ -304,19 +407,33 @@ extern "C" __global__ void filter_expand(const Context x) {
     }
     bool sloped = true;                                          // every DMRS symbol has a fit
     for (int s = 0; s < x.symbols; ++s) sloped = sloped && decided[2*s+1] >= 0.f;
-    const int c = x.cell_of_position[i];
-    const int* others = x.slope_cells+((long)u*x.cells+c)*3;
-    const int cell[4] = {c, others[0], others[1], others[2]};
     const float* own[4];
     const float* predicted[4];
     float gain[4];
     for (int q = 0; q < 4; ++q) {
-        const int s = x.cell_symbol[u*x.cells+cell[q]];
-        own[q] = x.ls+((long)u*x.positions+x.pack[u*x.cells+cell[q]])*width;
-        predicted[q] = x.prediction+(((long)u*x.cells+cell[q])*numbers+(int)decided[2*s])*width;
+        const int cell = x.position_cells[i*4+q], s = x.cell_symbol[u*x.cells+cell];
+        own[q] = x.ls+((long)u*x.positions+x.position_packs[i*4+q])*width;
+        predicted[q] = x.prediction+(((long)u*x.cells+cell)*numbers+(int)decided[2*s])*width;
         gain[q] = fmaxf(decided[2*s+1], 0.f);
     }
     const float in_time = sloped ? x.time_factor[i] : 0.f, in_frequency = sloped ? x.frequency_factor[i] : 0.f;
+    if (width % 4 == 0) {                                        // 16-byte accesses (all rows are 16-byte aligned)
+        for (int v = 0; v < width; v += 4) {
+            float4 refined[4];
+            for (int q = 0; q < 4; ++q) {
+                const float4 a = *reinterpret_cast<const float4*>(own[q]+v);
+                const float4 b = *reinterpret_cast<const float4*>(predicted[q]+v);
+                refined[q] = make_float4(a.x+gain[q]*(b.x-a.x), a.y+gain[q]*(b.y-a.y), a.z+gain[q]*(b.z-a.z),
+                                         a.w+gain[q]*(b.w-a.w));
+            }
+            *reinterpret_cast<float4*>(out+v) = make_float4(
+                refined[0].x+in_time*(refined[1].x-refined[0].x)+in_frequency*(refined[3].x-refined[2].x),
+                refined[0].y+in_time*(refined[1].y-refined[0].y)+in_frequency*(refined[3].y-refined[2].y),
+                refined[0].z+in_time*(refined[1].z-refined[0].z)+in_frequency*(refined[3].z-refined[2].z),
+                refined[0].w+in_time*(refined[1].w-refined[0].w)+in_frequency*(refined[3].w-refined[2].w));
+        }
+        return;
+    }
     for (int v = 0; v < width; ++v) {
         float refined[4];
         for (int q = 0; q < 4; ++q) refined[q] = own[q][v]+gain[q]*(predicted[q][v]-own[q][v]);
