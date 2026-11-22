@@ -50,6 +50,13 @@ results = modal.Volume.from_name("nrx-robustness", create_if_missing=True)
 def evaluate(test: str, condition: str, first: int, last: int, hours: float, points: str = "", receivers: str = ""):
     if test == "harq":
         command = ["python", "-u", str(REMOTE/FOLDER/"harq.py"), "--condition", condition, "--output-dir", "/results/results"]
+    elif test.startswith("kprobe:"):                       # kprobe:<setting>
+        command = ["python", "-u", str(REMOTE/FOLDER/"fallback_k.py"), "--setting", test.split(":")[1],
+                   "--condition", condition, "--output-dir", "/results/results"]
+    elif test.startswith("screen:"):                       # screen:<kind>:<strength>
+        _, kind, strength = test.split(":")
+        command = ["python", "-u", str(REMOTE/FOLDER/"screen.py"), "--kind", kind, "--strength", strength,
+                   "--condition", condition, "--output-dir", "/results/results"]
     else:
         command = ["python", "-u", str(REMOTE/FOLDER/"evaluate.py"), "--test", test, "--condition", condition,
                    "--output-dir", "/results/results"]
@@ -78,10 +85,16 @@ def evaluate(test: str, condition: str, first: int, last: int, hours: float, poi
 
 
 @app.local_entrypoint()
-def main(tests: str = "tdd_dddsu,cfo", parts: int = 2, episodes: int = 32, hours: float = 3., smoke: str = ""):
+def main(tests: str = "tdd_dddsu,cfo", parts: int = 2, episodes: int = 32, hours: float = 3., smoke: str = "",
+         screen: str = "", kprobe: str = ""):
     """--tests harq runs harq.py on the 16 test sequences (16-31) of each condition; --smoke tdd or harq runs one
     sequence of natural_umi."""
-    if smoke:
+    if kprobe:                                             # e.g. power_control:controlled_topology_change
+        calls = [(f"kprobe:{item.split(':')[0]}", item.split(":")[1], 0, episodes, hours, "", "")
+                 for item in kprobe.split(",")]
+    elif screen:                                             # e.g. doppler:600,cfo:1,none:0 -> sequences 0-3 of natural_umi
+        calls = [(f"screen:{item}", "natural_umi", 0, episodes, hours, "", "") for item in screen.split(",")]
+    elif smoke:
         calls = [("tdd_dddsu", "natural_umi", 0, 1, 0.5, "0,8,16", "") if smoke == "tdd" else
                  ("harq", "natural_umi", 20, 21, 0.5, "", "")]   # 13 errors, at all checks, 2 missed, 4 false alarms
     else:

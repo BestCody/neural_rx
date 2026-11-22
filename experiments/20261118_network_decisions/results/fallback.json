@@ -7,7 +7,18 @@
     "baseline_lmmse_kbest": 0.23,
     "frozen_cold_k8": 0.21,
     "baseline_lslin_lmmse": 0.0,
+    "pilot_memory_emptied": 0.0,
+    "neural_rx_k2_trained": 0.0,
+    "frozen_cold_k2": 0.0,
     "upper": 0.24
+   },
+   "fallback_rescued_tbs": {
+    "baseline_lmmse_kbest": 18,
+    "frozen_cold_k8": 17,
+    "baseline_lslin_lmmse": 0,
+    "pilot_memory_emptied": 0,
+    "neural_rx_k2_trained": 0,
+    "frozen_cold_k2": 0
    },
    "operating_point_failures": 311,
    "blocks": 3072,
@@ -22,7 +33,18 @@
     "baseline_lmmse_kbest": 0.44,
     "frozen_cold_k8": 0.15,
     "baseline_lslin_lmmse": 0.0,
+    "pilot_memory_emptied": 0.0,
+    "neural_rx_k2_trained": 0.0,
+    "frozen_cold_k2": 0.0,
     "upper": 0.47
+   },
+   "fallback_rescued_tbs": {
+    "baseline_lmmse_kbest": 27,
+    "frozen_cold_k8": 7,
+    "baseline_lslin_lmmse": 0,
+    "pilot_memory_emptied": 0,
+    "neural_rx_k2_trained": 0,
+    "frozen_cold_k2": 0
    },
    "operating_point_failures": 309,
    "blocks": 3072,
@@ -37,7 +59,18 @@
     "baseline_lmmse_kbest": 0.23,
     "frozen_cold_k8": 0.2,
     "baseline_lslin_lmmse": 0.0,
+    "pilot_memory_emptied": 0.0,
+    "neural_rx_k2_trained": 0.0,
+    "frozen_cold_k2": 0.0,
     "upper": 0.3
+   },
+   "fallback_rescued_tbs": {
+    "baseline_lmmse_kbest": 8,
+    "frozen_cold_k8": 6,
+    "baseline_lslin_lmmse": 0,
+    "pilot_memory_emptied": 0,
+    "neural_rx_k2_trained": 0,
+    "frozen_cold_k2": 0
    },
    "operating_point_failures": 276,
    "blocks": 2725,
@@ -54,7 +87,18 @@
     "baseline_lmmse_kbest": 0.03,
     "frozen_cold_k8": 0.04,
     "baseline_lslin_lmmse": 0.0,
+    "pilot_memory_emptied": 0.0,
+    "neural_rx_k2_trained": 0.0,
+    "frozen_cold_k2": 0.0,
     "upper": 0.04
+   },
+   "fallback_rescued_tbs": {
+    "baseline_lmmse_kbest": 7,
+    "frozen_cold_k8": 21,
+    "baseline_lslin_lmmse": 0,
+    "pilot_memory_emptied": 0,
+    "neural_rx_k2_trained": 0,
+    "frozen_cold_k2": 0
    },
    "operating_point_failures": 511,
    "blocks": 3072,
@@ -69,7 +113,18 @@
     "baseline_lmmse_kbest": 0.05,
     "frozen_cold_k8": 0.08,
     "baseline_lslin_lmmse": 0.0,
+    "pilot_memory_emptied": 0.0,
+    "neural_rx_k2_trained": 0.0,
+    "frozen_cold_k2": 0.0,
     "upper": 0.09
+   },
+   "fallback_rescued_tbs": {
+    "baseline_lmmse_kbest": 23,
+    "frozen_cold_k8": 39,
+    "baseline_lslin_lmmse": 0,
+    "pilot_memory_emptied": 2,
+    "neural_rx_k2_trained": 2,
+    "frozen_cold_k2": 2
    },
    "operating_point_failures": 380,
    "blocks": 3072,
@@ -84,7 +139,18 @@
     "baseline_lmmse_kbest": 0.13,
     "frozen_cold_k8": 0.19,
     "baseline_lslin_lmmse": 0.0,
+    "pilot_memory_emptied": 0.0,
+    "neural_rx_k2_trained": 0.0,
+    "frozen_cold_k2": 0.0,
     "upper": 0.19
+   },
+   "fallback_rescued_tbs": {
+    "baseline_lmmse_kbest": 24,
+    "frozen_cold_k8": 30,
+    "baseline_lslin_lmmse": 0,
+    "pilot_memory_emptied": 0,
+    "neural_rx_k2_trained": 0,
+    "frozen_cold_k2": 0
    },
    "operating_point_failures": 269,
    "blocks": 2725,

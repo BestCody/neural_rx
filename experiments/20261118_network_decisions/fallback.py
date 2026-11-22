@@ -26,6 +26,8 @@ STORED = ("frozen_cold_k2", "frozen_cold_k3", "frozen_cold_k8", "baseline_lslin_
           "baseline_perf_csi_kbest")
 REALISTIC = (*OURS, *STORED[:-1])                     # every receiver that does not need perfect CSI
 FALLBACKS = ("baseline_lmmse_kbest", "frozen_cold_k8", "baseline_lslin_lmmse")
+# fallbacks a real-time BS could run: LS + LMMSE and the stateless NRXs with two iterations (0.79 ms, Latency)
+REAL_TIME = ("baseline_lslin_lmmse", "pilot_memory_emptied", "neural_rx_k2_trained", "frozen_cold_k2")
 
 
 def load(condition, grids, stored):
@@ -93,10 +95,11 @@ def main():
             count, blocks = failures(episodes, lambda e: e[PRIMARY])
             alone = required_snr(snr, count, blocks)
             point = int(np.argmin(np.abs(snr-alone)))
-            gains = {}
-            for backup in FALLBACKS:
+            gains, rescued = {}, {}
+            for backup in dict.fromkeys(FALLBACKS+REAL_TIME):
                 both, _ = failures(episodes, lambda e, b=backup: e[PRIMARY] & e[b])
                 gains[backup] = round(round(alone, 2)-round(required_snr(snr, both, blocks), 2), 2)
+                rescued[backup] = int(count[point]-both[point])       # failed TBs this fallback decodes at the point
             every, _ = failures(episodes, lambda e: np.logical_and.reduce([e[m] for m in REALISTIC]))
             gains["upper"] = round(round(alone, 2)-round(required_snr(snr, every, blocks), 2), 2)
             failed = stuck = perfect = 0
@@ -111,7 +114,8 @@ def main():
                 repeated += after_failure(episode, point)
             report[setting][condition] = {
                 "required_snr_db": round(alone, 2), "operating_point_db": float(snr[point]),
-                "fallback_gain_db": gains, "operating_point_failures": failed, "blocks": blocks,
+                "fallback_gain_db": gains, "fallback_rescued_tbs": rescued,
+                "operating_point_failures": failed, "blocks": blocks,
                 "unfixable_share_of_failures": stuck/failed if failed else None,
                 "unfixable_also_failed_by_perfect_csi": perfect/stuck if stuck else None,
                 "failures_after_failure_of_same_ue": float(np.mean(repeated)) if repeated else None}

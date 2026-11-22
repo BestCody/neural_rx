@@ -82,7 +82,7 @@ class FrequencyOffsetGenerator(ClosedLoopPowerControlGenerator):
         h = super().sample_pool_channel(batch_size, seq_len, channel_regime)
         batch, slots, pool, symbols = int(batch_size), int(seq_len), int(h.shape[4]), int(h.shape[6])
         sign = np.random.default_rng(self.cfo_seed).choice([-1., 1.], size=(batch, pool))
-        offset = sign*CFO_PPM*1e-6*float(self.p.carrier_frequency)                        # Hz, [batch, pool UE]
+        offset = sign*getattr(self, "cfo_ppm", CFO_PPM)*1e-6*float(self.p.carrier_frequency)  # Hz, [batch, pool UE]
         time = (np.arange(slots)[:, None]*symbols+np.arange(symbols)[None, :])*float(self.rg.ofdm_symbol_duration)
         phase = 2*np.pi*offset[:, None, :, None]*time[None, :, None, :]                    # [batch, slot, UE, symbol]
         self.last_cfo_hz = offset
@@ -98,8 +98,12 @@ class FrequencyOffsetBank(PowerControlBank):
         generator.__class__ = FrequencyOffsetGenerator           # adds methods only
         return generator
 
+    @staticmethod
+    def seed(episode_index):
+        return CFO_SEED+int(episode_index)
+
     def _generator(self, job, episode_index):
         # The bank reuses one generator per condition, so the seed of the signs is set for every sequence.
         generator = super()._generator(job, episode_index)
-        generator.cfo_seed = CFO_SEED+int(episode_index)
+        generator.cfo_seed = self.seed(episode_index)
         return generator

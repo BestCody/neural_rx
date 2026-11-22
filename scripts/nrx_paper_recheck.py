@@ -173,9 +173,6 @@ expect(f'This classical estimator trails the channel filter by {span([over_wiene
        f'and by {over_wiener[1]:.2f}\\,dB for channel change, where it even falls {-wiener_gain[1]:.2f}\\,dB behind LMMSE + K-Best',
        'classical multi-slot estimator')
 pc_gain, pc_over = gap('pc', 'baseline_lmmse_kbest', 'filter_kbest'), gap('pc', 'wiener_kbest', 'filter_kbest')
-expect(f'the channel filter gains at most {max(pc_gain):.2f}\\,dB', 'power control: filter with K-Best')
-claim('leads the classical estimator except for scheduling gaps', pc_over[0] > 0 and pc_over[1] > 0 and pc_over[2] < 0,
-      'power control: classical estimator')
 # Related Work and introduction: what classical multi-slot estimation cannot do, with the measured comparison
 pc_wiener_gain = gap('pc', 'baseline_lmmse_kbest', 'wiener_kbest')
 expect(f'a classical multi-slot estimator given each condition\'s statistics falls {-wiener_gain[1]:.2f}\\,dB behind its single-slot '
@@ -294,9 +291,30 @@ def percent(values):
 expect(f'by {span([fallback["no", c] for c in CORE])}\\,dB, at the cost of a second receiver', 'fallback without power control')
 expect(f'{percent([unfixable["no", c] for c in CORE])} of the failed TBs fail for every receiver without perfect CSI, and '
        f'{percent([repeated["no", c] for c in CORE])} follow an error', 'unfixable without power control')
-expect(f'the fallback reduces the required SNR by at most {max(fallback["pc", c] for c in CORE):.2f}\\,dB, and '
-       f'{percent([unfixable["pc", c] for c in CORE])} of the failed TBs', 'fallback with power control')
-expect(f'Only {percent([repeated["pc", c] for c in CORE])} of the errors then follow an error of the same UE', 'CRC history with power control')
+expect(f'With power control, LMMSE + K-Best reduces the required SNR by at most {max(fallback["pc", c] for c in CORE):.2f}\\,dB, '
+       f'and only {percent([repeated["pc", c] for c in CORE])} of the errors follow an error of the same UE', 'fallback with power control')
+# fallbacks a real-time BS could run, recomputed from the stored per-TB results at the operating points
+rescued = []
+for s in ('no', 'pc'):
+    for c in CORE:
+        snrs, alone = errors(s, c, 'pilot_memory')
+        point = int(np.argmin(np.abs(np.asarray(snrs)-crossing(snrs, alone))))
+        for backup in ('baseline_lslin_lmmse', 'pilot_memory_emptied', 'neural_rx_k2_trained', 'frozen_cold_k2'):
+            rescued.append(1-errors(s, c, 'pilot_memory', [backup])[1][point]/alone[point])
+claim('a fallback that a real-time BS could run, LS + LMMSE or a stateless NRX with $N_{\\mathrm{it}}=2$, rescues less than 1\\% of the failed TBs',
+      max(rescued) < .01, 'real-time fallbacks')
+# when the channel filter falls back from its memory (experiments/20261122_robustness/fallback_k.py)
+probe = json.load(open('experiments/20261122_robustness/results/fallback_k_summary.json'))
+change, jump = probe['power_control'], probe['power_control_phase']
+expect('The receiver itself decides when to fall back from its memory', 'filter fallback')
+claim("it uses none on the TB of a channel change or a phase jump for more than 90\\% of the UEs' DMRS symbols",
+      change['change']['no_stored_tb_share'] > .9 and jump['phase_jump']['no_stored_tb_share'] > .9
+      and change['error_mismatches'] == 0 and jump['error_mismatches'] == 0 and change['sequences'] == jump['sequences'] == 16,
+      'filter fallback at changes and jumps')
+claim('and otherwise for less than 1\\%', change['other']['no_stored_tb_share'] < .01 and jump['other']['no_stored_tb_share'] < .01,
+      'filter fallback elsewhere')
+claim('a decision the classical multi-slot estimator cannot make', wiener_gain[1] < 0 and over_wiener[1] == max(over_wiener),
+      'classical estimator after a change')
 controller = json.load(open(f'{NET}/controller.json'))
 step = controller['step_by_step']['CRC history and receiver evidence, budget of the rule']
 single = controller['single_check']

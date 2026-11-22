@@ -1,0 +1,42 @@
+{
+ "power_control": {
+  "condition": "controlled_topology_change",
+  "sequences": 16,
+  "error_mismatches": 0,
+  "change": {
+   "symbols": 64,
+   "no_stored_tb_share": 0.984375,
+   "mean_k": 0.015625
+  },
+  "one_after_change": {
+   "symbols": 64,
+   "no_stored_tb_share": 0.46875,
+   "mean_k": 0.734375
+  },
+  "other": {
+   "symbols": 2880,
+   "no_stored_tb_share": 0.0020833333333333333,
+   "mean_k": 3.5597222222222222
+  },
+  "two_after_change": {
+   "symbols": 64,
+   "no_stored_tb_share": 0.0,
+   "mean_k": 1.1875
+  }
+ },
+ "power_control_phase": {
+  "condition": "natural_umi",
+  "sequences": 16,
+  "error_mismatches": 0,
+  "other": {
+   "symbols": 2966,
+   "no_stored_tb_share": 0.0057316250842886045,
+   "mean_k": 3.593054619015509
+  },
+  "phase_jump": {
+   "symbols": 106,
+   "no_stored_tb_share": 0.9339622641509434,
+   "mean_k": 0.12264150943396226
+  }
+ }
+}
