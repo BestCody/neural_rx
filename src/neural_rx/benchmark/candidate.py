@@ -21,6 +21,28 @@ def pretrained_checkpoint(config_name="nrx_large.cfg"):
     return root / "models/pretrained" / f"{label}_weights"
 
 
+def radio_settings(config_name="nrx_large.cfg"):
+    """MCS index and modulation order of a radio configuration, as the benchmark protocol records them."""
+    from sionna.nr import TBConfig
+    config = configparser.ConfigParser()
+    with (ROOT / "config" / config_name).open() as stream:
+        config.read_file(stream)
+    mcs = ast.literal_eval(config["system"]["mcs_index"])
+    if len(mcs) != 1:
+        raise ValueError("The benchmark uses one MCS per radio configuration")
+    table = ast.literal_eval(config["system"]["mcs_table"])
+    tb = TBConfig(mcs_index=int(mcs[0]), mcs_table=int(table))
+    return {"mcs_index": int(mcs[0]), "bits_per_symbol": int(tb.num_bits_per_symbol)}
+
+
+def manifest_config_name(manifest):
+    """The radio configuration a manifest binds, i.e., its .cfg support artifact."""
+    names = [record["name"] for record in manifest["support_artifacts"] if record["name"].endswith(".cfg")]
+    if len(names) != 1:
+        raise ValueError("A manifest must bind exactly one radio configuration")
+    return names[0]
+
+
 def validate_pretrained_checkpoint(manifest, config_name="nrx_large.cfg"):
     expected = artifact_record(pretrained_checkpoint(config_name))
     records = manifest["checkpoints"]
@@ -50,7 +72,7 @@ def validate_manifest(manifest, protocol):
         if len(record["sha256"]) != 64 or record["bytes"] <= 0:
             raise ValueError("Invalid artifact record")
     if role.startswith("frozen_"):
-        validate_pretrained_checkpoint(manifest)
+        validate_pretrained_checkpoint(manifest, manifest_config_name(manifest))
 
 
 def artifact_record(path: Path | str) -> dict:

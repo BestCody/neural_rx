@@ -1,0 +1,118 @@
+{
+ "reference": "power_control sequences of experiments/20261118_test_evaluation",
+ "cfo": {
+  "natural_umi": {
+   "required_snr_db": {
+    "neural_rx_k2_trained": 2.6009288191962012,
+    "pilot_memory": 1.8211694374392025,
+    "pilot_memory_emptied": 2.7084742011636918
+   },
+   "reference_snr_db": {
+    "pilot_memory": 1.7361755493204074,
+    "pilot_memory_emptied": 2.542230032761659,
+    "neural_rx_k2_trained": 2.4525815573929823
+   },
+   "incomplete": [],
+   "pilot_memory_memory_gain_db": 0.887,
+   "pilot_memory_lead_over_retrained_db": 0.78,
+   "reference_memory_gain_db": 0.806,
+   "reference_lead_over_retrained_db": 0.716
+  },
+  "controlled_topology_change": {
+   "required_snr_db": {
+    "neural_rx_k2_trained": 2.94171251346616,
+    "pilot_memory": 2.217726507487363,
+    "pilot_memory_emptied": 3.0325387063579483
+   },
+   "reference_snr_db": {
+    "pilot_memory": 2.163116178927329,
+    "pilot_memory_emptied": 2.896918672965402,
+    "neural_rx_k2_trained": 2.7705276292252394
+   },
+   "incomplete": [],
+   "pilot_memory_memory_gain_db": 0.815,
+   "pilot_memory_lead_over_retrained_db": 0.724,
+   "reference_memory_gain_db": 0.734,
+   "reference_lead_over_retrained_db": 0.607
+  },
+  "schedule_gap_reentry": {
+   "required_snr_db": {
+    "neural_rx_k2_trained": 3.1419570313344805,
+    "pilot_memory": 2.543667014753552,
+    "pilot_memory_emptied": 3.304816996538678
+   },
+   "reference_snr_db": {
+    "pilot_memory": 2.479894853591706,
+    "pilot_memory_emptied": 3.1077497414944912,
+    "neural_rx_k2_trained": 2.988123786813497
+   },
+   "incomplete": [],
+   "pilot_memory_memory_gain_db": 0.761,
+   "pilot_memory_lead_over_retrained_db": 0.598,
+   "reference_memory_gain_db": 0.628,
+   "reference_lead_over_retrained_db": 0.508
+  }
+ },
+ "tdd_dddsu": {
+  "natural_umi": {
+   "required_snr_db": {
+    "neural_rx_k2_trained": 2.3640795017399663,
+    "pilot_memory": 1.8960440557973508,
+    "pilot_memory_emptied": 2.4867581891783734,
+    "pilot_memory_uplink": 1.7938953320539255
+   },
+   "reference_snr_db": {
+    "pilot_memory": 1.7361755493204074,
+    "pilot_memory_emptied": 2.542230032761659,
+    "neural_rx_k2_trained": 2.4525815573929823
+   },
+   "incomplete": [],
+   "pilot_memory_memory_gain_db": 0.591,
+   "pilot_memory_lead_over_retrained_db": 0.468,
+   "pilot_memory_uplink_memory_gain_db": 0.693,
+   "pilot_memory_uplink_lead_over_retrained_db": 0.57,
+   "reference_memory_gain_db": 0.806,
+   "reference_lead_over_retrained_db": 0.716
+  },
+  "controlled_topology_change": {
+   "required_snr_db": {
+    "neural_rx_k2_trained": 2.9658597789989383,
+    "pilot_memory": 2.5255914837898072,
+    "pilot_memory_emptied": 3.0974178204982925,
+    "pilot_memory_uplink": 2.4173845428802343
+   },
+   "reference_snr_db": {
+    "pilot_memory": 2.163116178927329,
+    "pilot_memory_emptied": 2.896918672965402,
+    "neural_rx_k2_trained": 2.7705276292252394
+   },
+   "incomplete": [],
+   "pilot_memory_memory_gain_db": 0.572,
+   "pilot_memory_lead_over_retrained_db": 0.44,
+   "pilot_memory_uplink_memory_gain_db": 0.68,
+   "pilot_memory_uplink_lead_over_retrained_db": 0.548,
+   "reference_memory_gain_db": 0.734,
+   "reference_lead_over_retrained_db": 0.607
+  },
+  "schedule_gap_reentry": {
+   "required_snr_db": {
+    "neural_rx_k2_trained": 3.346271258202398,
+    "pilot_memory": 2.9332683667437873,
+    "pilot_memory_emptied": 3.4299112910538403,
+    "pilot_memory_uplink": 2.806705479624885
+   },
+   "reference_snr_db": {
+    "pilot_memory": 2.479894853591706,
+    "pilot_memory_emptied": 3.1077497414944912,
+    "neural_rx_k2_trained": 2.988123786813497
+   },
+   "incomplete": [],
+   "pilot_memory_memory_gain_db": 0.497,
+   "pilot_memory_lead_over_retrained_db": 0.413,
+   "pilot_memory_uplink_memory_gain_db": 0.623,
+   "pilot_memory_uplink_lead_over_retrained_db": 0.54,
+   "reference_memory_gain_db": 0.628,
+   "reference_lead_over_retrained_db": 0.508
+  }
+ }
+}

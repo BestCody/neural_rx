@@ -21,6 +21,9 @@ def build_parser():
     run.add_argument("--first-episode", type=int, default=0)
     run.add_argument("--last-episode", type=int, default=32)
     run.add_argument("--snr-offsets", type=float, nargs="+", help="Override the SNR grid around the operating point")
+    run.add_argument("--radio-config", help="Radio configuration (MCS), e.g. nrx_large_64qam.cfg")
+    run.add_argument("--anchors", type=Path, help="Calibration anchors of that radio configuration")
+    run.add_argument("--checkpoint", type=Path, help="Proposed receiver of that radio configuration")
 
     covariance = commands.add_parser("covariance")
     covariance.add_argument("--conditions", nargs="+", required=True)
@@ -57,6 +60,8 @@ def main():
     os.environ["CUDA_VISIBLE_DEVICES"] = "" if args.command == "summarize" else str(args.gpu)
     os.environ.setdefault("TF_CPP_MIN_LOG_LEVEL", "2")
     from neural_rx.benchmark import tbler_sweep
+    if getattr(args, "radio_config", None) or getattr(args, "anchors", None) or getattr(args, "checkpoint", None):
+        tbler_sweep.use_radio(args.radio_config, args.anchors, args.checkpoint)
 
     if args.command == "summarize":
         args.output.write_text(json.dumps(tbler_sweep.summarize(args.results_dir), indent=1))

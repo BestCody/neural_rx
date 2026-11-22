@@ -63,14 +63,15 @@ def source_records(paths, root=ROOT):
     return dict(sorted(records.items()))
 
 
-def evaluation_source_records(root=ROOT):
+def evaluation_source_records(root=ROOT, config_name="nrx_large.cfg"):
     return source_records(("src/neural_rx/benchmark/frozen.py",
-                           "config/nrx_large.cfg", "config/temporal_benchmark_v1.json",
+                           f"config/{Path(config_name).name}", "config/temporal_benchmark_v1.json",
                            "config/temporal_benchmark_v2.json"), root)
 
 
 def validate_evaluation_sources(records, root=ROOT):
-    if records != evaluation_source_records(root):
+    configs = [name for name in records if name.startswith("config/") and name.endswith(".cfg")]
+    if len(configs) != 1 or records != evaluation_source_records(root, Path(configs[0]).name):
         raise ValueError("Evaluation source changed; rerun the evaluation")
 
 

@@ -1,0 +1,1 @@
+{"condition": "schedule_gap_reentry", "episode": 28, "snr_db": 2.5, "mismatches": 0, "scored_ue_tbs": 83, "errors": 0, "schemes": {"regular": {"false_alarms": 0, "records": []}, "early": {"false_alarms": 0, "records": []}}, "seconds": 52.5}

@@ -1,0 +1,1 @@
+{"condition": "controlled_topology_change", "episode": 26, "snr_db": 2.0, "mismatches": 0, "scored_ue_tbs": 96, "errors": 0, "schemes": {"regular": {"false_alarms": 0, "records": []}, "early": {"false_alarms": 0, "records": []}}, "seconds": 51.3}

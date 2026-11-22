@@ -5,11 +5,10 @@ We consider MU-MIMO uplink transmission from $U$ user equipments (UEs) to a base
 \begin{equation}
 \mathbf{y}_{s,t}=\sum_{u=1}^{U}\mathbf{h}_{s,t,u}\,x_{s,t,u}+\mathbf{n}_{s,t},
 \end{equation}
-where $\mathbf{h}_{s,t,u}\in\mathbb{C}^{B}$ is the effective channel of UE $u$ after its transmit beamforming, $x_{s,t,u}$ is its modulated symbol or pilot, and $\mathbf{n}_{s,t}\sim\mathcal{CN}(\mathbf{0},N_0\mathbf{I})$ is complex Gaussian noise with variance $N_0$ per resource element. The receiver computes an LLR for each coded bit $b_{u,j}$, $j=1,2,\dots$, of the TB of each UE $u$. We define the LLRs as logits, i.e.,
+where $\mathbf{h}_{s,t,u}\in\mathbb{C}^{B}$ is the effective channel of UE $u$ after its transmit beamforming, $x_{s,t,u}$ is its modulated symbol or pilot, and $\mathbf{n}_{s,t}\sim\mathcal{CN}(\mathbf{0},N_0\mathbf{I})$ is the noise. The receiver computes an LLR for each coded bit $b_{u,j}$, $j=1,2,\dots$, of the TB of each UE $u$. Given all received signals $\mathbf{Y}$ of the slot, we define the LLRs as logits, i.e.,
 \begin{equation}
-\ell_{u,j}=\ln\frac{\Pr(b_{u,j}=1\,|\,\mathbf{Y})}{\Pr(b_{u,j}=0\,|\,\mathbf{Y})},
+\ell_{u,j}=\ln\frac{\Pr(b_{u,j}=1\,|\,\mathbf{Y})}{\Pr(b_{u,j}=0\,|\,\mathbf{Y})}.
 \end{equation}
-where $\mathbf{Y}$ collects all $\mathbf{y}_{s,t}$ of the slot.
 
 \subsection{Neural Receiver}
 We build on the NRX of \citet{cammerer2023neural} and \citet{wiesmayr2025realtime}, which consists of CGNN layers. The state initialization layer (\texttt{StateInit}) maps the received signal, a positional encoding of the pilot distances, and an LS channel estimate of each UE to an initial state. Then, $N_{\mathrm{it}}$ \texttt{CGNNIt} blocks, each with its own weights, update the state of each UE by convolutions over the resource grid and message passing between the UEs, and \texttt{ReadoutLLRs} outputs the LLRs. A second readout outputs a channel estimate for an auxiliary training loss. Following \citet{wiesmayr2025realtime}, we call this NRX, trained with $N_{\mathrm{it}}=8$ and a multi-loss that allows fewer iterations at inference, the \emph{Large NRX}. Its real-time implementation runs only the first $N_{\mathrm{it}}=2$ blocks.

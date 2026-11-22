@@ -112,7 +112,7 @@ def evaluate_frozen_references(directory, protocol, plan, provider: CachedScenar
             method: ColdNeuralRxBenchmarkAdapter(
                 manifest=manifest, method=method, training_seed=seed,
                 artifacts=resolve_manifest_artifacts(manifest, mapping),
-                config_name="nrx_large.cfg", tf_module=tf)
+                config_name=protocol.get("radio_config", "nrx_large.cfg"), tf_module=tf)
             for method, (manifest, mapping, seed) in registrations.items()
         }
         return evaluate_method_set(protocol, plan, provider, adapters, methods)

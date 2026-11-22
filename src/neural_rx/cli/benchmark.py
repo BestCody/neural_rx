@@ -18,6 +18,8 @@ def build_parser():
                         choices=("smoke", "latency", "calibration", "development", "confirmation"))
     parser.add_argument("--experiment-anchors", type=Path)
     parser.add_argument("--experiment-prbs", type=int, default=132)
+    parser.add_argument("--radio-config", default="nrx_large.cfg",
+                        help="Radio configuration (MCS) of every receiver, e.g. nrx_large_64qam.cfg")
     parser.add_argument("--experiment-episodes", type=int)
     parser.add_argument("--benchmark-protocol", type=Path, default=ROOT / "config/temporal_benchmark_v2.json",
                         help="Declared scenarios and scoring; v2 adds the ray-traced Munich report condition")

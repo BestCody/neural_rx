@@ -6,8 +6,8 @@ from pathlib import Path
 
 import numpy as np
 
-from neural_rx.benchmark.candidate import (artifact_record,
-                                         pretrained_checkpoint, resolve_manifest_artifacts, validate_manifest)
+from neural_rx.benchmark.candidate import (artifact_record, pretrained_checkpoint, radio_settings,
+                                         resolve_manifest_artifacts, validate_manifest)
 from neural_rx.benchmark.protocol import load_benchmark_protocol, resolved_condition_settings
 from neural_rx.benchmark.arrays import DECODED_LATENCY_DEFINITION
 from neural_rx.benchmark.scoring import crc_diagnostics, pooled_tbler, TBLER_DEFINITION
@@ -21,12 +21,17 @@ DEFAULT_PROTOCOL = ROOT/"config/temporal_benchmark_v2.json"
 
 
 
-def protocol_and_plan(phase, width, episodes=None, anchors=None, protocol_path=DEFAULT_PROTOCOL):
+def protocol_and_plan(phase, width, episodes=None, anchors=None, protocol_path=DEFAULT_PROTOCOL,
+                      config_name="nrx_large.cfg"):
+    """The protocol and job plan of one phase. config_name is the radio configuration (MCS) of every receiver; the
+    protocol's radio takes its MCS index and modulation order, and manifests and adapters read it from the protocol."""
     if width != 132 and phase != "smoke":
         raise ValueError("Full experiments require the declared 132-PRB deployment")
     protocol = copy.deepcopy(load_benchmark_protocol(protocol_path))
     protocol["protocol"] = "pretrained_nrx_experiment_v1"
     protocol["radio"]["n_size_bwp"] = width
+    protocol["radio"].update(radio_settings(config_name))
+    protocol["radio_config"] = config_name
     phase_settings = protocol["evaluation_phases"][phase]
     if phase in ("smoke", "latency"):
         conditions = [protocol["execution"]["latency"]["condition"]]
@@ -62,7 +67,7 @@ def protocol_and_plan(phase, width, episodes=None, anchors=None, protocol_path=D
     protocol["calibration"] = dict(baseline="frozen_cold_k8", additional_training_updates=0, target_tbler=.1)
     protocol["experiment"] = {"phase": phase, "scoring_start_tb": first,
                                "latency_definition": DECODED_LATENCY_DEFINITION}
-    protocol["runtime_sources"] = evaluation_source_records()
+    protocol["runtime_sources"] = evaluation_source_records(config_name=config_name)
     protocol = seal_payload(protocol, field="protocol_sha256")
     jobs = []
     base = phase_settings["seed"]
@@ -129,7 +134,8 @@ def load_receiver_checkpoint_export(checkpoint):
 
 
 def make_manifest(protocol, role, checkpoint=None):
-    support = [ROOT/"config/nrx_large.cfg"]
+    config_name = protocol.get("radio_config", "nrx_large.cfg")
+    support = [ROOT/"config"/config_name]
     if role == "candidate":
         if checkpoint is None:
             raise ValueError("Candidate checkpoint directory is required")
@@ -139,7 +145,7 @@ def make_manifest(protocol, role, checkpoint=None):
         seed = saved["binding"]["seed"]
         training = {"additional_updates": saved["update"], "binding": saved["binding"]}
     else:
-        weights = pretrained_checkpoint()
+        weights = pretrained_checkpoint(config_name)
         seed, training = 0, {"additional_updates": 0, "provenance": "shipped_neural_rx"}
     paths = [weights] + support
     records = [artifact_record(p) for p in paths]
@@ -296,27 +302,28 @@ def run_experiment(args):
     tf.keras.utils.set_random_seed(20260930)
     sn.config.seed = 20260930
     phase, width = args.experiment_phase, args.experiment_prbs
+    config_name = getattr(args, "radio_config", "nrx_large.cfg")
     anchors = None
     if phase in ("development", "confirmation"):
         if args.experiment_anchors is None:
             raise ValueError("--experiment-anchors is required")
         artifact = json.loads(args.experiment_anchors.read_text())
         verify_payload(artifact, field="manifest_sha256")
-        if artifact["teacher_sha256"] != file_sha256(pretrained_checkpoint()) or artifact["prbs"] != width:
+        if artifact["teacher_sha256"] != file_sha256(pretrained_checkpoint(config_name)) or artifact["prbs"] != width:
             raise ValueError("Calibration reference differs")
         anchors = artifact["conditions"]
     protocol, plan = protocol_and_plan(phase, width, args.experiment_episodes, anchors,
-                                     protocol_path=args.benchmark_protocol)
+                                     protocol_path=args.benchmark_protocol, config_name=config_name)
     rt_banks = load_ray_traced_banks(protocol, plan)
     if anchors is not None:
         unbracketed = [job["condition"] for job in plan["jobs"]
                        if not anchors[job["condition"]].get("target_bracketed", False)]
         if unbracketed:
             raise ValueError(f"Calibration did not bracket 10% TBLER for {phase}: {', '.join(unbracketed)}")
-    identity = scenario_identity(ROOT/"config/nrx_large.cfg", protocol)
+    identity = scenario_identity(ROOT/"config"/config_name, protocol)
     output = args.output_dir.resolve()
     output.mkdir(parents=True, exist_ok=True)
-    p = Parameters("nrx_large.cfg", training=False, num_tx_eval=2, n_size_bwp_override=width)
+    p = Parameters(config_name, training=False, num_tx_eval=2, n_size_bwp_override=width)
     e2e = E2E_Model(p, training=False, mcs_arr_eval_idx=0)
     scenarios = TemporalBenchmarkScenarioBank(p, e2e, tf, rt_banks=rt_banks)
     provider = CachedScenarioBank(scenarios, args.episode_cache, protocol,
@@ -346,7 +353,7 @@ def run_experiment(args):
         manifest, mapping, seed = make_manifest(protocol, role, args.experiment_checkpoint)
         manifests[role] = manifest
         return make_benchmark_adapter(manifest=manifest, method=method, training_seed=seed,
-                                      artifact_map=mapping, config_name="nrx_large.cfg", tf_module=tf)
+                                      artifact_map=mapping, config_name=config_name, tf_module=tf)
     atomic_json(output/"protocol.json", protocol)
     atomic_json(output/"plan.json", plan)
     if phase == "latency":

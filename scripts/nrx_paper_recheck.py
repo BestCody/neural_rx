@@ -135,9 +135,9 @@ phase_memory = [round(phase_required[c]['pilot_memory_emptied']-phase_required[c
 phase_lead = [round(phase_required[c]['neural_rx_k2_trained']-phase_required[c]['pilot_memory'], 2) for c in CORE]
 jumps = json.load(open(f'{NEW}/phase_jumps.json'))
 shares = sorted(100*jumps[c]['phase_jump_share'] for c in CORE)
-expect(f'With a uniformly distributed phase jump at every power step, which occurs before {shares[0]:.1f}\\% to '
+expect(f'With a uniformly random phase jump at every power step, which occurs before {shares[0]:.1f}\\% to '
        f'{shares[-1]:.1f}\\% of the scored TBs, the memory still contributes {span(phase_memory)}\\,dB', 'phase jumps: memory')
-claim("on each UE's first three TBs after a jump, the proposed NRX fails less often than the retrained Large NRX in all three conditions",
+claim("on each UE's first three TBs after a jump, the proposed NRX fails less often than the retrained Large NRX in all conditions",
       all(jumps[c]['tbler_near_jumps']['pilot_memory'] < jumps[c]['tbler_near_jumps']['neural_rx_k2_trained'] for c in CORE),
       'phase jumps: TBs after a jump')
 claim('it requires neither power consistency nor phase continuity across the stored slots',
@@ -176,6 +176,15 @@ pc_gain, pc_over = gap('pc', 'baseline_lmmse_kbest', 'filter_kbest'), gap('pc', 
 expect(f'the channel filter gains at most {max(pc_gain):.2f}\\,dB', 'power control: filter with K-Best')
 claim('leads the classical estimator except for scheduling gaps', pc_over[0] > 0 and pc_over[1] > 0 and pc_over[2] < 0,
       'power control: classical estimator')
+# Related Work and introduction: what classical multi-slot estimation cannot do, with the measured comparison
+pc_wiener_gain = gap('pc', 'baseline_lmmse_kbest', 'wiener_kbest')
+expect(f'a classical multi-slot estimator given each condition\'s statistics falls {-wiener_gain[1]:.2f}\\,dB behind its single-slot '
+       f'version after a channel change, while our filter stays ahead of both', 'related work: classical estimator')
+claim('while our filter stays ahead of both',
+      all(gap(s, b, 'filter_kbest')[1] > 0 for s in ('no', 'pc') for b in ('wiener_kbest', 'baseline_lmmse_kbest')),
+      'related work: filter ahead after a channel change')
+claim('Their weights, however, rest on channel statistics known in advance, which do not reveal when the channel of a user changes',
+      wiener_gain[1] < 0, 'introduction: classical estimators after a channel change')
 
 # ------------------------------------------------------------------------- effective SNR and Doppler groups (UMi)
 def effective(cond, method, group=None, edges=np.arange(-10., 30.5, 1.)):
@@ -297,12 +306,12 @@ claim('about four fifths of them already at the first check', .75 <= step['caugh
 claim(f'flags {100*step["false_alarm"]:.1f}\\% of the correct TBs in the test sequences, as does this rule',
       f'{100*step["false_alarm"]:.1f}' == f'{100*controller["rule"]["false_alarm"]:.1f}', 'false alarms')
 expect(f'It also catches {round(100*step["caught_first_failures"])}\\% of the errors that do not follow an error', 'first failures')
-claim('catch about a fifth of the errors after channel estimation',
-      .17 <= single['check 1, any receiver: noise and current channel strength']['caught'] <= .23, 'fifth')
 claim('the memory state and the refined estimate add little',
       single['check 1, + filtered estimate']['caught']-single['check 1, any receiver: noise and current channel strength']['caught'] < .03, 'adds little')
-expect(f'the LLRs raise the share to {round(100*single["check 2, + LLRs after detection"]["caught"])}\\%, and the parity checks to '
-       f'{round(100*single["check 3, + parity checks after 8 BP iterations"]["caught"])}\\%', 'LLRs and parity checks')
+shares = [single[name]['caught'] for name in ('check 1, any receiver: noise and current channel strength',
+          'check 1, + filtered estimate', 'check 2, + LLRs after detection', 'check 3, + parity checks after 8 BP iterations')]
+claim("Among the receiver's evidence, the LLRs matter most",
+      shares[2]-shares[1] == max(b-a for a, b in zip(shares, shares[1:])), 'LLRs matter most')
 compare = json.load(open(f'{NET}/compare_receivers.json'))['receivers']
 ours, stateless = compare['proposed'], compare['stateless']
 expect(f'Without the memory state, the controller still catches {round(100*ours["caught_share"])}\\% of the errors of the proposed NRX, '
@@ -312,10 +321,43 @@ claim('As that NRX fails about twice as often at the same SNR points',
       1.8 <= stateless['failures_per_100']/ours['failures_per_100'] <= 2.2, 'twice as many failures')
 expect(f'{stateless["late_per_100"]:.1f} errors per 100 TBs remain for retransmission after the CRC fails, against '
        f'{ours["late_per_100"]:.1f} with the proposed NRX', 'late retransmissions')
-claim('leaving six times fewer for after the CRC fails than with a stateless NRX',
+claim('leaving six times fewer for after the CRC fails than a stateless NRX',
       round(stateless['late_per_100']/ours['late_per_100']) == 6, 'six times fewer late')
 claim(f'request {round(100*step["caught"])}\\% of the needed retransmissions before decoding finishes, compared with {round(100*controller["rule"]["caught"])}\\% for the CRC history alone',
       True, 'abstract controller')
+
+# --------------------------------------------------------------------------------------------- robustness (Modal)
+ROB = 'experiments/20261122_robustness/results'
+robust = json.load(open(f'{ROB}/summary.json'))
+for test in ('cfo', 'tdd_dddsu'):
+    assert all(not v['incomplete'] and len(v['required_snr_db']) >= 3 for v in robust[test].values()), test
+cfo, tdd = robust['cfo'].values(), robust['tdd_dddsu'].values()
+loss = lambda v, r: v['required_snr_db'][r]-v['reference_snr_db'][r]
+expect('Except in the last tests with power control, we assume, as for DMRS bundling,', 'assumptions: robustness tests')
+claim('With a frequency offset of $\\pm 0.1$\\,ppm per UE, the most 3GPP allows',
+      'CFO_PPM = 0.1' in open('experiments/20261122_robustness/banks.py').read(), 'CFO: offset')
+claim('the proposed NRX loses less than 0.1\\,dB and the retrained Large NRX about 0.15\\,dB',
+      all(loss(v, 'pilot_memory') < .1 and .13 <= loss(v, 'neural_rx_k2_trained') <= .18 for v in cfo), 'CFO: losses')
+claim('as the channel filter tracks the rotation',
+      all(v['pilot_memory_memory_gain_db'] > v['reference_memory_gain_db'] for v in cfo), 'CFO: memory gain grows')
+expect('With the TDD pattern DDDSU, i.e., one uplink slot every 2.5\\,ms,', 'TDD: pattern')
+claim('the memory keeps more than 70\\% of its gain',
+      all(v['pilot_memory_memory_gain_db'] > .7*v['reference_memory_gain_db'] for v in tdd), 'TDD: memory share')
+claim('or at least 0.6\\,dB if the eight-slot limit counts uplink slots',
+      all(v['pilot_memory_uplink_memory_gain_db'] >= .6 for v in tdd), 'TDD: uplink counting')
+claim('and the proposed NRX still leads the retrained Large NRX by at least 0.4\\,dB',
+      all(v['pilot_memory_lead_over_retrained_db'] >= .4 for v in tdd), 'TDD: lead over retrained')
+harq = json.load(open(f'{ROB}/harq_summary.json'))
+conditions = [harq[c] for c in ('natural_umi', 'controlled_topology_change', 'schedule_gap_reentry')]
+claim('Simulating the retransmissions with Chase combining',
+      harq['all']['decision_mismatches'] == 0 and all(c['compared'] > 100 for c in conditions), 'HARQ: decisions reproduced')
+claim('early requests let the BS decode a failed TB one slot earlier in median',
+      harq['all']['median_slots_saved'] == 1 and all(c['median_slots_saved'] == 1 for c in conditions), 'HARQ: one slot')
+claim('for decoding times from 0.25 to 1\\,ms',
+      all(v == 1 for v in harq['all']['request_slots_saved_per_caught_error'].values()), 'HARQ: decoding times')
+claim('at the cost of about two unneeded transmissions per 100 TBs',
+      1.5 <= harq['all']['early_extra_transmissions_per_100_tbs'] <= 2.5, 'HARQ: extra transmissions')
+expect('Future work includes measured data and multiple training seeds.', 'future work')
 
 # --------------------------------------------------------------------------------------------- further datasets
 FURTHER = {'first': 'experiments/20261118_further_datasets/results/v2/errors.npz',

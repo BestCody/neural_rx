@@ -1,0 +1,37 @@
+{
+  "phase": "development",
+  "stage": 1,
+  "config": "nrx_large_64qam.cfg",
+  "checkpoint": "/home/h3lou/neural_rx/models/nrx_large_64qam_k2_20261121/checkpoint_002000",
+  "update": 2000,
+  "method": "retrained two-iteration Large NRX (benchmark frozen_cold_k2 adapter, retrained weights)",
+  "weights_sha256": "480394c454ccf1f836e74f1a154d1c7a7338048f22a55c1df77782e669347ad4",
+  "bank_sha256": "052c81cba24f4488c77da59b2e03ec30969143da4c06e8418f7c34a8df29a30f",
+  "preflight": {
+    "frozen_reference_artifacts_unchanged": true,
+    "frozen_reference_deterministic_replay": true,
+    "frozen_reference_finite_outputs": true,
+    "frozen_references_paired": true
+  },
+  "protocol_sha256": "9d99de930aedb87d6d14b80d993f09be4b871d47c9f48b8447b9431cce4fb41b",
+  "episodes_per_condition": 32,
+  "summary": {
+    "candidate_persistent": {
+      "core_tbler": 0.17083333333333334,
+      "core_errors": 2050,
+      "core_blocks": 12000,
+      "per_condition_tbler": {
+        "historical_tdl_b100": 0.2526041666666667,
+        "historical_tdl_c300": 0.22786458333333334,
+        "natural_umi": 0.2177734375,
+        "natural_uma": 0.11393229166666667,
+        "controlled_topology_change": 0.06640625,
+        "schedule_gap_reentry": 0.29705459770114945,
+        "close_los": 0.1708984375,
+        "near_far": 0.1630859375
+      }
+    }
+  },
+  "raw_sha256": "df8e4f0bb9de7d589a792a6de11ef6dce079b6cccd0feb1fc6e5e396fdaa4845",
+  "result_sha256": "9567901286ace0f9c97512b987d92f9dae0ea393e83120f292a37973734f6ce6"
+}

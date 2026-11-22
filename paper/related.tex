@@ -24,18 +24,21 @@ correlation~\cite{hoeher1997wiener}, Kalman tracking propagates an estimate and
 its error covariance between blocks~\cite{komninakis2002kalman}, and 5G NR
 Release~17 standardizes joint channel estimation over several PUSCH slots as DMRS
 bundling~\cite{3gpp38830,3gpp38214}. Bundling requires a channel that stays correlated over the
-window and a user whose transmit phase stays continuous. Learned
+window and a continuous transmit phase. Their weights come from channel
+statistics or a channel model that a BS must estimate per user, and they stay
+the same when a user's channel changes. Learned
 predictors exploit the same temporal structure with recurrent, state-space and
 transformer models over past channel
 estimates~\cite{mattu2022deep,mohsin2025continual,luo2025cpmamba,lagona2026transformer,gizzini2021talstm},
 and a hypernetwork can set the parameters of a Kalman
 tracker~\cite{pratik2021hkf}. These works, however, target channel prediction or
-tracking. None of them conditions a multi-user NRX on stored pilot history.
-Whereas a Wiener filter derives its weights from known channel statistics, an
-adaptive filter estimates them from the observations
-themselves~\cite{haykin2002adaptive}. Our channel filter is of this kind: it
-fits its weights by least squares on the stored pilots, and its output is the
-input of an NRX rather than of a conventional detector.
+tracking, and none conditions a multi-user NRX on stored pilot history.
+Our filter instead fits its weights per user by least squares on the
+stored pilots, like an adaptive filter~\cite{haykin2002adaptive}, chooses on the
+current slot how many entries to use, and feeds an NRX. In our evaluation, a
+classical multi-slot estimator given each condition's statistics falls 0.56\,dB
+behind its single-slot version after a channel change, while our filter stays
+ahead of both.
 
 Within learned receivers, earlier slots enter mainly through the weights.
 Online schemes retrain on decoder-recovered labels, on symbol decisions, or when
@@ -44,16 +47,12 @@ fires~\cite{fischer2022adaptive,finish2022symbol,uzlaner2025asynchronous}, or
 track a posterior over the weights~\cite{gusakov2026online}. They pay in label
 delay~\cite{fischer2022adaptive}, in compute that
 grows at least quadratically with the number of weights~\cite{gusakov2026online},
-and in error propagation when the model's own decisions later serve as labels or
-references~\cite{fischer2022adaptive,fan2025defined}. Long-term statistics such
+and in error propagation when their own decisions serve as labels or references~\cite{fischer2022adaptive,fan2025defined}. Long-term statistics such
 as time-averaged channel covariances~\cite{liu2026universal,wiesmayr2026impact}
 remain valid across scheduling gaps but adapt slowly after a user change and do
-not supply the instantaneous channel. Closest to our setting, \citet{kunde2025transformers} show that a fixed-weight softmax-attention
-layer over past pilot pairs can represent the symbol posterior and, empirically,
-outperforms detectors that treat a linear minimum mean square error (LMMSE)
-channel estimate as exact; their
-theory, however, is asymptotic, and their experiments are single-user and
-uncoded.
+not supply the instantaneous channel. Closest to our setting, \citet{kunde2025transformers} show that a fixed-weight attention layer over past pilot pairs can represent the symbol posterior and empirically outperforms
+detectors that treat a linear minimum mean square error (LMMSE) channel estimate
+as exact, but only with asymptotic theory and single-user, uncoded experiments.
 
 % Fig. 1 belongs to the Receiver Design. It is defined here because a full-width figure appears at the top of
 % the next page: the Receiver Design starts at the end of this page and refers to the figure there.

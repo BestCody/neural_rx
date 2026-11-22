@@ -41,6 +41,14 @@ SCORING_START = 16
 PRBS = 132
 
 
+def use_radio(config=None, anchors=None, checkpoint=None):
+    """Run the sweep for another radio configuration (MCS), with its calibration anchors and proposed receiver."""
+    global CONFIG, ANCHORS, CHECKPOINT
+    CONFIG = CONFIG if config is None else str(config)
+    ANCHORS = ANCHORS if anchors is None else Path(anchors).resolve()
+    CHECKPOINT = CHECKPOINT if checkpoint is None else Path(checkpoint).resolve()
+
+
 def configure_runtime():
     import sionna as sn
     for gpu in tf.config.list_physical_devices("GPU"):
@@ -92,7 +100,8 @@ class ChannelCapturingBank(TemporalBenchmarkScenarioBank):
 
 def sweep_context(episodes=32):
     anchors = json.loads(ANCHORS.read_text())["conditions"]
-    protocol, plan = protocol_and_plan("confirmation", PRBS, episodes, anchors, protocol_path=PROTOCOL)
+    protocol, plan = protocol_and_plan("confirmation", PRBS, episodes, anchors, protocol_path=PROTOCOL,
+                                       config_name=CONFIG)
     parameters = Parameters(CONFIG, training=False, num_tx_eval=2, n_size_bwp_override=PRBS)
     bank = ChannelCapturingBank(parameters, E2E_Model(parameters, training=False, mcs_arr_eval_idx=0), tf)
     return protocol, plan, parameters, bank, anchors
@@ -302,7 +311,7 @@ def run_doubletdl(args):
 def run_latency(args):
     """Median per-TB decode latency on the benchmark's timer and inputs."""
     configure_runtime()
-    protocol, plan = protocol_and_plan("latency", PRBS, protocol_path=PROTOCOL)
+    protocol, plan = protocol_and_plan("latency", PRBS, protocol_path=PROTOCOL, config_name=CONFIG)
     parameters = Parameters(CONFIG, training=False, num_tx_eval=2, n_size_bwp_override=PRBS)
     bank = TemporalBenchmarkScenarioBank(parameters, E2E_Model(parameters, training=False, mcs_arr_eval_idx=0), tf)
     adapters = {method: make_receiver(method, protocol) for method in args.methods}

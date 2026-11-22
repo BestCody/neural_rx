@@ -1,0 +1,67 @@
+{
+  "stage": "development",
+  "jobs": [
+    {
+      "condition": "close_los",
+      "provider": "shared_geometry",
+      "provider_settings": {
+        "provider": "shared_geometry",
+        "receiver_inputs": [],
+        "scenario": "umi",
+        "force_los": true,
+        "angular_separation_deg": [
+          0.0,
+          5.0
+        ],
+        "doppler_strata_hz": [
+          [
+            0.0,
+            400.0
+          ]
+        ]
+      },
+      "episode_count": 8,
+      "num_tbs": 16,
+      "snr_db": [
+        13.0,
+        14.0,
+        15.0,
+        16.0,
+        17.0,
+        18.0,
+        19.0,
+        20.0,
+        21.0,
+        22.0,
+        23.0,
+        24.0,
+        25.0,
+        26.0
+      ],
+      "seed_streams": {
+        "channel": 63006000,
+        "payload": 63106000,
+        "noise": 63206000,
+        "schedule": 63306000
+      }
+    }
+  ],
+  "episodes_per_condition": 8,
+  "snr_point_names": [
+    "point_0",
+    "point_1",
+    "point_2",
+    "point_3",
+    "point_4",
+    "point_5",
+    "point_6",
+    "point_7",
+    "point_8",
+    "point_9",
+    "point_10",
+    "point_11",
+    "point_12",
+    "point_13"
+  ],
+  "protocol_sha256": "d968a7ebf38b8943dfd6b4a796cac6e93c5fddc7add7cb9c0ae5fd5233c9e009"
+}

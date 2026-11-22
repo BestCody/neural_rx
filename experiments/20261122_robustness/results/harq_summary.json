@@ -1,0 +1,117 @@
+{
+ "natural_umi": {
+  "failed": 186,
+  "compared": 158,
+  "left_out_at_sequence_end": 28,
+  "regular": {
+   "decoded_after_retransmissions": [
+    158,
+    0,
+    0
+   ],
+   "not_decoded": 0,
+   "median_ms_to_decoding": 3.9
+  },
+  "early": {
+   "decoded_after_retransmissions": [
+    158,
+    0,
+    0
+   ],
+   "not_decoded": 0,
+   "median_ms_to_decoding": 3.4
+  },
+  "median_slots_saved": 1.0,
+  "slots_saved_share": 0.5632911392405063,
+  "early_extra_transmissions_per_100_tbs": 1.6927083333333333
+ },
+ "controlled_topology_change": {
+  "failed": 179,
+  "compared": 159,
+  "left_out_at_sequence_end": 20,
+  "regular": {
+   "decoded_after_retransmissions": [
+    142,
+    11,
+    5
+   ],
+   "not_decoded": 1,
+   "median_ms_to_decoding": 3.9
+  },
+  "early": {
+   "decoded_after_retransmissions": [
+    137,
+    16,
+    4
+   ],
+   "not_decoded": 2,
+   "median_ms_to_decoding": 3.4
+  },
+  "median_slots_saved": 1,
+  "slots_saved_share": 0.7834394904458599,
+  "early_extra_transmissions_per_100_tbs": 2.6692708333333335
+ },
+ "schedule_gap_reentry": {
+  "failed": 147,
+  "compared": 112,
+  "left_out_at_sequence_end": 35,
+  "regular": {
+   "decoded_after_retransmissions": [
+    104,
+    8,
+    0
+   ],
+   "not_decoded": 0,
+   "median_ms_to_decoding": 4.4
+  },
+  "early": {
+   "decoded_after_retransmissions": [
+    107,
+    5,
+    0
+   ],
+   "not_decoded": 0,
+   "median_ms_to_decoding": 3.9
+  },
+  "median_slots_saved": 1.0,
+  "slots_saved_share": 0.5803571428571429,
+  "early_extra_transmissions_per_100_tbs": 2.769461077844311
+ },
+ "all": {
+  "failed": 512,
+  "compared": 429,
+  "left_out_at_sequence_end": 83,
+  "regular": {
+   "decoded_after_retransmissions": [
+    404,
+    19,
+    5
+   ],
+   "not_decoded": 1,
+   "median_ms_to_decoding": 3.9
+  },
+  "early": {
+   "decoded_after_retransmissions": [
+    402,
+    21,
+    4
+   ],
+   "not_decoded": 2,
+   "median_ms_to_decoding": 3.4
+  },
+  "median_slots_saved": 1,
+  "slots_saved_share": 0.6487119437939111,
+  "early_extra_transmissions_per_100_tbs": 2.3593466424682394,
+  "decision_mismatches": 0,
+  "request_slots_saved_per_caught_error": {
+   "0.25": 1.0,
+   "0.5": 1.0,
+   "1.0": 1.0
+  }
+ },
+ "timeline": {
+  "slot_ms": 0.5,
+  "detection_ms": 0.9,
+  "decoding_ms": 0.5
+ }
+}

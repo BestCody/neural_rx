@@ -1,0 +1,181 @@
+{
+ "config": "nrx_large_64qam.cfg",
+ "sweep": {
+  "natural_umi": {
+   "required_snr_db": {
+    "pilot_memory": null,
+    "pilot_memory_emptied": null,
+    "neural_rx_k2_trained": null,
+    "frozen_cold_k2": null,
+    "frozen_cold_k3": null,
+    "frozen_cold_k8": null,
+    "baseline_lslin_lmmse": null,
+    "baseline_lmmse_kbest": null,
+    "baseline_perf_csi_kbest": null
+   },
+   "incomplete": [
+    "pilot_memory",
+    "pilot_memory_emptied",
+    "neural_rx_k2_trained",
+    "frozen_cold_k2",
+    "frozen_cold_k3",
+    "frozen_cold_k8",
+    "baseline_lslin_lmmse",
+    "baseline_lmmse_kbest",
+    "baseline_perf_csi_kbest"
+   ],
+   "memory_gain_db": null,
+   "lead_over_retrained_db": null,
+   "lead_over_three_iterations_db": null,
+   "behind_eight_iterations_db": null,
+   "retraining_gain_db": null
+  },
+  "controlled_topology_change": {
+   "required_snr_db": {
+    "pilot_memory": null,
+    "pilot_memory_emptied": null,
+    "neural_rx_k2_trained": null,
+    "frozen_cold_k2": null,
+    "frozen_cold_k3": null,
+    "frozen_cold_k8": null,
+    "baseline_lslin_lmmse": null,
+    "baseline_lmmse_kbest": null,
+    "baseline_perf_csi_kbest": null
+   },
+   "incomplete": [
+    "pilot_memory",
+    "pilot_memory_emptied",
+    "neural_rx_k2_trained",
+    "frozen_cold_k2",
+    "frozen_cold_k3",
+    "frozen_cold_k8",
+    "baseline_lslin_lmmse",
+    "baseline_lmmse_kbest",
+    "baseline_perf_csi_kbest"
+   ],
+   "memory_gain_db": null,
+   "lead_over_retrained_db": null,
+   "lead_over_three_iterations_db": null,
+   "behind_eight_iterations_db": null,
+   "retraining_gain_db": null
+  },
+  "schedule_gap_reentry": {
+   "required_snr_db": {
+    "pilot_memory": null,
+    "pilot_memory_emptied": null,
+    "neural_rx_k2_trained": null,
+    "frozen_cold_k2": null,
+    "frozen_cold_k3": null,
+    "frozen_cold_k8": null,
+    "baseline_lslin_lmmse": null,
+    "baseline_lmmse_kbest": null,
+    "baseline_perf_csi_kbest": null
+   },
+   "incomplete": [
+    "pilot_memory",
+    "pilot_memory_emptied",
+    "neural_rx_k2_trained",
+    "frozen_cold_k2",
+    "frozen_cold_k3",
+    "frozen_cold_k8",
+    "baseline_lslin_lmmse",
+    "baseline_lmmse_kbest",
+    "baseline_perf_csi_kbest"
+   ],
+   "memory_gain_db": null,
+   "lead_over_retrained_db": null,
+   "lead_over_three_iterations_db": null,
+   "behind_eight_iterations_db": null,
+   "retraining_gain_db": null
+  }
+ },
+ "power_control": {
+  "natural_umi": {
+   "required_snr_db": {
+    "pilot_memory": null,
+    "pilot_memory_emptied": null,
+    "neural_rx_k2_trained": null,
+    "frozen_cold_k2": null,
+    "frozen_cold_k3": null,
+    "frozen_cold_k8": null,
+    "baseline_lslin_lmmse": null,
+    "baseline_lmmse_kbest": null,
+    "baseline_perf_csi_kbest": null
+   },
+   "incomplete": [
+    "pilot_memory",
+    "pilot_memory_emptied",
+    "neural_rx_k2_trained",
+    "frozen_cold_k2",
+    "frozen_cold_k3",
+    "frozen_cold_k8",
+    "baseline_lslin_lmmse",
+    "baseline_lmmse_kbest",
+    "baseline_perf_csi_kbest"
+   ],
+   "memory_gain_db": null,
+   "lead_over_retrained_db": null,
+   "lead_over_three_iterations_db": null,
+   "behind_eight_iterations_db": null,
+   "retraining_gain_db": null
+  },
+  "controlled_topology_change": {
+   "required_snr_db": {
+    "pilot_memory": null,
+    "pilot_memory_emptied": null,
+    "neural_rx_k2_trained": null,
+    "frozen_cold_k2": null,
+    "frozen_cold_k3": null,
+    "frozen_cold_k8": null,
+    "baseline_lslin_lmmse": null,
+    "baseline_lmmse_kbest": null,
+    "baseline_perf_csi_kbest": null
+   },
+   "incomplete": [
+    "pilot_memory",
+    "pilot_memory_emptied",
+    "neural_rx_k2_trained",
+    "frozen_cold_k2",
+    "frozen_cold_k3",
+    "frozen_cold_k8",
+    "baseline_lslin_lmmse",
+    "baseline_lmmse_kbest",
+    "baseline_perf_csi_kbest"
+   ],
+   "memory_gain_db": null,
+   "lead_over_retrained_db": null,
+   "lead_over_three_iterations_db": null,
+   "behind_eight_iterations_db": null,
+   "retraining_gain_db": null
+  },
+  "schedule_gap_reentry": {
+   "required_snr_db": {
+    "pilot_memory": null,
+    "pilot_memory_emptied": null,
+    "neural_rx_k2_trained": null,
+    "frozen_cold_k2": null,
+    "frozen_cold_k3": null,
+    "frozen_cold_k8": null,
+    "baseline_lslin_lmmse": null,
+    "baseline_lmmse_kbest": null,
+    "baseline_perf_csi_kbest": null
+   },
+   "incomplete": [
+    "pilot_memory",
+    "pilot_memory_emptied",
+    "neural_rx_k2_trained",
+    "frozen_cold_k2",
+    "frozen_cold_k3",
+    "frozen_cold_k8",
+    "baseline_lslin_lmmse",
+    "baseline_lmmse_kbest",
+    "baseline_perf_csi_kbest"
+   ],
+   "memory_gain_db": null,
+   "lead_over_retrained_db": null,
+   "lead_over_three_iterations_db": null,
+   "behind_eight_iterations_db": null,
+   "retraining_gain_db": null
+  }
+ }
+}
