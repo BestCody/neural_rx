@@ -3,179 +3,143 @@
  "sweep": {
   "natural_umi": {
    "required_snr_db": {
-    "pilot_memory": null,
-    "pilot_memory_emptied": null,
-    "neural_rx_k2_trained": null,
-    "frozen_cold_k2": null,
-    "frozen_cold_k3": null,
-    "frozen_cold_k8": null,
+    "pilot_memory": 9.868092571108232,
+    "pilot_memory_emptied": 10.963807886341547,
+    "neural_rx_k2_trained": 10.781569075640435,
+    "frozen_cold_k2": 11.078657569252785,
+    "frozen_cold_k3": 10.64299163578509,
+    "frozen_cold_k8": 9.827493956903803,
     "baseline_lslin_lmmse": null,
     "baseline_lmmse_kbest": null,
     "baseline_perf_csi_kbest": null
    },
    "incomplete": [
-    "pilot_memory",
-    "pilot_memory_emptied",
-    "neural_rx_k2_trained",
-    "frozen_cold_k2",
-    "frozen_cold_k3",
-    "frozen_cold_k8",
     "baseline_lslin_lmmse",
     "baseline_lmmse_kbest",
     "baseline_perf_csi_kbest"
    ],
-   "memory_gain_db": null,
-   "lead_over_retrained_db": null,
-   "lead_over_three_iterations_db": null,
-   "behind_eight_iterations_db": null,
-   "retraining_gain_db": null
+   "memory_gain_db": 1.0957153152333152,
+   "lead_over_retrained_db": 0.9134765045322037,
+   "lead_over_three_iterations_db": 0.774899064676859,
+   "behind_eight_iterations_db": 0.040598614204428785,
+   "retraining_gain_db": 0.2970884936123497
   },
   "controlled_topology_change": {
    "required_snr_db": {
-    "pilot_memory": null,
-    "pilot_memory_emptied": null,
-    "neural_rx_k2_trained": null,
-    "frozen_cold_k2": null,
-    "frozen_cold_k3": null,
-    "frozen_cold_k8": null,
+    "pilot_memory": 10.21573652267419,
+    "pilot_memory_emptied": 11.136440328698901,
+    "neural_rx_k2_trained": 11.061024377084173,
+    "frozen_cold_k2": 11.31087744275584,
+    "frozen_cold_k3": 10.991988981487019,
+    "frozen_cold_k8": 10.052373401180438,
     "baseline_lslin_lmmse": null,
     "baseline_lmmse_kbest": null,
     "baseline_perf_csi_kbest": null
    },
    "incomplete": [
-    "pilot_memory",
-    "pilot_memory_emptied",
-    "neural_rx_k2_trained",
-    "frozen_cold_k2",
-    "frozen_cold_k3",
-    "frozen_cold_k8",
     "baseline_lslin_lmmse",
     "baseline_lmmse_kbest",
     "baseline_perf_csi_kbest"
    ],
-   "memory_gain_db": null,
-   "lead_over_retrained_db": null,
-   "lead_over_three_iterations_db": null,
-   "behind_eight_iterations_db": null,
-   "retraining_gain_db": null
+   "memory_gain_db": 0.9207038060247115,
+   "lead_over_retrained_db": 0.8452878544099836,
+   "lead_over_three_iterations_db": 0.776252458812829,
+   "behind_eight_iterations_db": 0.16336312149375232,
+   "retraining_gain_db": 0.2498530656716671
   },
   "schedule_gap_reentry": {
    "required_snr_db": {
-    "pilot_memory": null,
-    "pilot_memory_emptied": null,
-    "neural_rx_k2_trained": null,
-    "frozen_cold_k2": null,
-    "frozen_cold_k3": null,
-    "frozen_cold_k8": null,
+    "pilot_memory": 11.795541654097434,
+    "pilot_memory_emptied": 12.635800374004427,
+    "neural_rx_k2_trained": 12.558307081270506,
+    "frozen_cold_k2": 13.139909779698076,
+    "frozen_cold_k3": 12.35496316383452,
+    "frozen_cold_k8": 11.114235276698937,
     "baseline_lslin_lmmse": null,
     "baseline_lmmse_kbest": null,
     "baseline_perf_csi_kbest": null
    },
    "incomplete": [
-    "pilot_memory",
-    "pilot_memory_emptied",
-    "neural_rx_k2_trained",
-    "frozen_cold_k2",
-    "frozen_cold_k3",
-    "frozen_cold_k8",
     "baseline_lslin_lmmse",
     "baseline_lmmse_kbest",
     "baseline_perf_csi_kbest"
    ],
-   "memory_gain_db": null,
-   "lead_over_retrained_db": null,
-   "lead_over_three_iterations_db": null,
-   "behind_eight_iterations_db": null,
-   "retraining_gain_db": null
+   "memory_gain_db": 0.8402587199069931,
+   "lead_over_retrained_db": 0.7627654271730719,
+   "lead_over_three_iterations_db": 0.5594215097370867,
+   "behind_eight_iterations_db": 0.6813063773984975,
+   "retraining_gain_db": 0.5816026984275702
   }
  },
  "power_control": {
   "natural_umi": {
    "required_snr_db": {
-    "pilot_memory": null,
-    "pilot_memory_emptied": null,
-    "neural_rx_k2_trained": null,
-    "frozen_cold_k2": null,
-    "frozen_cold_k3": null,
-    "frozen_cold_k8": null,
+    "pilot_memory": 4.617429698973575,
+    "pilot_memory_emptied": 5.585785727454724,
+    "neural_rx_k2_trained": 5.3622479144622766,
+    "frozen_cold_k2": 5.588473251934914,
+    "frozen_cold_k3": 5.140441799182862,
+    "frozen_cold_k8": 4.694279010016863,
     "baseline_lslin_lmmse": null,
     "baseline_lmmse_kbest": null,
     "baseline_perf_csi_kbest": null
    },
    "incomplete": [
-    "pilot_memory",
-    "pilot_memory_emptied",
-    "neural_rx_k2_trained",
-    "frozen_cold_k2",
-    "frozen_cold_k3",
-    "frozen_cold_k8",
     "baseline_lslin_lmmse",
     "baseline_lmmse_kbest",
     "baseline_perf_csi_kbest"
    ],
-   "memory_gain_db": null,
-   "lead_over_retrained_db": null,
-   "lead_over_three_iterations_db": null,
-   "behind_eight_iterations_db": null,
-   "retraining_gain_db": null
+   "memory_gain_db": 0.968356028481149,
+   "lead_over_retrained_db": 0.744818215488702,
+   "lead_over_three_iterations_db": 0.5230121002092876,
+   "behind_eight_iterations_db": -0.07684931104328818,
+   "retraining_gain_db": 0.22622533747263773
   },
   "controlled_topology_change": {
    "required_snr_db": {
-    "pilot_memory": null,
-    "pilot_memory_emptied": null,
-    "neural_rx_k2_trained": null,
-    "frozen_cold_k2": null,
-    "frozen_cold_k3": null,
-    "frozen_cold_k8": null,
+    "pilot_memory": 5.112102093673049,
+    "pilot_memory_emptied": 6.017526615904542,
+    "neural_rx_k2_trained": 5.836751316121746,
+    "frozen_cold_k2": 6.03677278116517,
+    "frozen_cold_k3": 5.568302184228417,
+    "frozen_cold_k8": 5.0815763942508,
     "baseline_lslin_lmmse": null,
     "baseline_lmmse_kbest": null,
     "baseline_perf_csi_kbest": null
    },
    "incomplete": [
-    "pilot_memory",
-    "pilot_memory_emptied",
-    "neural_rx_k2_trained",
-    "frozen_cold_k2",
-    "frozen_cold_k3",
-    "frozen_cold_k8",
     "baseline_lslin_lmmse",
     "baseline_lmmse_kbest",
     "baseline_perf_csi_kbest"
    ],
-   "memory_gain_db": null,
-   "lead_over_retrained_db": null,
-   "lead_over_three_iterations_db": null,
-   "behind_eight_iterations_db": null,
-   "retraining_gain_db": null
+   "memory_gain_db": 0.9054245222314927,
+   "lead_over_retrained_db": 0.7246492224486971,
+   "lead_over_three_iterations_db": 0.4562000905553676,
+   "behind_eight_iterations_db": 0.03052569942224892,
+   "retraining_gain_db": 0.20002146504342377
   },
   "schedule_gap_reentry": {
    "required_snr_db": {
-    "pilot_memory": null,
-    "pilot_memory_emptied": null,
-    "neural_rx_k2_trained": null,
-    "frozen_cold_k2": null,
-    "frozen_cold_k3": null,
-    "frozen_cold_k8": null,
+    "pilot_memory": 5.4709647720953605,
+    "pilot_memory_emptied": 6.3286348793592735,
+    "neural_rx_k2_trained": 6.087478161903773,
+    "frozen_cold_k2": 6.363384801608942,
+    "frozen_cold_k3": 5.835566675186257,
+    "frozen_cold_k8": 5.3249106548217755,
     "baseline_lslin_lmmse": null,
     "baseline_lmmse_kbest": null,
     "baseline_perf_csi_kbest": null
    },
    "incomplete": [
-    "pilot_memory",
-    "pilot_memory_emptied",
-    "neural_rx_k2_trained",
-    "frozen_cold_k2",
-    "frozen_cold_k3",
-    "frozen_cold_k8",
     "baseline_lslin_lmmse",
     "baseline_lmmse_kbest",
     "baseline_perf_csi_kbest"
    ],
-   "memory_gain_db": null,
-   "lead_over_retrained_db": null,
-   "lead_over_three_iterations_db": null,
-   "behind_eight_iterations_db": null,
-   "retraining_gain_db": null
+   "memory_gain_db": 0.857670107263913,
+   "lead_over_retrained_db": 0.6165133898084125,
+   "lead_over_three_iterations_db": 0.3646019030908967,
+   "behind_eight_iterations_db": 0.14605411727358497,
+   "retraining_gain_db": 0.2759066397051688
   }
  }
 }
