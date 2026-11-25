@@ -9,6 +9,7 @@ verbatim and that the recomputed data must support (claim). Exit code 1 if anyth
 import glob
 import json
 import math
+import os
 import re
 
 import numpy as np
@@ -23,15 +24,32 @@ EXTRA = ('pilot_memory_current_tb', 'filter_kbest', 'wiener_kbest')            #
 STORED = ('baseline_lslin_lmmse', 'baseline_lmmse_kbest', 'baseline_perf_csi_kbest', 'frozen_cold_k2', 'frozen_cold_k3',
           'frozen_cold_k8')
 CORE = ['natural_umi', 'controlled_topology_change', 'schedule_gap_reentry']
-tex = re.sub(r'\\input\{([^}]+)\}', lambda m: open(f'paper/{m.group(1)}.tex', encoding='utf8').read(),
-             open('paper/main.tex', encoding='utf8').read())
+PAPER = os.environ.get('NRX_PAPER', 'paper')                 # paper_ieee for the IEEE version
+tex = re.sub(r'\\input\{([^}]+)\}', lambda m: open(f'{PAPER}/{m.group(1)}.tex', encoding='utf8').read(),
+             open(f'{PAPER}/main.tex', encoding='utf8').read())
 tex = re.sub(r'(?m)(?<!\\)%.*$', '', tex)
 text = re.sub(r'\s+', ' ', tex)
 bad = checked = 0
+# The IEEE version (paper_ieee) has no Network Decisions section and words some statements differently; its own wording is
+# checked in the block "IEEE version" below, from the same data, and the workshop wording of these labels is skipped there.
+IEEE = PAPER != 'paper'
+NETWORK = '\\section{Network Decisions}' in tex
+IEEE_REWORDED = {'phase jumps: memory', 'conclusion: phase jumps', 'abstract lead', 'abstract eight iterations',
+                 'abstract three iterations', 'related work: classical estimator',
+                 'related work: filter ahead after a channel change', 'time of the proposed NRX', 'budget including the fit',
+                 'time before the slot', 'real time', 'modulations: setup', 'modulations: released weights per MCS',
+                 'abstract: QPSK and eight iterations', 'modulations: introduction and conclusion'}
+section = None                                  # 'network' while checking statements of the Network Decisions section
+
+
+def skipped(label):
+    return (IEEE and label in IEEE_REWORDED) or (section == 'network' and not NETWORK)
 
 
 def expect(string, label):
     global bad, checked
+    if skipped(label):
+        return
     checked += 1
     if string not in text:
         bad += 1; print('MISSING', label, '|', string)
@@ -40,6 +58,8 @@ def expect(string, label):
 def claim(phrase, holds, label):
     """A statement: it must appear verbatim, and the recomputed data must support it."""
     global bad, checked
+    if skipped(label):
+        return
     checked += 2
     if phrase not in text:
         bad += 1; print('MISSING', label, '|', phrase)
@@ -243,8 +263,7 @@ ms = {k: float(np.median(aw[f'events_{k}'])) for k in ('large_k2', 'large_k3', '
 claim('median of 2{,}000 runs on an NVIDIA A100 GPU', 'A100' in json.load(open(f'{TRT}/fused_a100.json'))['gpu']
       and all(len(aw[f'events_{k}']) == 2000 for k in ms), 'GPU and number of runs')
 claim('with TensorRT~10.3 in FP16', json.load(open(f'{TRT}/fused_a100.json'))['tensorrt'].startswith('10.3.'), 'TensorRT version')
-expect(f'takes {ms["large_k2"]:.2f}\\,ms, each further CGNN iteration adds {(ms["large_k8"]-ms["large_k2"])/6:.2f}\\,ms', 'iteration time')
-claim('takes three times as long as $N_{\\mathrm{it}}=2$', 2.8 < ms['large_k8']/ms['large_k2'] < 3.3, 'eight vs two')
+expect(f'takes {ms["large_k2"]:.2f}\\,ms, and each further CGNN iteration adds {(ms["large_k8"]-ms["large_k2"])/6:.2f}\\,ms', 'iteration time')
 claim(f'$N_{{\\mathrm{{it}}}}=2$ meets the 1\\,ms budget, which $N_{{\\mathrm{{it}}}}=3$ exceeds ({ms["large_k3"]:.2f}\\,ms)',
       ms['large_k2'] < 1 < ms['large_k3'], 'budget of the Large NRX')
 claim(f'The proposed NRX takes {ms["proposed"]:.2f}\\,ms, i.e., {ms["proposed"]-ms["large_k2"]:.2f}\\,ms more than the Large NRX with '
@@ -259,6 +278,7 @@ for phrase in ('It meets the 1\\,ms real-time budget, which the three-iteration 
     claim(phrase, ms['proposed'] < 1 < ms['large_k3'], 'real time')
 
 # -------------------------------------------------------------------------------------------- network decisions
+section = 'network'
 realistic = [m for m in (*OURS, *STORED) if m != 'baseline_perf_csi_kbest']
 fallback, unfixable, repeated = {}, {}, {}
 for s in ('no', 'pc'):
@@ -291,7 +311,7 @@ def percent(values):
 expect(f'by {span([fallback["no", c] for c in CORE])}\\,dB, at the cost of a second receiver', 'fallback without power control')
 expect(f'{percent([unfixable["no", c] for c in CORE])} of the failed TBs fail for every receiver without perfect CSI, and '
        f'{percent([repeated["no", c] for c in CORE])} follow an error', 'unfixable without power control')
-expect(f'With power control, LMMSE + K-Best reduces the required SNR by at most {max(fallback["pc", c] for c in CORE):.2f}\\,dB, '
+expect(f'With power control, LMMSE + K-Best gains at most {max(fallback["pc", c] for c in CORE):.2f}\\,dB, '
        f'and only {percent([repeated["pc", c] for c in CORE])} of the errors follow an error of the same UE', 'fallback with power control')
 # fallbacks a real-time BS could run, recomputed from the stored per-TB results at the operating points
 rescued = []
@@ -307,7 +327,7 @@ claim('a fallback that a real-time BS could run, LS + LMMSE or a stateless NRX w
 probe = json.load(open('experiments/20261122_robustness/results/fallback_k_summary.json'))
 change, jump = probe['power_control'], probe['power_control_phase']
 expect('The receiver itself decides when to fall back from its memory', 'filter fallback')
-claim("it uses none on the TB of a channel change or a phase jump for more than 90\\% of the UEs' DMRS symbols",
+claim("it uses none at a channel change or a phase jump for more than 90\\% of the UEs' DMRS symbols",
       change['change']['no_stored_tb_share'] > .9 and jump['phase_jump']['no_stored_tb_share'] > .9
       and change['error_mismatches'] == 0 and jump['error_mismatches'] == 0 and change['sequences'] == jump['sequences'] == 16,
       'filter fallback at changes and jumps')
@@ -345,6 +365,7 @@ claim(f'request {round(100*step["caught"])}\\% of the needed retransmissions bef
       True, 'abstract controller')
 
 # --------------------------------------------------------------------------------------------- robustness (Modal)
+section = None
 ROB = 'experiments/20261122_robustness/results'
 robust = json.load(open(f'{ROB}/summary.json'))
 for test in ('cfo', 'tdd_dddsu'):
@@ -365,6 +386,7 @@ claim('or at least 0.6\\,dB if the eight-slot limit counts uplink slots',
       all(v['pilot_memory_uplink_memory_gain_db'] >= .6 for v in tdd), 'TDD: uplink counting')
 claim('and the proposed NRX still leads the retrained Large NRX by at least 0.4\\,dB',
       all(v['pilot_memory_lead_over_retrained_db'] >= .4 for v in tdd), 'TDD: lead over retrained')
+section = 'network'                                          # simulated HARQ
 harq = json.load(open(f'{ROB}/harq_summary.json'))
 conditions = [harq[c] for c in ('natural_umi', 'controlled_topology_change', 'schedule_gap_reentry')]
 claim('Simulating the retransmissions with Chase combining',
@@ -375,12 +397,101 @@ claim('for decoding times from 0.25 to 1\\,ms',
       all(v == 1 for v in harq['all']['request_slots_saved_per_caught_error'].values()), 'HARQ: decoding times')
 claim('at the cost of about two unneeded transmissions per 100 TBs',
       1.5 <= harq['all']['early_extra_transmissions_per_100_tbs'] <= 2.5, 'HARQ: extra transmissions')
+section = None
 expect('Future work includes measured data and multiple training seeds.', 'future work')
+
+
+# --------------------------------------------------------------------------------------------- QPSK and 64-QAM
+MOD = 'experiments/20261121_modulations/results'
+mods = {label: json.load(open(f'{MOD}/{label}/summary.json')) for label in ('nrx_large_qpsk', 'nrx_large_64qam')}
+
+
+def snr(label, setting, condition, receiver):
+    value = mods[label][setting][condition]
+    assert not value['incomplete'], (label, setting, condition)
+    return value['required_snr_db'][receiver]
+
+
+cells = [(label, s, c) for label in mods for s in ('sweep', 'power_control') for c in CORE]
+gains = [snr(*k, 'pilot_memory_emptied')-snr(*k, 'pilot_memory') for k in cells]
+expect('For QPSK (MCS 9) and 64-QAM (MCS 19), with all NRXs trained in the same way from the released weights for each MCS',
+       'modulations: setup')
+claim('trained in the same way from the released weights for each MCS',
+      all(json.load(open(f'{MOD}/{label}/stage1/recipe.json'))['initializer_checkpoint'] == f'models/pretrained/{label}_weights'
+          for label in mods), 'modulations: released weights per MCS')
+claim('the memory contributes 0.7 to 1.1\\,dB', f'{min(gains):.1f}' == '0.7' and f'{max(gains):.1f}' == '1.1', 'modulations: memory')
+claim('the proposed NRX outperforms the retrained Large NRX and the Large NRX with $N_{\\mathrm{it}}=3$ in all cases, with and without power control',
+      all(snr(*k, 'pilot_memory') < min(snr(*k, 'neural_rx_k2_trained'), snr(*k, 'frozen_cold_k3')) for k in cells),
+      'modulations: retrained and three iterations')
+qpsk = [k for k in cells if k[0] == 'nrx_large_qpsk']
+claim('With QPSK, it also outperforms the Large NRX with $N_{\\mathrm{it}}=8$ in all cases',
+      all(snr(*k, 'pilot_memory') < snr(*k, 'frozen_cold_k8') for k in qpsk), 'modulations: QPSK and eight iterations')
+claim('and, with QPSK, in all conditions', all(snr(*k, 'pilot_memory') < snr(*k, 'frozen_cold_k8') for k in qpsk),
+      'abstract: QPSK and eight iterations')
+behind = {k: snr(*k, 'pilot_memory')-snr(*k, 'frozen_cold_k8') for k in cells if k[0] == 'nrx_large_64qam'}
+claim('with 64-QAM, it stays within 0.15\\,dB of it with power control',
+      all(v <= .15 for k, v in behind.items() if k[1] == 'power_control'), 'modulations: 64-QAM with power control')
+claim('but trails it by about 0.7\\,dB after scheduling gaps without power control',
+      round(behind['nrx_large_64qam', 'sweep', 'schedule_gap_reentry'], 1) == .7
+      and max(behind, key=behind.get) == ('nrx_large_64qam', 'sweep', 'schedule_gap_reentry'), 'modulations: 64-QAM after gaps')
+for phrase in ('MU-MIMO with QPSK, 16-QAM, and 64-QAM over sequences', 'an evaluation with QPSK, 16-QAM, and 64-QAM in which'):
+    expect(phrase, 'modulations: introduction and conclusion')
+
+# --------------------------------------------------------------------------------------------- IEEE version
+if IEEE:
+    lslin = {label: [snr(label, st, c, 'baseline_lslin_lmmse')-snr(label, st, c, 'pilot_memory')
+                     for st in ('sweep', 'power_control') for c in CORE] for label in mods}
+    mod_lead = [snr(*k, 'neural_rx_k2_trained')-snr(*k, 'pilot_memory') for k in cells]
+    mod_three = [snr(*k, 'frozen_cold_k3')-snr(*k, 'pilot_memory') for k in cells]
+    all_lead = lead+pc_lead+mod_lead
+    claim('requires 0.5 to 0.9\\,dB less SNR than a stateless two-iteration NRX retrained on the same data',
+          f'{min(all_lead):.1f}' == '0.5' and f'{max(all_lead):.1f}' == '0.9', 'IEEE abstract: lead, three modulations')
+    claim('outperforms the released three-iteration NRX in all cases, with and without power control',
+          min(three+pc_three+mod_three) > 0, 'IEEE abstract: three iterations')
+    claim('with QPSK, it also outperforms the released eight-iteration NRX in all cases',
+          all(snr(*k, 'pilot_memory') < snr(*k, 'frozen_cold_k8') for k in qpsk), 'IEEE abstract: QPSK')
+    claim('It keeps most of its memory gain with phase jumps, frequency offsets, and TDD uplink slots',
+          min(a/b for a, b in zip(phase_memory, pc_memory)) > .9
+          and all(v['pilot_memory_memory_gain_db'] > .5*v['reference_memory_gain_db'] for t in ('cfo', 'tdd_dddsu')
+                  for v in robust[t].values()), 'IEEE abstract: robustness')
+    for phrase in ('it meets the 1\\,ms real-time budget, which the three-iteration NRX exceeds',
+                   'remains real-time capable, whereas the three-iteration NRX exceeds the 1\\,ms budget',
+                   'while it remains real-time capable, unlike the three-iteration NRX'):
+        claim(phrase, ms['proposed'] < 1 < ms['large_k3'], 'IEEE: real time')
+    expect(f'With a uniformly random phase jump at every power step, the memory still contributes {span(phase_memory)}\\,dB',
+           'IEEE: phase jumps')
+    expect(f"after a channel change, it stays ahead of a classical multi-slot estimator given each condition's statistics, "
+           f"which even falls {-wiener_gain[1]:.2f}\\,dB behind its single-slot version", 'IEEE: related work, classical estimator')
+    claim('after a channel change, it stays ahead of a classical multi-slot estimator',
+          all(gap(s_, b, 'filter_kbest')[1] > 0 for s_ in ('no', 'pc') for b in ('wiener_kbest', 'baseline_lmmse_kbest')),
+          'IEEE: related work, filter ahead')
+    expect(f'are computed before the slot arrives, in {ms["fit_only"]:.2f}\\,ms for both UEs', 'IEEE: time before the slot')
+    claim(f'The proposed NRX takes {ms["proposed"]:.2f}\\,ms, and the GPU work per slot including this computation is '
+          f'{ms["proposed_and_fit"]:.2f}\\,ms, or {ms["proposed_overlapped"]:.2f}\\,ms if it runs at the same time as the slot, so '
+          f'it meets the 1\\,ms budget either way', max(ms['proposed'], ms['proposed_and_fit'], ms['proposed_overlapped']) < 1,
+          'IEEE: budget')
+    claim("On the TB of a channel change or a phase jump, the channel filter uses no stored TB for more than 90\\% of the UEs' "
+          "DMRS symbols, and otherwise for less than 1\\%",
+          change['change']['no_stored_tb_share'] > .9 and jump['phase_jump']['no_stored_tb_share'] > .9
+          and change['other']['no_stored_tb_share'] < .01 and jump['other']['no_stored_tb_share'] < .01
+          and change['error_mismatches'] == jump['error_mismatches'] == 0, 'IEEE: filter fallback')
+    claim('For QPSK (MCS 9) and 64-QAM (MCS 19), we train and evaluate all NRXs in the same way, starting from the released '
+          'weights for each MCS',
+          all(json.load(open(f'{MOD}/{label}/stage1/recipe.json'))['initializer_checkpoint'] == f'models/pretrained/{label}_weights'
+              for label in mods), 'IEEE: modulations, setup')
+    claim('With QPSK and 64-QAM, the memory contributes 0.7 to 1.1\\,dB', f'{min(gains):.1f}' == '0.7' and f'{max(gains):.1f}' == '1.1',
+          'IEEE: modulations, memory')
+    claim('LS + LMMSE needs at least 0.8\\,dB more with 64-QAM and 2.3\\,dB more with QPSK',
+          min(lslin['nrx_large_64qam']) >= .8 and min(lslin['nrx_large_qpsk']) >= 2.3, 'IEEE: modulations, LS + LMMSE')
+    claim('With two CGNN iterations and QPSK, 16-QAM, or 64-QAM, it outperforms stateless NRXs with up to three iterations',
+          min(lead+pc_lead+mod_lead) > 0 and min(three+pc_three+mod_three) > 0, 'IEEE: conclusion')
+    expect('MU-MIMO with QPSK, 16-QAM, and 64-QAM over sequences', 'IEEE: introduction')
+    expect('\\includegraphics[width=\\columnwidth]{figures/modulations_summary.pdf}', 'IEEE: modulation figure')
 
 # --------------------------------------------------------------------------------------------- further datasets
 FURTHER = {'first': 'experiments/20261118_further_datasets/results/v2/errors.npz',
            'second': 'experiments/20261118_further_datasets/results/seed86/errors.npz'}
-if all(glob.glob(path) for path in FURTHER.values()) and 'further independent datasets' in text:
+if all(glob.glob(path) for path in FURTHER.values()) and 'further datasets at a fixed SNR' in text:
     names = ['historical_tdl_b100', 'historical_tdl_c300', 'natural_umi', 'natural_uma', 'controlled_topology_change',
              'schedule_gap_reentry', 'close_los', 'near_far', 'ray_traced_munich']
     rates, blocks = {}, {}
@@ -397,20 +508,12 @@ if all(glob.glob(path) for path in FURTHER.values()) and 'further independent da
     behind = [k for k in cases if rates[k+('frozen_cold_k8',)] < rates[k+('candidate_persistent',)]]
     ahead = [k for k in cases if rates[k+('candidate_persistent',)] < rates[k+('frozen_cold_k8',)]]
     claim(f'the memory lowers TBLER in {len(lower)} of the {len(cases)} cases', True, 'further datasets: memory')
-    tdl = ('first', 'historical_tdl_b100')
-    expect(f"from {100*rates[tdl+('candidate_reset',)]:.1f}\\% to {100*rates[tdl+('candidate_persistent',)]:.1f}\\% for a TDL channel",
-           'further datasets: TDL example')
-    claim('for closely spaced LOS UEs on one dataset, TBLER is unchanged', [k[1] for k in same] == ['close_los']
-          and len(lower)+len(same) == len(cases), 'further datasets: unchanged')
-    claim(f'outperforms the Large NRX with $N_{{\\mathrm{{it}}}}=8$ in {len(ahead)} of the {len(cases)} cases', True,
+    claim(f'outperforms the Large NRX with $N_{{\\mathrm{{it}}}}=8$ in {len(ahead)} ' + ('cases' if IEEE else f'of the {len(cases)} cases'), True,
           'further datasets: ahead of eight iterations')
-    claim('namely for both TDL channels and for the UMa channels on both datasets',
+    claim('for both TDL channels and the UMa channels on both datasets' if IEEE else 'namely for both TDL channels and for the UMa channels on both datasets',
           set(ahead) == {(ds, name) for ds in FURTHER for name in ('historical_tdl_b100', 'historical_tdl_c300', 'natural_uma')},
           'further datasets: which cases')
-    example = ('first', 'historical_tdl_c300')
-    expect(f"with a TBLER of {100*rates[example+('candidate_persistent',)]:.1f}\\% instead of {100*rates[example+('frozen_cold_k8',)]:.1f}\\%",
-           'further datasets: example ahead')
-    claim('Without its memory, it is behind in all six',
+    claim('which it does not without its memory' if IEEE else 'Without its memory, it is behind in all six',
           len(ahead) == 6 and all(rates[k+('frozen_cold_k8',)] < rates[k+('candidate_reset',)] for k in ahead),
           'further datasets: behind without the memory')
     claim(f'remains ahead in {len(behind)} cases', True, 'further datasets: eight iterations ahead')

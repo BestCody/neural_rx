@@ -9,15 +9,11 @@
     "frozen_cold_k2": 11.078657569252785,
     "frozen_cold_k3": 10.64299163578509,
     "frozen_cold_k8": 9.827493956903803,
-    "baseline_lslin_lmmse": null,
-    "baseline_lmmse_kbest": null,
-    "baseline_perf_csi_kbest": null
+    "baseline_lslin_lmmse": 11.24623697853023,
+    "baseline_lmmse_kbest": 9.763128712167537,
+    "baseline_perf_csi_kbest": 8.94957739632216
    },
-   "incomplete": [
-    "baseline_lslin_lmmse",
-    "baseline_lmmse_kbest",
-    "baseline_perf_csi_kbest"
-   ],
+   "incomplete": [],
    "memory_gain_db": 1.0957153152333152,
    "lead_over_retrained_db": 0.9134765045322037,
    "lead_over_three_iterations_db": 0.774899064676859,
@@ -32,15 +28,11 @@
     "frozen_cold_k2": 11.31087744275584,
     "frozen_cold_k3": 10.991988981487019,
     "frozen_cold_k8": 10.052373401180438,
-    "baseline_lslin_lmmse": null,
-    "baseline_lmmse_kbest": null,
-    "baseline_perf_csi_kbest": null
+    "baseline_lslin_lmmse": 11.271780361548831,
+    "baseline_lmmse_kbest": 9.559118114449541,
+    "baseline_perf_csi_kbest": 8.817625710383812
    },
-   "incomplete": [
-    "baseline_lslin_lmmse",
-    "baseline_lmmse_kbest",
-    "baseline_perf_csi_kbest"
-   ],
+   "incomplete": [],
    "memory_gain_db": 0.9207038060247115,
    "lead_over_retrained_db": 0.8452878544099836,
    "lead_over_three_iterations_db": 0.776252458812829,
@@ -55,15 +47,11 @@
     "frozen_cold_k2": 13.139909779698076,
     "frozen_cold_k3": 12.35496316383452,
     "frozen_cold_k8": 11.114235276698937,
-    "baseline_lslin_lmmse": null,
-    "baseline_lmmse_kbest": null,
-    "baseline_perf_csi_kbest": null
+    "baseline_lslin_lmmse": 12.65900967184627,
+    "baseline_lmmse_kbest": 10.942568134740942,
+    "baseline_perf_csi_kbest": 9.278477129911844
    },
-   "incomplete": [
-    "baseline_lslin_lmmse",
-    "baseline_lmmse_kbest",
-    "baseline_perf_csi_kbest"
-   ],
+   "incomplete": [],
    "memory_gain_db": 0.8402587199069931,
    "lead_over_retrained_db": 0.7627654271730719,
    "lead_over_three_iterations_db": 0.5594215097370867,
@@ -80,15 +68,11 @@
     "frozen_cold_k2": 5.588473251934914,
     "frozen_cold_k3": 5.140441799182862,
     "frozen_cold_k8": 4.694279010016863,
-    "baseline_lslin_lmmse": null,
-    "baseline_lmmse_kbest": null,
-    "baseline_perf_csi_kbest": null
+    "baseline_lslin_lmmse": 6.260070747302361,
+    "baseline_lmmse_kbest": 4.742220395168783,
+    "baseline_perf_csi_kbest": 4.3072235416147695
    },
-   "incomplete": [
-    "baseline_lslin_lmmse",
-    "baseline_lmmse_kbest",
-    "baseline_perf_csi_kbest"
-   ],
+   "incomplete": [],
    "memory_gain_db": 0.968356028481149,
    "lead_over_retrained_db": 0.744818215488702,
    "lead_over_three_iterations_db": 0.5230121002092876,
@@ -103,15 +87,11 @@
     "frozen_cold_k2": 6.03677278116517,
     "frozen_cold_k3": 5.568302184228417,
     "frozen_cold_k8": 5.0815763942508,
-    "baseline_lslin_lmmse": null,
-    "baseline_lmmse_kbest": null,
-    "baseline_perf_csi_kbest": null
+    "baseline_lslin_lmmse": 6.725530312400812,
+    "baseline_lmmse_kbest": 5.113618267506825,
+    "baseline_perf_csi_kbest": 4.62784279614857
    },
-   "incomplete": [
-    "baseline_lslin_lmmse",
-    "baseline_lmmse_kbest",
-    "baseline_perf_csi_kbest"
-   ],
+   "incomplete": [],
    "memory_gain_db": 0.9054245222314927,
    "lead_over_retrained_db": 0.7246492224486971,
    "lead_over_three_iterations_db": 0.4562000905553676,
@@ -126,15 +106,11 @@
     "frozen_cold_k2": 6.363384801608942,
     "frozen_cold_k3": 5.835566675186257,
     "frozen_cold_k8": 5.3249106548217755,
-    "baseline_lslin_lmmse": null,
-    "baseline_lmmse_kbest": null,
-    "baseline_perf_csi_kbest": null
+    "baseline_lslin_lmmse": 7.018908405807102,
+    "baseline_lmmse_kbest": 5.66435241441384,
+    "baseline_perf_csi_kbest": 4.5269942040474715
    },
-   "incomplete": [
-    "baseline_lslin_lmmse",
-    "baseline_lmmse_kbest",
-    "baseline_perf_csi_kbest"
-   ],
+   "incomplete": [],
    "memory_gain_db": 0.857670107263913,
    "lead_over_retrained_db": 0.6165133898084125,
    "lead_over_three_iterations_db": 0.3646019030908967,

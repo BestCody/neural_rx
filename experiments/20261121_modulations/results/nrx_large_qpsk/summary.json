@@ -1,0 +1,121 @@
+{
+ "config": "nrx_large_qpsk.cfg",
+ "sweep": {
+  "natural_umi": {
+   "required_snr_db": {
+    "pilot_memory": 4.7033700523767585,
+    "pilot_memory_emptied": 5.624449085548271,
+    "neural_rx_k2_trained": 5.489474811067712,
+    "frozen_cold_k2": 5.63046847726503,
+    "frozen_cold_k3": 5.189704934438128,
+    "frozen_cold_k8": 4.889363128741788,
+    "baseline_lslin_lmmse": 7.285211861261061,
+    "baseline_lmmse_kbest": 4.765556743202237,
+    "baseline_perf_csi_kbest": 4.279801735821831
+   },
+   "incomplete": [],
+   "memory_gain_db": 0.9210790331715124,
+   "lead_over_retrained_db": 0.7861047586909535,
+   "lead_over_three_iterations_db": 0.4863348820613691,
+   "behind_eight_iterations_db": -0.1859930763650297,
+   "retraining_gain_db": 0.14099366619731768
+  },
+  "controlled_topology_change": {
+   "required_snr_db": {
+    "pilot_memory": 4.491383176768629,
+    "pilot_memory_emptied": 5.4742916502926775,
+    "neural_rx_k2_trained": 5.327995122734113,
+    "frozen_cold_k2": 5.425122694802399,
+    "frozen_cold_k3": 5.148661407318054,
+    "frozen_cold_k8": 4.740253054154587,
+    "baseline_lslin_lmmse": 7.404138610685983,
+    "baseline_lmmse_kbest": 4.527993812231158,
+    "baseline_perf_csi_kbest": 4.139004557687307
+   },
+   "incomplete": [],
+   "memory_gain_db": 0.9829084735240485,
+   "lead_over_retrained_db": 0.8366119459654842,
+   "lead_over_three_iterations_db": 0.6572782305494247,
+   "behind_eight_iterations_db": -0.24886987738595767,
+   "retraining_gain_db": 0.0971275720682856
+  },
+  "schedule_gap_reentry": {
+   "required_snr_db": {
+    "pilot_memory": 5.694800615083389,
+    "pilot_memory_emptied": 6.4385398803139475,
+    "neural_rx_k2_trained": 6.398236039782576,
+    "frozen_cold_k2": 6.56884905841351,
+    "frozen_cold_k3": 6.337401015299004,
+    "frozen_cold_k8": 5.912825700504246,
+    "baseline_lslin_lmmse": 8.021818686516042,
+    "baseline_lmmse_kbest": 5.960820399424805,
+    "baseline_perf_csi_kbest": 4.522168913236515
+   },
+   "incomplete": [],
+   "memory_gain_db": 0.7437392652305581,
+   "lead_over_retrained_db": 0.7034354246991867,
+   "lead_over_three_iterations_db": 0.6426004002156143,
+   "behind_eight_iterations_db": -0.21802508542085697,
+   "retraining_gain_db": 0.1706130186309336
+  }
+ },
+ "power_control": {
+  "natural_umi": {
+   "required_snr_db": {
+    "pilot_memory": -0.5853813914915785,
+    "pilot_memory_emptied": 0.36139326239538727,
+    "neural_rx_k2_trained": 0.2601178121827108,
+    "frozen_cold_k2": 0.30055594307700034,
+    "frozen_cold_k3": 0.1390243056396867,
+    "frozen_cold_k8": -0.16575676190552285,
+    "baseline_lslin_lmmse": 2.0497621979995113,
+    "baseline_lmmse_kbest": -0.3754213459135056,
+    "baseline_perf_csi_kbest": -0.8774857689560703
+   },
+   "incomplete": [],
+   "memory_gain_db": 0.9467746538869658,
+   "lead_over_retrained_db": 0.8454992036742893,
+   "lead_over_three_iterations_db": 0.7244056971312652,
+   "behind_eight_iterations_db": -0.4196246295860557,
+   "retraining_gain_db": 0.04043813089428955
+  },
+  "controlled_topology_change": {
+   "required_snr_db": {
+    "pilot_memory": -0.27086561969649336,
+    "pilot_memory_emptied": 0.6482597596647474,
+    "neural_rx_k2_trained": 0.5071251865563852,
+    "frozen_cold_k2": 0.567895092339161,
+    "frozen_cold_k3": 0.3827256074014387,
+    "frozen_cold_k8": 0.10464363172055785,
+    "baseline_lslin_lmmse": 2.409850488978251,
+    "baseline_lmmse_kbest": -0.17661508377085378,
+    "baseline_perf_csi_kbest": -0.6187506189506251
+   },
+   "incomplete": [],
+   "memory_gain_db": 0.9191253793612407,
+   "lead_over_retrained_db": 0.7779908062528785,
+   "lead_over_three_iterations_db": 0.653591227097932,
+   "behind_eight_iterations_db": -0.3755092514170512,
+   "retraining_gain_db": 0.06076990578277586
+  },
+  "schedule_gap_reentry": {
+   "required_snr_db": {
+    "pilot_memory": -0.14159002089235317,
+    "pilot_memory_emptied": 0.6995094998585555,
+    "neural_rx_k2_trained": 0.6152087192928147,
+    "frozen_cold_k2": 0.6636429619696096,
+    "frozen_cold_k3": 0.45455748661441586,
+    "frozen_cold_k8": 0.16126519525881794,
+    "baseline_lslin_lmmse": 2.4371432349379267,
+    "baseline_lmmse_kbest": 0.04225820687100003,
+    "baseline_perf_csi_kbest": -0.7459426443270596
+   },
+   "incomplete": [],
+   "memory_gain_db": 0.8410995207509087,
+   "lead_over_retrained_db": 0.7567987401851679,
+   "lead_over_three_iterations_db": 0.596147507506769,
+   "behind_eight_iterations_db": -0.3028552161511711,
+   "retraining_gain_db": 0.04843424267679486
+  }
+ }
+}

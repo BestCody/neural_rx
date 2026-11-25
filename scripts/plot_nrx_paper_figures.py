@@ -30,9 +30,10 @@ PANELS = {"natural_umi": "(a) UMi", "controlled_topology_change": "(b) Channel c
           "schedule_gap_reentry": "(c) Scheduling gaps"}
 
 
-def save(fig, stem):
-    fig.savefig(OUT/f"{stem}.pdf", bbox_inches="tight", pad_inches=.01)
-    fig.savefig(OUT/f"{stem}.png", bbox_inches="tight", pad_inches=.01, dpi=220)
+def save(fig, stem, out=None):
+    out = OUT if out is None else out          # the IEEE version (plot_nrx_ieee_figures.py) writes elsewhere
+    fig.savefig(out/f"{stem}.pdf", bbox_inches="tight", pad_inches=.01)
+    fig.savefig(out/f"{stem}.png", bbox_inches="tight", pad_inches=.01, dpi=220)
     plt.close(fig)
 
 
@@ -91,9 +92,9 @@ def architecture():
     save(fig, "receiver_architecture")
 
 
-def tbler_curves(summary):
+def tbler_curves(summary, size=(7, 2.85), out=None):
     """TBLER vs. SNR per condition: without power control (top row) and with it (bottom row)."""
-    fig, grid = plt.subplots(2, 3, figsize=(7, 2.85), sharey=True)
+    fig, grid = plt.subplots(2, 3, figsize=size, sharey=True)
     letters = iter("abcdef")
     for axes, setting, suffix in ((grid[0], "no_power_control", ""), (grid[1], "power_control", ", power control")):
         for ax, (condition, title) in zip(axes, PANELS.items(), strict=True):
@@ -111,16 +112,16 @@ def tbler_curves(summary):
     fig.legend(handles=handles, loc="upper center", ncol=4, fontsize=6.6, frameon=True, fancybox=False,
                edgecolor="black", borderpad=.3, columnspacing=1, handlelength=2.2, bbox_to_anchor=(.5, 1.13))
     fig.subplots_adjust(wspace=.09, hspace=.62, left=.06, right=.995, top=.98, bottom=.13)
-    save(fig, "tbler_vs_snr")
+    save(fig, "tbler_vs_snr", out)
 
 
-def snr_and_latency(summary, latency):
+def snr_and_latency(summary, latency, size=(3.3, 1.6), out=None):
     """Required SNR (left) and median TensorRT inference time on the A100 (right) vs. N_it for UMi, in the export of
     the code release of Wiesmayr et al."""
     umi = summary["no_power_control"]["natural_umi"]
     iterations = {2: "frozen_cold_k2", 3: "frozen_cold_k3", 8: "frozen_cold_k8"}
     engines = {2: "large_k2", 3: "large_k3", 8: "large_k8"}
-    fig, left = plt.subplots(figsize=(3.3, 1.6))
+    fig, left = plt.subplots(figsize=size)
     right = left.twinx()
     left.plot(list(iterations), [umi[m]["snr_at_10pct_db"] for m in iterations.values()], color="#ff7f00",
               linestyle=":", marker=".", linewidth=1.05, label="Large NRX (SNR)")
@@ -146,7 +147,7 @@ def snr_and_latency(summary, latency):
     handles = left.get_legend_handles_labels()[0]+right.get_legend_handles_labels()[0]
     fig.legend(handles=handles, loc="upper center", ncol=2, fontsize=6.3, frameon=True, fancybox=False,
                edgecolor="black", borderpad=.3, columnspacing=1, bbox_to_anchor=(.5, 1.27))
-    save(fig, "snr_latency_tradeoff")
+    save(fig, "snr_latency_tradeoff", out)
 
 
 def memory_gain(numbers):

@@ -7,8 +7,8 @@ In this work, we propose a stateful NRX that carries channel estimates across sl
 
 In summary, our contributions are:
 \begin{itemize}
-\item We develop a stateful NRX that combines a pilot memory of LS channel estimates with a channel filter whose weights are fitted on this memory and not trained.
-\item We evaluate the proposed NRX in simulations of $2\times 4$ MU-MIMO with 16-QAM over sequences of 64 slots, with and without power control. It clearly outperforms a stateless two-iteration NRX retrained on the same data, outperforms the released NRXs with up to three iterations, performs close to the released eight-iteration NRX, and even outperforms it on the tapped delay line and urban macrocell channels of two further datasets.
+\item We develop a stateful NRX with a pilot memory and a channel filter fitted on it, not trained.
+\item We evaluate the proposed NRX in simulations of $2\times 4$ MU-MIMO with QPSK, 16-QAM, and 64-QAM over sequences of 64 slots, with and without power control. It clearly outperforms a stateless two-iteration NRX retrained on the same data, outperforms the released NRXs with up to three iterations, and performs close to the released eight-iteration NRX.
 \item The proposed NRX does not increase the number of CGNN weights, and our latency measurements with TensorRT show that it remains real-time capable, whereas the three-iteration NRX exceeds the 1\,ms budget.
 \item We show how the network can use the receiver's intermediate results: falling back to a conventional receiver after a cyclic redundancy check (CRC) failure helps for few TBs, whereas with closed-loop power control, most failing TBs can be identified before decoding finishes, so that their retransmissions can be requested early.
 \end{itemize}

@@ -29,6 +29,7 @@ PC = ROOT/"experiments/20261112_early_retransmission"
 COVARIANCE = ROOT/"experiments/20261104_tbler_sweep/covariance"
 SWEEP_OFFSETS_DB = tuple(float(offset) for offset in range(-6, 9))
 PC_GRID_16QAM = (-2, -1.5, -1, -.5, 0, .5, 1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5, 5, 5.5, 6, 7, 8, 10)  # run_receivers_pc.py
+CLASSICAL = ("baseline_lslin_lmmse", "baseline_lmmse_kbest", "baseline_perf_csi_kbest")
 RECEIVERS = {"pilot_memory": "candidate_persistent", "pilot_memory_emptied": "candidate_reset",
              "neural_rx_k2_trained": "frozen_cold_k2", "frozen_cold_k2": "frozen_cold_k2",
              "frozen_cold_k3": "frozen_cold_k3", "frozen_cold_k8": "frozen_cold_k8",
@@ -55,6 +56,13 @@ def main():
     args = parser.parse_args()
     os.environ["CUDA_VISIBLE_DEVICES"] = str(args.gpu)
     os.environ.setdefault("TF_CPP_MIN_LOG_LEVEL", "2")
+    if set(args.receivers) & set(CLASSICAL):
+        # Two LMMSE + K-Best decoders do not fit into one GPU's memory at 64-QAM: a classical run waits until no other
+        # classical run holds this GPU. The lock ends with the process, when its GPU memory is released.
+        import fcntl
+        (HERE/"logs").mkdir(exist_ok=True)
+        lock = open(HERE/"logs"/f".classical_gpu{args.gpu}.lock", "w")
+        fcntl.flock(lock, fcntl.LOCK_EX)
 
     import numpy as np
     import tensorflow as tf

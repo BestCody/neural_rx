@@ -1,0 +1,43 @@
+% IEEE version (conference template IEEEtran 1.8b from CTAN, bare_conf.tex). Differs from the workshop version in
+% paper/: no Network Decisions section, and QPSK and 64-QAM results with Fig. 5.
+\documentclass[conference]{IEEEtran}
+\IEEEoverridecommandlockouts
+\usepackage{cite}
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{graphicx}
+\usepackage{textcomp}
+\usepackage{xcolor}
+\usepackage[hyphens]{url}
+\newcommand{\red}[1]{\textcolor{red}{#1}}   % review notes; remove before submission
+
+\begin{document}
+
+\title{Stateful Neural Receivers: Amortizing Iterative Inference Across 5G NR Slots}
+
+\author{
+\IEEEauthorblockN{Hanze Lou}
+\IEEEauthorblockA{Oakville Trafalgar Secondary School\\
+louhansen811@gmail.com}
+\and
+\IEEEauthorblockN{Muhammad Sulaiman, Mohammad A. Salahuddin, Raouf Boutaba}
+\IEEEauthorblockA{University of Waterloo\\
+\{m4sulaim, mohammad.salahuddin, rboutaba\}@uwaterloo.ca}
+}
+
+\maketitle
+\bstctlcite{IEEEexample:BSTcontrol}   % IEEE style: more than six authors -> first author et al.
+
+\input{abstract}
+
+% Index Terms are optional in the IEEE conference template; left out for space.
+
+\input{introduction}
+\input{related}
+\input{design}
+\input{experiments}
+\input{conclusion}
+
+\bibliographystyle{IEEEtran}
+\bibliography{references}
+
+\end{document}
