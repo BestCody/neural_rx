@@ -125,7 +125,7 @@ def tbler_curves(summary, size=(7, 2.4), out=None):
     save(fig, "tbler_vs_snr", out)
 
 
-def memory_gain(numbers):
+def memory_gain(numbers, out=None):
     gains = numbers
     fig, ax = plt.subplots(figsize=(3.3, 1.3))
     bars = ax.bar(list(gains), list(gains.values()), width=.55, color=PINK)
@@ -136,7 +136,7 @@ def memory_gain(numbers):
     ax.grid(True, axis="y", linewidth=.3, color="#bbbbbb")
     ax.set_axisbelow(True)
     ax.tick_params(labelsize=7, length=2, pad=1.5)
-    save(fig, "memory_gain_vs_doppler")
+    save(fig, "memory_gain_vs_doppler", out)
 
 
 def load_summary():

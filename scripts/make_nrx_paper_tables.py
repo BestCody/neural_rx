@@ -7,6 +7,7 @@ stay in the section files):
     further_datasets.tex  TBLER at a fixed SNR on the two further datasets
     latency.tex           median TensorRT latency on the A100
     network.tex           fallback and early retransmission (workshop version only)
+    impairments.tex       the impairment block of modulations.tex on its own (IEEE version only)
 
     python scripts/make_nrx_paper_tables.py [--paper paper|paper_ieee]          # write the tables
     python scripts/make_nrx_paper_tables.py [--paper ...] --check               # exit 1 if a file is out of date
@@ -97,6 +98,16 @@ def modulations_table():
                   + [robust["tdd_dddsu"][c]["required_snr_db"][m] for c in CORE])
         lines.append(row(NAMES[m], values))
     return lines+["\\bottomrule", "\\end{tabular}"]
+
+
+def impairments_table():
+    """The bottom block of modulations_table on its own (the IEEE version shows QPSK and 64-QAM in a figure)."""
+    lines = modulations_table()
+    start = next(k for k, line in enumerate(lines) if "16-QAM (MCS 14) with power control" in line)
+    spec = "@{}l" + "@{\\hspace{6pt}}rrr"*4 + "@{}"
+    return ([f"\\begin{{tabular}}{{{spec}}}", "\\toprule"] + lines[start+2:start+4]
+            + [f"Receiver & {CONDITIONS} & {CONDITIONS} & {CONDITIONS} & {CONDITIONS} \\\\", "\\midrule"]
+            + lines[start+4:])
 
 
 FURTHER_NAMES = {"historical_tdl_b100": "TDL-B100", "historical_tdl_c300": "TDL-C300", "natural_umi": "UMi",
@@ -192,7 +203,9 @@ def latency_table():
 
 
 TABLES = {"required_snr": required_snr_table, "modulations": modulations_table, "further_datasets": further_table,
-          "latency": latency_table, "network": network_table}
+          "latency": latency_table, "network": network_table, "impairments": impairments_table}
+USED = {"paper": ("required_snr", "further_datasets", "modulations", "latency", "network"),
+        "paper_ieee": ("required_snr", "further_datasets", "impairments", "latency")}
 
 
 def main():
@@ -203,9 +216,8 @@ def main():
     folder = ROOT/args.paper/"tables"
     folder.mkdir(exist_ok=True)
     stale = []
-    for name, make in TABLES.items():
-        if args.paper != "paper" and name == "network":       # the IEEE version has no Network Decisions section
-            continue
+    for name in USED[args.paper]:
+        make = TABLES[name]
         content = "% written by scripts/make_nrx_paper_tables.py; do not edit\n" + "\n".join(make()) + "\n"
         path = folder/f"{name}.tex"
         if args.check:

@@ -34,10 +34,8 @@ bad = checked = 0
 # checked in the block "IEEE version" below, from the same data, and the workshop wording of these labels is skipped there.
 IEEE = PAPER != 'paper'
 NETWORK = '\\section{Network Decisions}' in tex
-IEEE_REWORDED = {'phase jumps: memory', 'conclusion: phase jumps', 'abstract lead', 'abstract eight iterations',
-                 'abstract three iterations', 'related work: classical estimator',
-                 'related work: filter ahead after a channel change', 'time of the proposed NRX', 'budget including the fit',
-                 'time before the slot', 'real time', 'modulations: setup', 'modulations: released weights per MCS',
+IEEE_REWORDED = {'conclusion: phase jumps', 'abstract lead', 'abstract eight iterations', 'abstract three iterations',
+                 'modulations: setup', 'modulations: released weights per MCS', 'modulations: memory',
                  'abstract: QPSK and eight iterations', 'modulations: introduction and conclusion'}
 section = None                                  # 'network' while checking statements of the Network Decisions section
 
@@ -132,19 +130,13 @@ memory, no_memory = gap('no', 'pilot_memory_emptied', 'pilot_memory'), gap('no',
 cut, retraining = gap('no', 'frozen_cold_k2', 'frozen_cold_k8'), gap('no', 'frozen_cold_k2', 'neural_rx_k2_trained')
 # The workshop text states the results qualitatively, as Cammerer et al. and Wiesmayr et al. do (user, 2026-11-27);
 # Table 1 to 5 carry the values. Each qualitative word is tied to a threshold here.
-claim('costs more than 1\\,dB in all three conditions' if IEEE else 'significantly raises the required SNR in all three conditions',
+claim('significantly raises the required SNR in all three conditions',
       min(cut) > 1, 'iteration cut')
-claim('recovers about half a dB' if IEEE else 'recovers only part of this loss',
+claim('recovers only part of this loss',
       all(.4 <= v <= .7 and v < c for v, c in zip(retraining, cut)), 'retraining gain')
-if IEEE:
-    expect(f'The proposed NRX requires {span(lead)}\\,dB less than this retrained Large NRX', 'lead over retrained')
-else:                                            # the workshop text states bounds; Table 1 has the values
-    claim('the pilot memory and the channel filter, clearly outperforms it', min(lead) > .3, 'lead over retrained')
-if IEEE:
-    expect(f'by {span(three)}\\,dB, and stays within {max(behind):.2f}\\,dB of the Large NRX with $N_{{\\mathrm{{it}}}}=8$', 'three and eight iterations')
-else:                                            # the numbers are in Table 1
-    claim('It also outperforms the Large NRX with $N_{\\mathrm{it}}=3$ in all three conditions and performs close to the Large NRX '
-          'with $N_{\\mathrm{it}}=8$', min(three) > 0 and max(behind) <= .25, 'three and eight iterations')
+claim('the pilot memory and the channel filter, clearly outperforms it', min(lead) > .3, 'lead over retrained')
+claim('It also outperforms the Large NRX with $N_{\\mathrm{it}}=3$ in all three conditions and performs close to the Large NRX '
+      'with $N_{\\mathrm{it}}=8$', min(three) > 0 and max(behind) <= .25, 'three and eight iterations')
 claim('The proposed NRX outperforms LS + LMMSE in all three conditions', min(gap('no', 'baseline_lslin_lmmse', 'pilot_memory')) > 0, 'LS + LMMSE')
 kbest = gap('no', 'pilot_memory', 'baseline_lmmse_kbest')
 claim('remains ahead of it for UMi and channel change, whereas the proposed NRX is ahead for scheduling gaps',
@@ -152,41 +144,20 @@ claim('remains ahead of it for UMi and channel change, whereas the proposed NRX 
 claim('Perf.-CSI + K-Best remains ahead of all other receivers',
       all(required[s][c]['baseline_perf_csi_kbest'] < required[s][c][m] for s in required for c in CORE
           for m in required[s][c] if m != 'baseline_perf_csi_kbest'), 'perfect CSI')
-if IEEE:
-    expect(f'by {span(memory)}\\,dB. Without its memory, the proposed NRX requires up to {max(-v for v in no_memory):.2f}\\,dB more than the retrained Large NRX',
-           'memory gain')
-else:
-    claim('which significantly reduces the required SNR in all three conditions. Without its memory, the proposed NRX performs at most '
-          'slightly worse than the retrained Large NRX', min(memory) > .5 and 0 < max(-v for v in no_memory) <= .25, 'memory gain')
+claim('which significantly reduces the required SNR in all three conditions. Without its memory, the proposed NRX performs at most '
+      'slightly worse than the retrained Large NRX', min(memory) > .5 and 0 < max(-v for v in no_memory) <= .25, 'memory gain')
 pc_lead, pc_three, pc_behind, pc_memory = (gap('pc', 'neural_rx_k2_trained', 'pilot_memory'), gap('pc', 'frozen_cold_k3', 'pilot_memory'),
                                            gap('pc', 'pilot_memory', 'frozen_cold_k8'), gap('pc', 'pilot_memory_emptied', 'pilot_memory'))
-if IEEE:
-    expect(f'requires {span(pc_lead)}\\,dB less than the retrained Large NRX and {span(pc_three)}\\,dB less than the Large NRX with $N_{{\\mathrm{{it}}}}=3$. '
-           f'It stays within {max(pc_behind):.2f}\\,dB of the Large NRX with $N_{{\\mathrm{{it}}}}=8$', 'power control')
-    claim('is on par with it for UMi', abs(pc_behind[0]) <= .05, 'power control: UMi')
-else:
-    claim('The proposed NRX clearly outperforms the retrained Large NRX and the Large NRX with $N_{\\mathrm{it}}=3$, performs close to the '
-          'Large NRX with $N_{\\mathrm{it}}=8$', min(pc_lead) > .3 and min(pc_three) > .3 and max(pc_behind) <= .25, 'power control')
+claim('The proposed NRX clearly outperforms the retrained Large NRX and the Large NRX with $N_{\\mathrm{it}}=3$, performs close to the '
+      'Large NRX with $N_{\\mathrm{it}}=8$', min(pc_lead) > .3 and min(pc_three) > .3 and max(pc_behind) <= .25, 'power control')
 claim('outperforms LMMSE + K-Best in all three conditions', min(gap('pc', 'baseline_lmmse_kbest', 'pilot_memory')) > 0,
       'power control: LMMSE + K-Best')
-if IEEE:
-    expect(f'The memory contributes {span(pc_memory)}\\,dB', 'power control: memory')
-else:
-    claim('The memory again yields a significant gain.', min(pc_memory) > .5, 'power control: memory')
+claim('The memory again yields a significant gain.', min(pc_memory) > .5, 'power control: memory')
 phase_required = {c: {m: round(crossing(*errors('phase', c, m)), 2) for m in OURS} for c in CORE}
 phase_memory = [round(phase_required[c]['pilot_memory_emptied']-phase_required[c]['pilot_memory'], 2) for c in CORE]
 phase_lead = [round(phase_required[c]['neural_rx_k2_trained']-phase_required[c]['pilot_memory'], 2) for c in CORE]
-jumps = json.load(open(f'{NEW}/phase_jumps.json'))
-shares = sorted(100*jumps[c]['phase_jump_share'] for c in CORE)
-if IEEE:
-    expect(f'With a uniformly random phase jump at every power step, which occurs before {shares[0]:.1f}\\% to '
-           f'{shares[-1]:.1f}\\% of the scored TBs, the memory still contributes {span(phase_memory)}\\,dB', 'phase jumps: memory')
-    claim("on each UE's first three TBs after a jump, the proposed NRX fails less often than the retrained Large NRX in all conditions",
-          all(jumps[c]['tbler_near_jumps']['pilot_memory'] < jumps[c]['tbler_near_jumps']['neural_rx_k2_trained'] for c in CORE),
-          'phase jumps: TBs after a jump')
-else:
-    claim('with a uniformly random phase jump at every power step (Table~\\ref{tab:modulations}, bottom), the memory keeps almost all '
-          'of its gain', all(a >= b-.05 for a, b in zip(phase_memory, pc_memory)), 'phase jumps: memory')
+claim('with a uniformly random phase jump at every power step (Table~\\ref{tab:'
+      + ('impairments}' if IEEE else 'modulations}, bottom') + '), the memory keeps almost all of its gain', all(a >= b-.05 for a, b in zip(phase_memory, pc_memory)), 'phase jumps: memory')
 claim('it requires neither power consistency nor phase continuity across the stored slots',
       min(pc_memory) > .5 and min(phase_memory) > .5 and min(phase_lead) > .4, 'related work: power and phase')
 claim('and keeps its memory gain with a phase jump at every power step',
@@ -197,20 +168,15 @@ if not IEEE:
     claim('and stays within 0.2\\,dB of the eight-iteration NRX, with and without power control', max(behind+pc_behind) <= .2,
           'abstract eight iterations')
     claim('outperforms the three-iteration NRX, and stays within', min(three+pc_three) > 0, 'abstract three iterations')
-claim('outperforms the released NRXs with up to three iterations' if IEEE else
-      'clearly outperforms a stateless two-iteration NRX retrained on the same data and the released NRXs with up to three iterations',
+claim('clearly outperforms a stateless two-iteration NRX retrained on the same data and the released NRXs with up to three iterations',
       min(gap(s, m, 'pilot_memory')[i] for s in required for m in ('frozen_cold_k2', 'frozen_cold_k3', 'neural_rx_k2_trained')
           for i in range(3)) > 0, 'introduction: stateless NRXs')
 claim('With two iterations, it recovers most of the accuracy that the cut from eight iterations costs',
       all(required[s][c]['frozen_cold_k2']-required[s][c]['pilot_memory'] > .5*(required[s][c]['frozen_cold_k2']-required[s][c]['frozen_cold_k8'])
           for s in required for c in CORE), 'introduction: most of the accuracy')
-if IEEE:
-    claim('by up to 1\\,dB, even when the NRX is retrained for two iterations',
-          .9 <= max(gap('no', 'neural_rx_k2_trained', 'frozen_cold_k8')) <= 1.05, 'introduction')
-else:
-    claim('the cut to two iterations clearly raises the signal-to-noise ratio (SNR) required for a transport block error rate (TBLER) of 10\\%, '
-          'even when the NRX is retrained for two iterations',
-          min(gap(s, 'neural_rx_k2_trained', 'frozen_cold_k8')[i] for s in ('no', 'pc') for i in range(3)) > .5, 'introduction')
+claim('the cut to two iterations clearly raises the signal-to-noise ratio (SNR) required for a transport block error rate (TBLER) of 10\\%, '
+      'even when the NRX is retrained for two iterations',
+      min(gap(s, 'neural_rx_k2_trained', 'frozen_cold_k8')[i] for s in ('no', 'pc') for i in range(3)) > .5, 'introduction')
 
 # ------------------------------------------- ablation with the current TB only; the filter with a classical receiver
 for s in required:
@@ -218,31 +184,19 @@ for s in required:
         for m in EXTRA:
             required[s][c][m] = round(crossing(*errors(s, c, m)), 2)
 current_only = gap('no', 'pilot_memory_current_tb', 'pilot_memory_emptied')
-if IEEE:
-    expect(f'the proposed NRX requires {span(current_only)}\\,dB more than with its memory emptied', 'current TB only')
-else:
-    claim('the proposed NRX requires even slightly more than with its memory emptied', 0 <= min(current_only) and max(current_only) <= .2,
-          'current TB only')
+claim('the proposed NRX requires even slightly more than with its memory emptied', 0 <= min(current_only) and max(current_only) <= .2,
+      'current TB only')
 claim('The gain stems from the earlier slots', min(current_only+gap('pc', 'pilot_memory_current_tb', 'pilot_memory_emptied')) >= 0,
       'no gain without earlier slots')
 filter_gain = gap('no', 'baseline_lmmse_kbest', 'filter_kbest')
 over_wiener, wiener_gain = gap('no', 'wiener_kbest', 'filter_kbest'), gap('no', 'baseline_lmmse_kbest', 'wiener_kbest')
-if IEEE:
-    expect(f'they reduce its required SNR by {span(filter_gain)}\\,dB.', 'filter with K-Best')
-    expect(f'This classical estimator trails the channel filter by {span([over_wiener[0], over_wiener[2]])}\\,dB for UMi and scheduling gaps '
-           f'and by {over_wiener[1]:.2f}\\,dB for channel change, where it even falls {-wiener_gain[1]:.2f}\\,dB behind LMMSE + K-Best',
-           'classical multi-slot estimator')
-else:
-    claim('they reduce its required SNR in all three conditions (Table~\\ref{tab:required})', min(filter_gain) > 0, 'filter with K-Best')
-    claim('performs close to the channel filter for UMi and scheduling gaps but falls clearly behind it for channel change, even behind LMMSE + K-Best',
-          max(over_wiener[0], over_wiener[2]) < .1 and over_wiener[1] > .5 and wiener_gain[1] < -.3, 'classical multi-slot estimator')
+claim('they reduce its required SNR in all three conditions (Table~\\ref{tab:required})', min(filter_gain) > 0, 'filter with K-Best')
+claim('performs close to the channel filter for UMi and scheduling gaps but falls clearly behind it for channel change, even behind LMMSE + K-Best',
+      max(over_wiener[0], over_wiener[2]) < .1 and over_wiener[1] > .5 and wiener_gain[1] < -.3, 'classical multi-slot estimator')
 pc_gain, pc_over = gap('pc', 'baseline_lmmse_kbest', 'filter_kbest'), gap('pc', 'wiener_kbest', 'filter_kbest')
 # Related Work and introduction: what classical multi-slot estimation cannot do, with the measured comparison (the IEEE
 # version words it in its own block; the co-author took it out of the workshop version on 2026-11-27)
 pc_wiener_gain = gap('pc', 'baseline_lmmse_kbest', 'wiener_kbest')
-if IEEE:
-    claim('Their weights, however, rest on channel statistics known in advance, which do not reveal when the channel of a user changes',
-          wiener_gain[1] < 0, 'introduction: classical estimators after a channel change')
 
 # ------------------------------------------------------------------------- effective SNR and Doppler groups (UMi)
 def effective(cond, method, group=None, edges=np.arange(-10., 30.5, 1.)):
@@ -277,17 +231,9 @@ def effective(cond, method, group=None, edges=np.arange(-10., 30.5, 1.)):
     return None
 
 
-eff = {c: {m: effective(c, m) for m in (*OURS, 'frozen_cold_k8')} for c in CORE}
-if IEEE:                                         # the workshop version has no table for these and dropped them (2026-11-27)
-    expect(f'the proposed NRX requires {span([eff[c]["neural_rx_k2_trained"]-eff[c]["pilot_memory"] for c in CORE])}\\,dB less than the retrained Large NRX '
-           f'and stays within {max(round(eff[c]["pilot_memory"]-eff[c]["frozen_cold_k8"], 2) for c in CORE):.2f}\\,dB of the Large NRX with $N_{{\\mathrm{{it}}}}=8$',
-           'effective SNR')
 doppler = {g: {m: effective('natural_umi', m, g, np.arange(-6., 14.)) for m in OURS} for g in range(3)}
 gains = [doppler[g]['pilot_memory_emptied']-doppler[g]['pilot_memory'] for g in range(3)]
-if IEEE:
-    expect(f'it rises from {gains[0]:.2f}\\,dB at Doppler shifts below 50\\,Hz to {gains[2]:.2f}\\,dB above 175\\,Hz', 'Doppler gain')
-else:
-    expect('as Fig.~\\ref{fig:doppler} shows for UMi in the effective SNR', 'Doppler gain')
+expect('as Fig.~\\ref{fig:doppler} shows for UMi in the effective SNR', 'Doppler gain')
 claim('The gain of the memory grows with the Doppler shift', gains[0] < gains[1] < gains[2], 'Doppler order')
 
 # ------------------------------------------------------------------------------------- TBs and training length
@@ -297,10 +243,6 @@ for cond in CORE:
     assert len(files) == 32
     counts.append(sum(int(np.load(path)['active'][16:].sum()) for path in files))
 expect(f'over {min(counts):,} to {max(counts):,} TBs per condition and SNR point'.replace(',', '{,}'), 'TBs per SNR point')
-stage1 = json.load(open('experiments/20261117_neural_rx_training/results/best.json'))
-later = [v for update, v in stage1['development'].items() if int(update) > stage1['update']]
-if IEEE:
-    claim('whose validation TBLER had stopped improving', len(later) >= 3 and min(later) >= stage1['core_tbler'], 'stage 1 trained out')
 
 # --------------------------------------------------------------------------------------------------- latency
 aw = np.load(f'{TRT}/fused_a100_samples.npz')
@@ -309,32 +251,16 @@ ms = {k: float(np.median(aw[f'events_{k}'])) for k in ('large_k2', 'large_k3', '
 claim('median of 2{,}000 runs on an NVIDIA A100 GPU', 'A100' in json.load(open(f'{TRT}/fused_a100.json'))['gpu']
       and all(len(aw[f'events_{k}']) == 2000 for k in ms), 'GPU and number of runs')
 claim('with TensorRT~10.3 in FP16', json.load(open(f'{TRT}/fused_a100.json'))['tensorrt'].startswith('10.3.'), 'TensorRT version')
-if IEEE:
-    expect(f'takes {ms["large_k2"]:.2f}\\,ms, and each further CGNN iteration adds {(ms["large_k8"]-ms["large_k2"])/6:.2f}\\,ms', 'iteration time')
-else:
-    claim('Each further CGNN iteration adds about 0.3\\,ms, so $N_{\\mathrm{it}}=2$ meets the 1\\,ms budget, which $N_{\\mathrm{it}}=3$ exceeds.',
-          .25 <= (ms['large_k8']-ms['large_k2'])/6 < .35 and ms['large_k2'] < 1 < ms['large_k3'], 'iteration time')
-if IEEE:
-    claim(f'$N_{{\\mathrm{{it}}}}=2$ meets the 1\\,ms budget, which $N_{{\\mathrm{{it}}}}=3$ exceeds ({ms["large_k3"]:.2f}\\,ms)',
-          ms['large_k2'] < 1 < ms['large_k3'], 'budget of the Large NRX')
-    claim(f'The proposed NRX takes {ms["proposed"]:.2f}\\,ms, i.e., {ms["proposed"]-ms["large_k2"]:.2f}\\,ms more than the Large NRX with '
-          '$N_{\\mathrm{it}}=2$', ms['proposed'] < 1, 'time of the proposed NRX')
-    claim(f'the GPU work per slot is {ms["proposed_and_fit"]:.2f}\\,ms, and if it runs at the same time as the slot, the slot takes '
-          f'{ms["proposed_overlapped"]:.2f}\\,ms. The proposed NRX thus meets the 1\\,ms budget in either case',
-          max(ms['proposed'], ms['proposed_and_fit'], ms['proposed_overlapped']) < 1, 'budget including the fit')
-    expect(f'are computed before the slot arrives, which takes {ms["fit_only"]:.2f}\\,ms', 'time before the slot')
-else:                                            # the times themselves are in Table 4
-    claim('The proposed NRX takes only slightly longer than the Large NRX with $N_{\\mathrm{it}}=2$',
-          0 < ms['proposed']-ms['large_k2'] < .05 and ms['proposed'] < 1, 'time of the proposed NRX')
-    claim('the GPU work per slot stays below 1\\,ms, whether this computation runs after the slot or in parallel with it',
-          max(ms['proposed'], ms['proposed_and_fit'], ms['proposed_overlapped']) < 1, 'budget including the fit')
-    expect('only depend on earlier slots and are computed before the slot arrives', 'time before the slot')
-for phrase in (('It meets the 1\\,ms real-time budget, which the three-iteration NRX exceeds',
-                'show that it remains real-time capable, whereas the three-iteration NRX exceeds the 1\\,ms budget',
-                'by which it remains real-time capable, unlike the three-iteration NRX') if IEEE else
-               ('It meets the 1\\,ms real-time budget, which the three-iteration NRX exceeds',
-                'show that it remains real-time capable, unlike the released three-iteration NRX',
-                'by which it remains real-time capable, unlike the three-iteration NRX')):
+claim('Each further CGNN iteration adds about 0.3\\,ms, so $N_{\\mathrm{it}}=2$ meets the 1\\,ms budget, which $N_{\\mathrm{it}}=3$ exceeds.',
+      .25 <= (ms['large_k8']-ms['large_k2'])/6 < .35 and ms['large_k2'] < 1 < ms['large_k3'], 'iteration time')
+claim('The proposed NRX takes only slightly longer than the Large NRX with $N_{\\mathrm{it}}=2$',
+      0 < ms['proposed']-ms['large_k2'] < .05 and ms['proposed'] < 1, 'time of the proposed NRX')
+claim('the GPU work per slot stays below 1\\,ms, whether this computation runs after the slot or in parallel with it',
+      max(ms['proposed'], ms['proposed_and_fit'], ms['proposed_overlapped']) < 1, 'budget including the fit')
+expect('only depend on earlier slots and are computed before the slot arrives', 'time before the slot')
+for phrase in ('meets the 1\\,ms real-time budget, which the three-iteration NRX exceeds',       # abstract
+               'show that it remains real-time capable, unlike the released three-iteration NRX',  # contributions
+               'it remains real-time capable, unlike the three-iteration NRX'):                    # conclusion
     claim(phrase, ms['proposed'] < 1 < ms['large_k3'], 'real time')
 
 # -------------------------------------------------------------------------------------------- network decisions
@@ -432,23 +358,17 @@ for test in ('cfo', 'tdd_dddsu'):
     assert all(not v['incomplete'] and len(v['required_snr_db']) >= 3 for v in robust[test].values()), test
 cfo, tdd = robust['cfo'].values(), robust['tdd_dddsu'].values()
 loss = lambda v, r: v['required_snr_db'][r]-v['reference_snr_db'][r]
-expect('Except in the last tests with power control, we assume, as for DMRS bundling,' if IEEE else
-       'Except in the impairment tests, each UE keeps its phase continuous across slots, as for DMRS bundling,', 'assumptions: robustness tests')
+expect('Except in the impairment tests, each UE keeps its phase continuous across slots, as for DMRS bundling,', 'assumptions: robustness tests')
 claim('With a frequency offset of $\\pm 0.1$\\,ppm per UE, the most 3GPP allows',
       'CFO_PPM = 0.1' in open('experiments/20261122_robustness/banks.py').read(), 'CFO: offset')
-claim('the proposed NRX loses less than 0.1\\,dB and the retrained Large NRX about 0.15\\,dB' if IEEE else
-      'the proposed NRX loses even less than the retrained Large NRX',
+claim('the proposed NRX loses even less than the retrained Large NRX',
       all(loss(v, 'pilot_memory') < .1 and .13 <= loss(v, 'neural_rx_k2_trained') <= .18 for v in cfo), 'CFO: losses')
 claim('as the channel filter tracks the rotation',
       all(v['pilot_memory_memory_gain_db'] > v['reference_memory_gain_db'] for v in cfo), 'CFO: memory gain grows')
 expect('With the TDD pattern DDDSU, i.e., one uplink slot every 2.5\\,ms,', 'TDD: pattern')
-claim('the memory keeps more than 70\\% of its gain' if IEEE else 'the memory keeps most of its gain',
+claim('the memory keeps most of its gain',
       all(v['pilot_memory_memory_gain_db'] > .7*v['reference_memory_gain_db'] for v in tdd), 'TDD: memory share')
-if IEEE:
-    claim('or at least 0.6\\,dB if the eight-slot limit counts uplink slots',
-          all(v['pilot_memory_uplink_memory_gain_db'] >= .6 for v in tdd), 'TDD: uplink counting')
-claim('and the proposed NRX still leads the retrained Large NRX by at least 0.4\\,dB' if IEEE else
-      'and the proposed NRX still clearly outperforms the retrained Large NRX',
+claim('and the proposed NRX still clearly outperforms the retrained Large NRX',
       all(v['pilot_memory_lead_over_retrained_db'] >= .4 for v in tdd), 'TDD: lead over retrained')
 section = 'network'                                          # simulated HARQ
 harq = json.load(open(f'{ROB}/harq_summary.json'))
@@ -459,7 +379,7 @@ claim('early requests let the BS decode a failed TB one slot earlier in median',
       harq['all']['median_slots_saved'] == 1 and all(c['median_slots_saved'] == 1 for c in conditions), 'HARQ: one slot')
 claim('at the cost of a few unneeded transmissions', harq['all']['early_extra_transmissions_per_100_tbs'] <= 3, 'HARQ: extra transmissions')
 section = None
-expect('Future work includes measured data and multiple training seeds.' if IEEE else 'Future work includes measured data.', 'future work')
+expect('Future work includes measured data.', 'future work')
 
 
 # --------------------------------------------------------------------------------------------- QPSK and 64-QAM
@@ -480,10 +400,7 @@ expect('For QPSK (MCS 9) and 64-QAM (MCS 19), with all NRXs trained in the same 
 claim('trained in the same way from the released weights for each MCS',
       all(json.load(open(f'{MOD}/{label}/stage1/recipe.json'))['initializer_checkpoint'] == f'models/pretrained/{label}_weights'
           for label in mods), 'modulations: released weights per MCS')
-if IEEE:
-    claim('the memory contributes 0.7 to 1.1\\,dB', f'{min(gains):.1f}' == '0.7' and f'{max(gains):.1f}' == '1.1', 'modulations: memory')
-else:
-    claim('the memory again yields a significant gain (Table~\\ref{tab:modulations}, top)', min(gains) > .5, 'modulations: memory')
+claim('the memory again yields a significant gain (Table~\\ref{tab:modulations}, top)', min(gains) > .5, 'modulations: memory')
 claim('the proposed NRX outperforms the retrained Large NRX and the Large NRX with $N_{\\mathrm{it}}=3$ in all cases, with and without power control',
       all(snr(*k, 'pilot_memory') < min(snr(*k, 'neural_rx_k2_trained'), snr(*k, 'frozen_cold_k3')) for k in cells),
       'modulations: retrained and three iterations')
@@ -493,10 +410,9 @@ claim('With QPSK, it also outperforms the Large NRX with $N_{\\mathrm{it}}=8$ in
 claim('With QPSK, and on the tapped delay line and urban macrocell channels of two further datasets, it also outperforms the eight-iteration NRX',
       all(snr(*k, 'pilot_memory') < snr(*k, 'frozen_cold_k8') for k in qpsk), 'abstract: QPSK and eight iterations')
 behind = {k: snr(*k, 'pilot_memory')-snr(*k, 'frozen_cold_k8') for k in cells if k[0] == 'nrx_large_64qam'}
-claim('with 64-QAM, it stays within 0.15\\,dB of it with power control' if IEEE else 'with 64-QAM, it performs close to it with power control',
+claim('with 64-QAM, it performs close to it with power control',
       all(v <= .15 for k, v in behind.items() if k[1] == 'power_control'), 'modulations: 64-QAM with power control')
-claim('but trails it by about 0.7\\,dB after scheduling gaps without power control' if IEEE else
-      'but falls behind it after scheduling gaps without power control',
+claim('but falls behind it after scheduling gaps without power control',
       round(behind['nrx_large_64qam', 'sweep', 'schedule_gap_reentry'], 1) == .7
       and max(behind, key=behind.get) == ('nrx_large_64qam', 'sweep', 'schedule_gap_reentry'), 'modulations: 64-QAM after gaps')
 for phrase in ('MU-MIMO with QPSK, 16-QAM, and 64-QAM over sequences', 'an evaluation with QPSK, 16-QAM, and 64-QAM in which'):
@@ -504,50 +420,24 @@ for phrase in ('MU-MIMO with QPSK, 16-QAM, and 64-QAM over sequences', 'an evalu
 
 # --------------------------------------------------------------------------------------------- IEEE version
 if IEEE:
-    lslin = {label: [snr(label, st, c, 'baseline_lslin_lmmse')-snr(label, st, c, 'pilot_memory')
-                     for st in ('sweep', 'power_control') for c in CORE] for label in mods}
     mod_lead = [snr(*k, 'neural_rx_k2_trained')-snr(*k, 'pilot_memory') for k in cells]
     mod_three = [snr(*k, 'frozen_cold_k3')-snr(*k, 'pilot_memory') for k in cells]
     all_lead = lead+pc_lead+mod_lead
-    claim('requires 0.5 to 0.9\\,dB less SNR than a stateless two-iteration NRX retrained on the same data',
-          f'{min(all_lead):.1f}' == '0.5' and f'{max(all_lead):.1f}' == '0.9', 'IEEE abstract: lead, three modulations')
-    claim('outperforms the released three-iteration NRX in all cases, with and without power control',
-          min(three+pc_three+mod_three) > 0, 'IEEE abstract: three iterations')
-    claim('with QPSK, it also outperforms the released eight-iteration NRX in all cases',
+    claim('requires more than 0.5\\,dB less SNR than a stateless two-iteration NRX retrained on the same data and outperforms the '
+          'three-iteration NRX in all cases, with and without power control', min(all_lead) > .5 and min(three+pc_three+mod_three) > 0,
+          'IEEE abstract: lead and three iterations, three modulations')
+    claim('with QPSK, it also outperforms the eight-iteration NRX',
           all(snr(*k, 'pilot_memory') < snr(*k, 'frozen_cold_k8') for k in qpsk), 'IEEE abstract: QPSK')
     claim('It keeps most of its memory gain with phase jumps, frequency offsets, and TDD uplink slots',
           min(a/b for a, b in zip(phase_memory, pc_memory)) > .9
           and all(v['pilot_memory_memory_gain_db'] > .5*v['reference_memory_gain_db'] for t in ('cfo', 'tdd_dddsu')
                   for v in robust[t].values()), 'IEEE abstract: robustness')
-    for phrase in ('it meets the 1\\,ms real-time budget, which the three-iteration NRX exceeds',
-                   'remains real-time capable, whereas the three-iteration NRX exceeds the 1\\,ms budget',
-                   'while it remains real-time capable, unlike the three-iteration NRX'):
-        claim(phrase, ms['proposed'] < 1 < ms['large_k3'], 'IEEE: real time')
-    expect(f'With a uniformly random phase jump at every power step, the memory still contributes {span(phase_memory)}\\,dB',
-           'IEEE: phase jumps')
-    expect(f"after a channel change, it stays ahead of a classical multi-slot estimator given each condition's statistics, "
-           f"which even falls {-wiener_gain[1]:.2f}\\,dB behind its single-slot version", 'IEEE: related work, classical estimator')
-    claim('after a channel change, it stays ahead of a classical multi-slot estimator',
-          all(gap(s_, b, 'filter_kbest')[1] > 0 for s_ in ('no', 'pc') for b in ('wiener_kbest', 'baseline_lmmse_kbest')),
-          'IEEE: related work, filter ahead')
-    expect(f'are computed before the slot arrives, in {ms["fit_only"]:.2f}\\,ms for both UEs', 'IEEE: time before the slot')
-    claim(f'The proposed NRX takes {ms["proposed"]:.2f}\\,ms, and the GPU work per slot including this computation is '
-          f'{ms["proposed_and_fit"]:.2f}\\,ms, or {ms["proposed_overlapped"]:.2f}\\,ms if it runs at the same time as the slot, so '
-          f'it meets the 1\\,ms budget either way', max(ms['proposed'], ms['proposed_and_fit'], ms['proposed_overlapped']) < 1,
-          'IEEE: budget')
-    claim("On the TB of a channel change or a phase jump, the channel filter uses no stored TB for more than 90\\% of the UEs' "
-          "DMRS symbols, and otherwise for less than 1\\%",
-          change['change']['no_stored_tb_share'] > .9 and jump['phase_jump']['no_stored_tb_share'] > .9
-          and change['other']['no_stored_tb_share'] < .01 and jump['other']['no_stored_tb_share'] < .01
-          and change['error_mismatches'] == jump['error_mismatches'] == 0, 'IEEE: filter fallback')
     claim('For QPSK (MCS 9) and 64-QAM (MCS 19), we train and evaluate all NRXs in the same way, starting from the released '
           'weights for each MCS',
           all(json.load(open(f'{MOD}/{label}/stage1/recipe.json'))['initializer_checkpoint'] == f'models/pretrained/{label}_weights'
               for label in mods), 'IEEE: modulations, setup')
-    claim('With QPSK and 64-QAM, the memory contributes 0.7 to 1.1\\,dB', f'{min(gains):.1f}' == '0.7' and f'{max(gains):.1f}' == '1.1',
+    claim('The memory again yields a significant gain, and the proposed NRX outperforms the retrained Large NRX', min(gains) > .5,
           'IEEE: modulations, memory')
-    claim('LS + LMMSE needs at least 0.8\\,dB more with 64-QAM and 2.3\\,dB more with QPSK',
-          min(lslin['nrx_large_64qam']) >= .8 and min(lslin['nrx_large_qpsk']) >= 2.3, 'IEEE: modulations, LS + LMMSE')
     claim('With two CGNN iterations and QPSK, 16-QAM, or 64-QAM, it outperforms stateless NRXs with up to three iterations',
           min(lead+pc_lead+mod_lead) > 0 and min(three+pc_three+mod_three) > 0, 'IEEE: conclusion')
     expect('MU-MIMO with QPSK, 16-QAM, and 64-QAM over sequences', 'IEEE: introduction')
@@ -572,14 +462,8 @@ if all(glob.glob(path) for path in FURTHER.values()) and 'further datasets at a 
     same = [k for k in cases if rates[k+('candidate_persistent',)] == rates[k+('candidate_reset',)]]
     behind = [k for k in cases if rates[k+('frozen_cold_k8',)] < rates[k+('candidate_persistent',)]]
     ahead = [k for k in cases if rates[k+('candidate_persistent',)] < rates[k+('frozen_cold_k8',)]]
-    if IEEE:
-        claim(f'the memory lowers TBLER in {len(lower)} of the {len(cases)} cases', True, 'further datasets: memory')
-    else:
-        claim('The memory lowers TBLER in all cases but one', len(lower) == len(cases)-1, 'further datasets: memory')
-    if IEEE:
-        claim(f'outperforms the Large NRX with $N_{{\\mathrm{{it}}}}=8$ in {len(ahead)} cases', True, 'further datasets: ahead of eight iterations')
-    claim('for both TDL channels and the UMa channels on both datasets' if IEEE else
-          'outperforms the Large NRX with $N_{\\mathrm{it}}=8$ for both TDL channels and for the UMa channels on both datasets',
+    claim('The memory lowers TBLER in all cases but one', len(lower) == len(cases)-1, 'further datasets: memory')
+    claim('outperforms the Large NRX with $N_{\\mathrm{it}}=8$ for both TDL channels and for the UMa channels on both datasets',
           set(ahead) == {(ds, name) for ds in FURTHER for name in ('historical_tdl_b100', 'historical_tdl_c300', 'natural_uma')},
           'further datasets: which cases')
     claim('which it does not without its memory',
@@ -588,7 +472,7 @@ if all(glob.glob(path) for path in FURTHER.values()) and 'further datasets at a 
     if not IEEE:
         claim('on the tapped delay line and urban macrocell channels of two further datasets, it also outperforms the eight-iteration NRX',
               {name for _, name in ahead} == {'historical_tdl_b100', 'historical_tdl_c300', 'natural_uma'}, 'abstract: further datasets')
-    claim(f'remains ahead in {len(behind)} cases' if IEEE else 'remains ahead in most other cases',
+    claim('remains ahead in most other cases',
           len(behind) > (len(cases)-len(ahead))/2, 'further datasets: eight iterations ahead')
     relative = sorted(behind, key=lambda k: rates[k+('candidate_persistent',)]/rates[k+('frozen_cold_k8',)], reverse=True)
     claim('most clearly for closely spaced LOS and near-far UEs', all(k[1] in ('close_los', 'near_far') for k in relative[:3]),
@@ -647,6 +531,7 @@ bottom = [(LABEL[m], [required['pc'][c][m] for c in CORE] + [phase_required[c][m
            + [robust['cfo'][c]['required_snr_db'][m] for c in CORE] + [robust['tdd_dddsu'][c]['required_snr_db'][m] for c in CORE])
           for m in ('neural_rx_k2_trained', 'pilot_memory', 'pilot_memory_emptied')]
 compare_rows('modulations', top+bottom)
+compare_rows('impairments', bottom)
 compare_rows('latency', [(cell(ms['large_k2']), [ms[k] for k in ('large_k3', 'large_k8', 'proposed', 'fit_only', 'proposed_and_fit',
                                                                   'proposed_overlapped')])])
 if FURTHER and 'rates' in globals():

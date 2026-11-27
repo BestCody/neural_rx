@@ -14,7 +14,7 @@ import sys
 os.environ.setdefault("CUDA_VISIBLE_DEVICES", "")
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import matplotlib.pyplot as plt  # noqa: E402
-from plot_nrx_paper_figures import CURVES, PINK, ROOT, load_summary, tbler_curves  # noqa: E402
+from plot_nrx_paper_figures import CURVES, PINK, ROOT, TRAINED, load_summary, memory_gain, tbler_curves  # noqa: E402
 
 OUT = ROOT/"paper_ieee/figures"
 MODULATIONS = ROOT/"experiments/20261121_modulations/results"
@@ -72,9 +72,10 @@ def modulations_summary():
 
 
 if __name__ == "__main__":
-    # Fig. 2 of the workshop version, lower for the six-page format; the workshop figure stays as it is. The IEEE version has
-    # no Doppler or latency figure (their numbers are in the text).
+    # Fig. 2 of the workshop version, lower for the six-page format, and the Doppler figure; latency is a table.
     tbler_curves(load_summary(), size=(7, 2.35), out=OUT)
+    required = json.loads((TRAINED/"doppler.json").read_text())["required_effective_snr_db"]
+    memory_gain({g: required["pilot_memory_emptied"][g]-required["pilot_memory"][g] for g in ("0-50", "50-175", "175-400")}, out=OUT)
     table = modulations_summary()
     for setting, rows in table.items():
         for modulation, conditions in rows.items():
