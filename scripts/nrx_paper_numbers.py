@@ -253,9 +253,11 @@ def flatten(value):
 def check(tex, numbers, allowed):
     """Every decimal number in the abstract, introduction, receiver design, evaluation, and conclusion must round from
     a collected result or be a listed constant. Related work quotes other papers' numbers, so it is not checked."""
-    # main.tex pulls the sections in with \\input{name}; expand them to check the full text.
-    text = re.sub(r"\\input\{([^}]+)\}", lambda m: (Path(tex).parent/f"{m.group(1)}.tex").read_text(),
-                  Path(tex).read_text())
+    # main.tex pulls the sections in with \\input{name}; expand them to check the full text. The tables that
+    # scripts/make_nrx_paper_tables.py writes are left out: scripts/nrx_paper_recheck.py checks every cell of them.
+    expand = lambda m: "" if m.group(1).startswith("tables/") else (Path(tex).parent/f"{m.group(1)}.tex").read_text()
+    text = re.sub(r"\\input\{([^}]+)\}", expand, Path(tex).read_text())
+    text = re.sub(r"\\input\{([^}]+)\}", expand, text)
     section = (text[text.index(r"\begin{abstract}"):text.index(r"\section{Related Work}")]
                + text[text.index(r"\section{Receiver Design}"):text.index(r"\bibliography{references}")])
     section = re.sub(r"(?m)%.*$", "", section)

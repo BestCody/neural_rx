@@ -1,0 +1,24 @@
+% written by scripts/make_nrx_paper_tables.py; do not edit
+\begin{tabular}{@{}l@{\hspace{6pt}}rrr@{\hspace{6pt}}rrr@{\hspace{6pt}}rrr@{\hspace{6pt}}rrr@{}}
+\toprule
+ & \multicolumn{6}{c}{QPSK (MCS 9)} & \multicolumn{6}{c}{64-QAM (MCS 19)} \\
+\cmidrule(lr){2-7}\cmidrule(l){8-13}
+ & \multicolumn{3}{c}{Without power control} & \multicolumn{3}{c}{With power control} & \multicolumn{3}{c}{Without power control} & \multicolumn{3}{c}{With power control} \\
+\cmidrule(lr){2-4}\cmidrule(lr){5-7}\cmidrule(lr){8-10}\cmidrule(l){11-13}
+Receiver & UMi & Change & Gaps & UMi & Change & Gaps & UMi & Change & Gaps & UMi & Change & Gaps \\
+\midrule
+Large NRX, $N_{\mathrm{it}}=3$ & 5.19 & 5.15 & 6.34 & 0.14 & 0.38 & 0.45 & 10.64 & 10.99 & 12.35 & 5.14 & 5.57 & 5.84 \\
+Large NRX, $N_{\mathrm{it}}=8$ & 4.89 & 4.74 & 5.91 & $-$0.17 & 0.10 & 0.16 & 9.83 & 10.05 & 11.11 & 4.69 & 5.08 & 5.32 \\
+Large NRX retrained, $N_{\mathrm{it}}=2$ & 5.49 & 5.33 & 6.40 & 0.26 & 0.51 & 0.62 & 10.78 & 11.06 & 12.56 & 5.36 & 5.84 & 6.09 \\
+Proposed NRX & 4.70 & 4.49 & 5.69 & $-$0.59 & $-$0.27 & $-$0.14 & 9.87 & 10.22 & 11.80 & 4.62 & 5.11 & 5.47 \\
+\quad no memory & 5.62 & 5.47 & 6.44 & 0.36 & 0.65 & 0.70 & 10.96 & 11.14 & 12.64 & 5.59 & 6.02 & 6.33 \\
+\midrule
+ & \multicolumn{12}{c}{16-QAM (MCS 14) with power control} \\
+\cmidrule(l){2-13}
+ & \multicolumn{3}{c}{No impairment} & \multicolumn{3}{c}{Phase jumps} & \multicolumn{3}{c}{Frequency offset} & \multicolumn{3}{c}{TDD} \\
+\cmidrule(lr){2-4}\cmidrule(lr){5-7}\cmidrule(lr){8-10}\cmidrule(l){11-13}
+Large NRX retrained, $N_{\mathrm{it}}=2$ & 2.45 & 2.77 & 2.99 & 2.46 & 2.77 & 2.99 & 2.60 & 2.94 & 3.14 & 2.36 & 2.97 & 3.35 \\
+Proposed NRX & 1.74 & 2.16 & 2.48 & 1.75 & 2.18 & 2.46 & 1.82 & 2.22 & 2.54 & 1.90 & 2.53 & 2.93 \\
+\quad no memory & 2.54 & 2.90 & 3.11 & 2.56 & 2.89 & 3.10 & 2.71 & 3.03 & 3.30 & 2.49 & 3.10 & 3.43 \\
+\bottomrule
+\end{tabular}

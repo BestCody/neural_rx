@@ -1,0 +1,33 @@
+% written by scripts/make_nrx_paper_tables.py; do not edit
+\begin{tabular}{@{}lrr@{}}
+\toprule
+ & No PC & PC \\
+\midrule
+\multicolumn{3}{@{}l}{\emph{Fallback from the memory}: DMRS symbols on which} \\
+\multicolumn{3}{@{}l}{the channel filter uses no stored TB [\%]} \\
+\quad at a channel change & -- & 98.4 \\
+\quad after a phase jump & -- & 93.4 \\
+\quad otherwise, at most & -- & 0.6 \\
+\midrule
+\multicolumn{3}{@{}l}{\emph{Fallback after a CRC failure}: failed TBs rescued [\%] by} \\
+\quad LS + LMMSE & 0.0 & 0.0 \\
+\quad Stateless NRX, $N_{\mathrm{it}}=2$ & 0.0 & 0.2 \\
+\quad LMMSE + K-Best & 5.9 & 4.7 \\
+\quad Large NRX, $N_{\mathrm{it}}=8$ & 3.3 & 7.8 \\
+Failed TBs after an error of the UE [\%] & 97.1 & 80.9 \\
+\midrule
+\emph{Early retransmission} & CRC hist. & Controller \\
+Errors caught early [\%] & & \\
+\quad proposed NRX & 79.5 & 97.3 \\
+\quad proposed NRX, no memory state & 79.5 & 96.9 \\
+\quad stateless NRX, no memory state & 82.1 & 90.3 \\
+Correct TBs flagged [\%], proposed & 2.7 & 2.7 \\
+Errors after the CRC per 100 TBs & & \\
+\quad proposed NRX, no memory state & 2.4 & 0.4 \\
+\quad stateless NRX, no memory state & 4.0 & 2.2 \\
+\midrule
+\emph{Simulated HARQ} & After CRC & Early \\
+Median time to decoding [ms] & 3.9 & 3.4 \\
+Unneeded transmissions per 100 TBs & 0.0 & 2.4 \\
+\bottomrule
+\end{tabular}
