@@ -156,11 +156,11 @@ claim('The memory again yields a significant gain.', min(pc_memory) > .5, 'power
 phase_required = {c: {m: round(crossing(*errors('phase', c, m)), 2) for m in OURS} for c in CORE}
 phase_memory = [round(phase_required[c]['pilot_memory_emptied']-phase_required[c]['pilot_memory'], 2) for c in CORE]
 phase_lead = [round(phase_required[c]['neural_rx_k2_trained']-phase_required[c]['pilot_memory'], 2) for c in CORE]
-claim('with a uniformly random phase jump at every power step (Table~\\ref{tab:'
+claim('With a uniformly random phase jump at every power step (Table~\\ref{tab:'
       + ('impairments}' if IEEE else 'modulations}, bottom') + '), the memory keeps almost all of its gain', all(a >= b-.05 for a, b in zip(phase_memory, pc_memory)), 'phase jumps: memory')
 claim('it requires neither power consistency nor phase continuity across the stored slots',
       min(pc_memory) > .5 and min(phase_memory) > .5 and min(phase_lead) > .4, 'related work: power and phase')
-claim('and keeps its memory gain with a phase jump at every power step',
+claim('It keeps its memory gain with a phase jump at every power step',
       all(abs(a-b) <= .05 for a, b in zip(phase_memory, pc_memory)), 'conclusion: phase jumps')
 both = lead+pc_lead
 claim('requires more than 0.5\\,dB less SNR than a stateless two-iteration NRX retrained on the same data', min(both) > .5, 'abstract lead')
@@ -184,13 +184,13 @@ for s in required:
         for m in EXTRA:
             required[s][c][m] = round(crossing(*errors(s, c, m)), 2)
 current_only = gap('no', 'pilot_memory_current_tb', 'pilot_memory_emptied')
-claim('the proposed NRX requires even slightly more than with its memory emptied', 0 <= min(current_only) and max(current_only) <= .2,
+claim('The proposed NRX then performs even slightly worse than with its memory emptied', 0 <= min(current_only) and max(current_only) <= .2,
       'current TB only')
 claim('The gain stems from the earlier slots', min(current_only+gap('pc', 'pilot_memory_current_tb', 'pilot_memory_emptied')) >= 0,
       'no gain without earlier slots')
 filter_gain = gap('no', 'baseline_lmmse_kbest', 'filter_kbest')
 over_wiener, wiener_gain = gap('no', 'wiener_kbest', 'filter_kbest'), gap('no', 'baseline_lmmse_kbest', 'wiener_kbest')
-claim('they reduce its required SNR in all three conditions (Table~\\ref{tab:required})', min(filter_gain) > 0, 'filter with K-Best')
+claim('they reduce its required SNR in all three conditions without power control (Table~\\ref{tab:required})', min(filter_gain) > 0, 'filter with K-Best')
 claim('performs close to the channel filter for UMi and scheduling gaps but falls clearly behind it for channel change, even behind LMMSE + K-Best',
       max(over_wiener[0], over_wiener[2]) < .1 and over_wiener[1] > .5 and wiener_gain[1] < -.3, 'classical multi-slot estimator')
 pc_gain, pc_over = gap('pc', 'baseline_lmmse_kbest', 'filter_kbest'), gap('pc', 'wiener_kbest', 'filter_kbest')
@@ -317,7 +317,9 @@ claim('a fallback that a real-time BS could run, LS + LMMSE or a stateless NRX w
       max(rescued) < .01, 'real-time fallbacks')
 claim('and LMMSE + K-Best and the Large NRX with $N_{\\mathrm{it}}=8$ rescue only a few',
       max(pooled_rescued[s, b] for s in ('no', 'pc') for b in ('baseline_lmmse_kbest', 'frozen_cold_k8')) < .1, 'slow fallbacks')
-claim('Most failed TBs follow an error of the same UE', min(pooled_repeated.values()) > .5, 'errors after errors')
+claim('Most failed TBs belong to a UE whose previous TB also failed', min(pooled_repeated.values()) > .5, 'errors after errors')
+claim('raising the transmit power, as power control does (Table~\\ref{tab:required}), helps more than switching to another receiver',
+      min(required['no'][c]['pilot_memory']-required['pc'][c]['pilot_memory'] for c in CORE) > max(fallback.values()), 'power before fallback')
 # when the channel filter falls back from its memory (experiments/20261122_robustness/fallback_k.py)
 probe = json.load(open('experiments/20261122_robustness/results/fallback_k_summary.json'))
 change, jump = probe['power_control'], probe['power_control_phase']
@@ -344,7 +346,7 @@ claim('Without the memory state, it still catches almost all errors of the propo
 claim('As that NRX fails more often at the same SNR', stateless['failures_per_100']/ours['failures_per_100'] > 1.5, 'twice as many failures')
 claim('many more errors remain for retransmission after the CRC fails than with the proposed NRX',
       stateless['late_per_100']/ours['late_per_100'] > 3, 'late retransmissions')
-claim('leaving far fewer for after the CRC fails than with a stateless NRX',
+claim('which leaves far fewer for after the CRC fails than with a stateless NRX',
       stateless['late_per_100']/ours['late_per_100'] > 3, 'six times fewer late')
 claim(f'request {round(100*step["caught"])}\\% of the needed retransmissions before decoding finishes, against '
       f'{round(100*controller["rule"]["caught"])}\\% for the CRC history alone at the same false-alarm rate',
@@ -373,11 +375,12 @@ claim('and the proposed NRX still clearly outperforms the retrained Large NRX',
 section = 'network'                                          # simulated HARQ
 harq = json.load(open(f'{ROB}/harq_summary.json'))
 conditions = [harq[c] for c in ('natural_umi', 'controlled_topology_change', 'schedule_gap_reentry')]
-claim('Simulating the retransmissions with Chase combining',
+claim('We also simulate the retransmissions, which the BS combines with the failed TB by Chase combining',
       harq['all']['decision_mismatches'] == 0 and all(c['compared'] > 100 for c in conditions), 'HARQ: decisions reproduced')
-claim('early requests let the BS decode a failed TB one slot earlier in median',
+claim('With early requests, it decodes a failed TB one slot earlier in median than with requests after the CRC fails',
       harq['all']['median_slots_saved'] == 1 and all(c['median_slots_saved'] == 1 for c in conditions), 'HARQ: one slot')
-claim('at the cost of a few unneeded transmissions', harq['all']['early_extra_transmissions_per_100_tbs'] <= 3, 'HARQ: extra transmissions')
+claim('The cost is a few unneeded transmissions for the correct TBs that the controller flags',
+      harq['all']['early_extra_transmissions_per_100_tbs'] <= 3, 'HARQ: extra transmissions')
 section = None
 expect('Future work includes measured data.', 'future work')
 
@@ -415,7 +418,7 @@ claim('with 64-QAM, it performs close to it with power control',
 claim('but falls behind it after scheduling gaps without power control',
       round(behind['nrx_large_64qam', 'sweep', 'schedule_gap_reentry'], 1) == .7
       and max(behind, key=behind.get) == ('nrx_large_64qam', 'sweep', 'schedule_gap_reentry'), 'modulations: 64-QAM after gaps')
-for phrase in ('MU-MIMO with QPSK, 16-QAM, and 64-QAM over sequences', 'an evaluation with QPSK, 16-QAM, and 64-QAM in which'):
+for phrase in ('MU-MIMO with QPSK, 16-QAM, and 64-QAM over sequences', 'In our evaluation with QPSK, 16-QAM, and 64-QAM,'):
     expect(phrase, 'modulations: introduction and conclusion')
 
 # --------------------------------------------------------------------------------------------- IEEE version
