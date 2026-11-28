@@ -103,10 +103,6 @@ class PretrainedBenchmarkTest(unittest.TestCase):
         bits, crc = CRCDecoder(encoder)(coded)
         hard, status = bits.numpy().astype(bool),crc.numpy().reshape(2).astype(bool)
         np.testing.assert_array_equal(status,[True,False])
-        from neural_rx.benchmark.smoke import _crc_diagnostics
-        self.assertEqual(_crc_diagnostics(dict(hard_bits=hard,crc_status=status),
-            np.zeros_like(hard),np.ones(2,bool)),
-            dict(undetected_payload_errors=1,crc_failures_with_correct_payload=1))
         class Adapter(ZeroAdapter):
             def decode_tb(self,inputs):
                 return dict(hard_bits=hard.copy(),crc_status=status.copy(),logits=np.zeros_like(hard,np.float32))

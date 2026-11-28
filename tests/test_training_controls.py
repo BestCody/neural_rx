@@ -1,4 +1,3 @@
-import copy
 import hashlib
 import json
 import os
@@ -10,9 +9,7 @@ import unittest
 from unittest import mock
 
 from neural_rx.receiver.training_options import requested_updates
-from neural_rx.cli.campaign import continued_registration, evaluation_updates
 from neural_rx.cli.train import main as train_main
-from neural_rx.cli.train_backbone import training_paths
 from neural_rx.receiver.checkpoints import recover_history
 
 
@@ -40,55 +37,6 @@ def publish_checkpoint(directory, step):
 class TrainingControlsTest(unittest.TestCase):
     def setUp(self):
         self.recipe = json.loads((ROOT/"config/memory_training.json").read_text())
-
-    def test_launcher_registers_retained_anchors_and_development_bank(self):
-        import neural_rx.cli.campaign as launcher
-        from neural_rx.benchmark.generalization_protocol import seal_payload
-        from neural_rx.benchmark.candidate import pretrained_checkpoint
-        benchmark = json.loads((ROOT/"config/temporal_benchmark_v1.json").read_text())
-        with tempfile.TemporaryDirectory() as temporary:
-            directory = Path(temporary)
-            anchors = directory/"anchors.json"
-            write_json(anchors, seal_payload(dict(teacher_sha256=launcher.file_sha256(pretrained_checkpoint()),
-                prbs=benchmark["radio"]["n_size_bwp"], conditions={}), field="manifest_sha256"))
-            dataset = seal_payload(dict(identity=dict(radio=benchmark["radio"])), field="manifest_sha256")
-            write_json(directory/"dataset.json", dataset)
-            arguments = ["pilot", "--steps", "1000", "--output-dir", str(directory/"results"),
-                "--data-gpu", "none", "--replica-gpu", "none", "--anchors", str(anchors),
-                "--development-cache", str(directory), "--dry-run"]
-            with mock.patch.object(sys, "argv", arguments), mock.patch("builtins.print") as printed, \
-                    mock.patch.object(launcher, "recover_latest",
-                                      side_effect=AssertionError("Dry run must not mutate checkpoints")):
-                launcher.main()
-            record = json.loads(printed.call_args.args[0])
-            self.assertEqual(record["checkpoints"], [1000])
-            self.assertEqual(record["calibration_anchors"]["sha256"], launcher.file_sha256(anchors))
-            self.assertEqual(record["development_cache"]["manifest_sha256"], dataset["manifest_sha256"])
-            self.assertFalse((directory/"results").exists())
-            dataset["identity"]["radio"]["n_size_bwp"] += 1
-            write_json(directory/"dataset.json", seal_payload(dataset, field="manifest_sha256"))
-            with mock.patch.object(sys, "argv", arguments), self.assertRaisesRegex(ValueError, "radio configuration"):
-                launcher.main()
-
-    def test_base_training_preserves_pretrained_files_and_existing_outputs(self):
-        source = ROOT/"models/pretrained/nrx_large_weights"
-        before = hashlib.sha256(source.read_bytes()).hexdigest()
-        with tempfile.TemporaryDirectory() as temporary:
-            directory = Path(temporary)
-            initial, destination = training_paths("nrx_large", directory)
-            self.assertEqual(initial, source)
-            self.assertEqual(destination, directory/"nrx_large_weights")
-            for output in (ROOT/"models/pretrained", ROOT/"models/pretrained/subdirectory"):
-                with self.assertRaisesRegex(ValueError, "pretrained weights"):
-                    training_paths("nrx_large", output)
-            alias = directory/"alias"
-            alias.symlink_to(ROOT/"models/pretrained", target_is_directory=True)
-            with self.assertRaisesRegex(ValueError, "pretrained weights"):
-                training_paths("nrx_large", alias)
-            destination.hardlink_to(source)
-            with self.assertRaises(FileExistsError):
-                training_paths("nrx_large", directory)
-        self.assertEqual(hashlib.sha256(source.read_bytes()).hexdigest(), before)
 
     def test_training_log_recovers_only_updates_in_the_checkpoint(self):
         def row(step):
@@ -150,22 +98,6 @@ class TrainingControlsTest(unittest.TestCase):
         for steps in (None, -1, 1.5, "6000", True):
             with self.subTest(steps=steps), self.assertRaises(ValueError):
                 requested_updates(steps)
-
-
-    def test_increasing_duration_preserves_the_run_identity(self):
-        previous = dict(recipe=self.recipe, requested_updates=1701,
-                        checkpoints=evaluation_updates(self.recipe, 1701),
-                        architecture={"memory":"pilot_history_attention"})
-        current = dict(previous, requested_updates=8001,
-                       checkpoints=evaluation_updates(self.recipe, 8001))
-        merged = continued_registration(previous, current)
-        self.assertEqual(merged["requested_updates"], 8001)
-        self.assertIn(1701, merged["checkpoints"])
-        changed = copy.deepcopy(current)
-        changed["recipe"]["seed"] += 1
-        with self.assertRaisesRegex(ValueError, "different registration"):
-            continued_registration(previous, changed)
-
 
 
     def test_direct_cli_continues_and_recovers_after_update_failure(self):

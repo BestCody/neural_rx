@@ -61,7 +61,9 @@ class ChannelFilter:
         match = (valid[:, :, None, 1:] & used[..., None] & (ages[:, :, None, 1:] == wanted[..., None]))
         found = tf.reduce_any(match, -1)
         index = 1+tf.argmax(tf.cast(match, tf.int32), -1, output_type=tf.int32)      # ages of valid entries differ
-        index = tf.concat([tf.fill(tf.shape(index[..., :1]), target), index], -1)
+        # the record itself first; its shape must not come from index, which is empty when no entry is used (K = 0)
+        own = tf.fill(tf.concat([tf.shape(index)[:-1], [1]], 0), target)
+        index = tf.concat([own, index], -1)
         current, usable = ports[:, :, target], valid[:, :, target]
         present = tf.concat([usable[..., None], found & usable[..., None]], -1)
         old, local_valid, delta = layout.neighbors(tf.gather(records, index, axis=2, batch_dims=2),

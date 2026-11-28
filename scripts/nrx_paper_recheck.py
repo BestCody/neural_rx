@@ -183,20 +183,17 @@ for s in required:
     for c in CORE:
         for m in EXTRA:
             required[s][c][m] = round(crossing(*errors(s, c, m)), 2)
-current_only = gap('no', 'pilot_memory_current_tb', 'pilot_memory_emptied')
-claim('The proposed NRX then performs even slightly worse than with its memory emptied', 0 <= min(current_only) and max(current_only) <= .2,
-      'current TB only')
-claim('The gain stems from the earlier slots', min(current_only+gap('pc', 'pilot_memory_current_tb', 'pilot_memory_emptied')) >= 0,
-      'no gain without earlier slots')
+# the filter over the current TB only, with weights fitted on the memory (fixed 2026-11-28: it used to predict nothing)
+from_fit = [required[st][c]['pilot_memory_emptied']-required[st][c]['pilot_memory_current_tb'] for st in ('no', 'pc') for c in CORE]
+from_slots = [required[st][c]['pilot_memory_current_tb']-required[st][c]['pilot_memory'] for st in ('no', 'pc') for c in CORE]
+claim('This filter already yields most of the memory gain (Table~\\ref{tab:required}, current TB only)',
+      all(f > s_ for f, s_ in zip(from_fit, from_slots)), 'current TB only')
+claim('and the estimates of earlier slots add the rest', min(from_slots) > 0, 'earlier slots add the rest')
 filter_gain = gap('no', 'baseline_lmmse_kbest', 'filter_kbest')
 over_wiener, wiener_gain = gap('no', 'wiener_kbest', 'filter_kbest'), gap('no', 'baseline_lmmse_kbest', 'wiener_kbest')
 claim('they reduce its required SNR in all three conditions without power control (Table~\\ref{tab:required})', min(filter_gain) > 0, 'filter with K-Best')
 claim('performs close to the channel filter for UMi and scheduling gaps but falls clearly behind it for channel change, even behind LMMSE + K-Best',
       max(over_wiener[0], over_wiener[2]) < .1 and over_wiener[1] > .5 and wiener_gain[1] < -.3, 'classical multi-slot estimator')
-pc_gain, pc_over = gap('pc', 'baseline_lmmse_kbest', 'filter_kbest'), gap('pc', 'wiener_kbest', 'filter_kbest')
-# Related Work and introduction: what classical multi-slot estimation cannot do, with the measured comparison (the IEEE
-# version words it in its own block; the co-author took it out of the workshop version on 2026-11-27)
-pc_wiener_gain = gap('pc', 'baseline_lmmse_kbest', 'wiener_kbest')
 
 # ------------------------------------------------------------------------- effective SNR and Doppler groups (UMi)
 def effective(cond, method, group=None, edges=np.arange(-10., 30.5, 1.)):
@@ -334,7 +331,6 @@ claim('a decision the classical multi-slot estimator cannot make', wiener_gain[1
       'classical estimator after a change')
 controller = json.load(open(f'{NET}/controller.json'))
 step = controller['step_by_step']['CRC history and receiver evidence, budget of the rule']
-single = controller['single_check']
 claim('already catches most errors in the test sequences', controller['rule']['caught'] > .5, 'rule')
 claim('the controller catches almost all of them', step['caught'] > .95, 'controller')
 claim('and flags as many correct TBs in the test sequences as this rule',
@@ -462,7 +458,6 @@ if all(glob.glob(path) for path in FURTHER.values()) and 'further datasets at a 
                 rates[ds, name, m] = (data[f'errors_{m}'][c, 0, :, 16:] & mask).sum()/mask.sum()
     cases = sorted({k[:2] for k in rates})
     lower = [k for k in cases if rates[k+('candidate_persistent',)] < rates[k+('candidate_reset',)]]
-    same = [k for k in cases if rates[k+('candidate_persistent',)] == rates[k+('candidate_reset',)]]
     behind = [k for k in cases if rates[k+('frozen_cold_k8',)] < rates[k+('candidate_persistent',)]]
     ahead = [k for k in cases if rates[k+('candidate_persistent',)] < rates[k+('frozen_cold_k8',)]]
     claim('The memory lowers TBLER in all cases but one', len(lower) == len(cases)-1, 'further datasets: memory')

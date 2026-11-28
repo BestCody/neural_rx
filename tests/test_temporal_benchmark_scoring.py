@@ -4,7 +4,6 @@ import unittest
 
 import numpy as np
 
-from neural_rx.cli.campaign import selection_key
 from neural_rx.benchmark.frozen import development_report, protocol_and_plan, rates
 from neural_rx.benchmark.plan import calibrate_condition
 from neural_rx.benchmark.scoring import (
@@ -24,7 +23,6 @@ class EnumeratedBootstrap:
 
 class PooledScoringTest(unittest.TestCase):
     def test_payload_and_crc_flags_exclude_inactive_users_and_preserve_batches(self):
-        from neural_rx.benchmark.smoke import _crc_diagnostics
         truth = np.zeros((4, 2, 3), np.int8)
         hard = truth.copy()
         hard[[1, 3], :, 1] = 1
@@ -36,8 +34,6 @@ class PooledScoringTest(unittest.TestCase):
             errors, disagreement = payload_error_flags(hard[index], crc[index], truth[index], active[index])
             np.testing.assert_array_equal(errors, expected_errors[index])
             np.testing.assert_array_equal(disagreement, expected_disagreement[index])
-        self.assertEqual(_crc_diagnostics(dict(hard_bits=hard, crc_status=crc), truth, active),
-                         dict(undetected_payload_errors=1, crc_failures_with_correct_payload=1))
 
     def test_payload_flags_reject_shapes_that_would_broadcast_across_users(self):
         hard = np.zeros((2, 3), bool)
@@ -70,17 +66,13 @@ class PooledScoringTest(unittest.TestCase):
             "core_conditions": ["schedule"],
         }
 
-    def test_report_selection_and_comparison_agree_with_unequal_episode_sizes(self):
+    def test_report_and_comparison_agree_with_unequal_episode_sizes(self):
         reported = rates(self.arrays, ["a", "b"], 1)
         summaries = {m: method_summary([self.arrays], m, self.protocol, "development")
                      for m in ("a", "b")}
         for method, expected in (("a", 3/13), ("b", 2/13)):
             self.assertAlmostEqual(reported[method][0][0], expected)
             self.assertAlmostEqual(summaries[method]["core_tbler"], expected)
-        def result(m):
-            return dict(summary={"candidate_persistent": summaries[m]},
-                        manifests={"candidate": {"training": {"additional_updates": 1}}})
-        self.assertLess(selection_key(result("b")), selection_key(result("a")))
         paired = paired_summary([self.arrays], "a", "b", self.protocol,
                                 "development", 4, EnumeratedBootstrap())
         self.assertAlmostEqual(paired["difference"], 1/13)

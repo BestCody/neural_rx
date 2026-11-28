@@ -7,7 +7,7 @@ import unittest
 
 from neural_rx.provenance.sources import (
     TRAINING_SCHEMA, evaluation_source_records, source_records, training_source_records,
-    validate_evaluation_sources, validate_training_binding,
+    validate_training_binding,
 )
 
 
@@ -74,10 +74,6 @@ class ArtifactProvenanceTest(unittest.TestCase):
                     "src/neural_rx/receiver/native_ops/memory_append.cc",
                     "src/neural_rx/receiver/native_ops/memory_append.cu.cc", "config/nrx_large.cfg"}
         self.assertTrue(required.issubset(sources))
-        for name in required:
-            incomplete = {k: v for k, v in sources.items() if k != name}
-            with self.subTest(name=name), self.assertRaisesRegex(ValueError, "source changed"):
-                validate_evaluation_sources(incomplete)
         training = training_source_records("nrx_large.cfg")
         self.assertTrue({name for name in required if '/native_ops/' in name}.issubset(training))
         self.assertTrue({"config/nrx_large.cfg", "src/neural_rx/backbone/channel_models.py",

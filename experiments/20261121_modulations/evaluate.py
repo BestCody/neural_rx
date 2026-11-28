@@ -66,7 +66,7 @@ def main():
 
     import numpy as np
     import tensorflow as tf
-    from neural_rx.backbone import E2E_Model, Parameters
+    from neural_rx.backbone import E2E_Model
     from neural_rx.backbone.training import load_weights
     from neural_rx.benchmark import tbler_sweep as sweep
     from neural_rx.benchmark.runtime import validate_episode

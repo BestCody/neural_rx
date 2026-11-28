@@ -69,12 +69,6 @@ def evaluation_source_records(root=ROOT, config_name="nrx_large.cfg"):
                            "config/temporal_benchmark_v2.json"), root)
 
 
-def validate_evaluation_sources(records, root=ROOT):
-    configs = [name for name in records if name.startswith("config/") and name.endswith(".cfg")]
-    if len(configs) != 1 or records != evaluation_source_records(root, Path(configs[0]).name):
-        raise ValueError("Evaluation source changed; rerun the evaluation")
-
-
 def training_source_records(radio_config, root=ROOT):
     return source_records(("src/neural_rx/cli/train.py",
                            f"config/{Path(radio_config).name}"), root)

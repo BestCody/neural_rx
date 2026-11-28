@@ -5,7 +5,6 @@ from typing import NamedTuple
 import tensorflow as tf
 
 from neural_rx.receiver.pilot_history import PilotHistory
-from neural_rx.backbone.core import prepare_cgnn_inputs
 
 
 class ReferenceState(NamedTuple):
@@ -45,17 +44,3 @@ class ReferenceMemoryManager:
             for table, new, previous in zip(state, values, old, strict=True)))
 
 
-def make_decode_step(receiver, model, memory_manager, decoder):
-    from neural_rx.decoding import OneLayerGridCodeMap
-    mapping = OneLayerGridCodeMap(receiver._neural_rx, receiver._tb_encoders[0].num_tx,
-                                 model.base._num_bits_per_symbol[0])
-    @tf.function(reduce_retracing=True)
-    def decode(y, channel, noise, active, ue_ids, slot, state):
-        history = memory_manager.gather(state, ue_ids, slot, active)
-        inputs = prepare_cgnn_inputs(receiver, y, channel, active)
-        observation = model.observe(channel, noise)
-        grid, _ = model.detect(inputs, noise, history, observation)
-        output = decoder(mapping.grid_to_coded(grid))
-        state = memory_manager.scatter(state, ue_ids, observation, active, slot)
-        return output.hard_bits, output.crc_status, state
-    return decode

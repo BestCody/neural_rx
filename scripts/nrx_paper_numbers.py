@@ -51,47 +51,6 @@ def required_snr():
     return table, gains, blocks
 
 
-def effective_snr(width=1.):
-    """Required effective SNR (SNR + effective channel power of the UE in dB) at TBLER=10% per condition and receiver
-    without power control, pooled over all sequences in bins of `width` dB. Channel power comes from the stored sweep;
-    every receiver decoded the same sequences."""
-    from neural_rx.benchmark.plan import decreasing_isotonic, snr_at_target
-    edges = np.arange(-10., 30.+width/2, width)
-    centers = edges[:-1]+width/2
-    sources = {m: SWEEP for m in ("frozen_cold_k2", "frozen_cold_k3", "frozen_cold_k8", "baseline_lslin_lmmse",
-                                  "baseline_lmmse_kbest", "baseline_perf_csi_kbest")}
-    sources.update({m: TRAINED for m in ("pilot_memory", "pilot_memory_emptied", "neural_rx_k2_trained")})
-    result = {}
-    for condition in CORE:
-        result[condition] = {}
-        for method, base in sources.items():
-            failures, blocks = np.zeros(len(centers)), np.zeros(len(centers))
-            for directory, first in (("sweep", 0), ("sweep_high", 1)):       # +3 dB appears in both sweeps
-                for path in sorted((SWEEP/directory/condition/"candidate_persistent").glob("episode_*.npz")):
-                    with np.load(path) as reference, np.load(base/directory/condition/method/path.name) as data:
-                        if not np.array_equal(reference["fingerprint"], data["fingerprint"]):
-                            raise ValueError(f"{method}/{path.name}: decoded on a different sequence")
-                        active = reference["active"][START:].astype(bool)
-                        power = 10*np.log10(reference["channel_power"][START:])
-                        for point in range(first, len(data["snr_db"])):
-                            index = np.floor((data["snr_db"][point]+power-edges[0])/width).astype(int)
-                            valid = (index >= 0) & (index < len(centers)) & active
-                            np.add.at(failures, index[valid], data["errors"][point, START:][valid].astype(float))
-                            np.add.at(blocks, index[valid], 1)
-            rates = failures/np.maximum(blocks, 1)
-            fitted = decreasing_isotonic(rates, np.maximum(blocks, 1))
-            result[condition][method] = {
-                "required_db": float(snr_at_target(centers, fitted, .1)),
-                "drop_80_to_5_db": float(snr_at_target(centers, fitted, .05)-snr_at_target(centers, fitted, .8))}
-    for condition, rows in result.items():
-        value = lambda m: rows[m]["required_db"]
-        rows["gains"] = {"lead_over_retrained_db": value("neural_rx_k2_trained")-value("pilot_memory"),
-                         "memory_gain_db": value("pilot_memory_emptied")-value("pilot_memory"),
-                         "behind_eight_iterations_db": value("pilot_memory")-value("frozen_cold_k8"),
-                         "lead_over_three_iterations_db": value("frozen_cold_k3")-value("pilot_memory")}
-    return result
-
-
 def doppler():
     required = json.loads((TRAINED/"doppler.json").read_text())["required_effective_snr_db"]
     groups = ("0-50", "50-175", "175-400")
@@ -227,9 +186,9 @@ def collect():
     settings = json.loads((ROOT/"config/memory_receiver.json").read_text())["architecture"]
     cells, antennas, neighbors = 132*3, 4, 2*(2*settings["neighbor_radius"]+1)     # per DMRS symbol at 132 PRBs
     entries = settings["history_tbs"]-settings["fit_tbs"]
-    return {"required_snr_db": table, "gains": gains, "blocks": blocks, "effective_snr": effective_snr(),
-            "doppler": doppler(), "latency": latency(), "training": training(), "network": network(),
-            "further_datasets": further(), "classical": classical(), "phase_jumps": phase_jumps(),
+    return {"required_snr_db": table, "gains": gains, "blocks": blocks, "doppler": doppler(), "latency": latency(),
+            "training": training(), "network": network(), "further_datasets": further(), "classical": classical(),
+            "phase_jumps": phase_jumps(),
             "weights": {"large_nrx_two_iterations": export["large_k2"], "large_nrx_three_iterations": export["large_k3"],
                         "large_nrx_eight_iterations": export["large_k8"], "proposed": export["large_k2"]},
             # as the text states them, in units of 1e5
@@ -261,6 +220,7 @@ def check(tex, numbers, allowed):
     section = (text[text.index(r"\begin{abstract}"):text.index(r"\section{Related Work}")]
                + text[text.index(r"\section{Receiver Design}"):text.index(r"\bibliography{references}")])
     section = re.sub(r"(?m)%.*$", "", section)
+    section = re.sub(r"\\setlength\{[^}]*\}\{[^}]*\}", "", section)     # layout lengths such as the tables' tabcolsep
     values = list(flatten(numbers))
     values += [100*v for v in values]+[abs(v) for v in values]
     unknown = []

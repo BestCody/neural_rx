@@ -85,11 +85,6 @@ class PilotHistoryBenchmarkAdapter(_ArtifactGuard):
         self.start_episode()
 
     @property
-    def _state(self):
-        with self._lock:
-            return self._buffer.snapshot(self._committed.head, self._committed.count)
-
-    @property
     def _step(self):
         return self._committed.step
 

@@ -230,6 +230,30 @@ class ChannelFilterTest(unittest.TestCase):
         self.assertLess(error(one), .7*ls)
 
 
+    def test_memory_of_only_the_fitted_tbs_predicts_from_the_current_tb(self):
+        """With as many stored TBs as the fit uses, no entry is left for the prediction (K = 0): the filter must still
+        predict each pilot from its neighbours in the current TB, with weights fitted on the stored TBs. (It used to
+        drop the current TB's own record as well, i.e., predict nothing.)"""
+        rng = np.random.RandomState(11)
+        model = build_model(8)
+        layout = next(iter(model.layouts.values()))
+        variance, shape = .2, (2, 1, 4)
+        channel = (rng.normal(size=shape)+1j*rng.normal(size=shape))/np.sqrt(2)*np.ones([1, layout.count, 1])
+        observation, active = records(channel, variance, rng), tf.ones([1, 2])
+        truth = np.broadcast_to(channel[:, :1, None], (2, layout.frequency, layout.symbols, 4))
+        fit = model.channel_filter.fit_tbs
+        history = history_of(model, [records(channel, variance, rng) for _ in range(fit)])
+        valid = tf.concat([tf.ones([1, 2, 1], tf.bool), history.valid], 2)
+        stacked = tf.concat([observation[:, :, None], history.observations], 2)
+        ports = tf.concat([tf.broadcast_to(tf.range(2)[None, :, None], [1, 2, 1]), history.ports], 2)
+        ages = tf.concat([tf.zeros([1, 2, 1], history.age.dtype), history.age], 2)
+        x, *_ = model.channel_filter.design(stacked, ports, ages, valid, 0, ages[:, :, 1:1], valid[:, :, 1:1], layout)
+        self.assertGreater(x.shape[-1], 0)
+        estimate = layout.expand_channel(model.channel_filter(observation, history, active, layout))[0]
+        ls = layout.expand_channel(model.channel_filter(observation, model.empty_history(observation), active, layout))[0]
+        error = lambda value: float(np.mean(np.abs(value-truth)**2))
+        self.assertLess(error(estimate), .7*error(ls))
+
     def test_weights_are_fitted_for_the_ages_of_the_entries_after_a_pause(self):
         rng = np.random.RandomState(5)
         model = build_model(8)

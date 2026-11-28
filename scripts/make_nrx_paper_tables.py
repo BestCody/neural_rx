@@ -129,7 +129,7 @@ def further_table():
     lines = ["\\begin{tabular}{@{}l@{\\hspace{4pt}}rrr@{\\hspace{8pt}}rrr@{}}", "\\toprule",
              " & \\multicolumn{3}{c}{Dataset 1} & \\multicolumn{3}{c}{Dataset 2} \\\\",
              "\\cmidrule(lr){2-4}\\cmidrule(l){5-7}", f"Condition & {sub} & {sub} \\\\", "\\midrule"]
-    for index, name in enumerate(order):
+    for name in order:
         values = []
         for dataset in ("v2", "seed86"):
             r = report[dataset].get(name)

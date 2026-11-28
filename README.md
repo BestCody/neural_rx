@@ -125,11 +125,11 @@ src/neural_rx/
     training*.py             Training (both stages), fresh data, batching, and workers.
     checkpoints.py           Atomic checkpoint recovery.
   decoding.py              Shared Sionna decoder and bit mapping (memory and Cold receivers).
-  benchmark/               Shared accuracy/latency evaluation, protocol, scoring, smoke test.
+  benchmark/               Shared accuracy/latency evaluation, protocol, and scoring.
   data/                    Statistical (temporal.py) and shared-geometry (geometry.py) generators.
   rt/                      Ray-traced channel export (export.py) and benchmark integration.
   provenance/              Artifact hashing, atomic writes, and source-closure records.
-  verification/            Independent reference calculations used by checks.
+  verification/            Independent reference calculations used by the tests.
   cli/                     Entry points behind the nrx-* commands.
   paths.py                 Repository root for configs, models, and datasets.
 tests/                     Correctness tests and shared fixtures.
@@ -150,15 +150,8 @@ Run from the repository root, in the `neural_rx` environment:
 
 ```bash
 nrx-benchmark --help        # shared accuracy/latency benchmark
-nrx-campaign --help         # training campaign with development evaluation and selection
-nrx-train --help            # joint training loop only
-nrx-smoke --help            # quick adapter smoke test
+nrx-train --help            # training loop (both stages)
 ```
-
-`nrx-campaign` runs training with periodic development evaluation,
-checkpoint selection, final confirmation, and a latency comparison.
-`nrx-train` provides the training loop without that orchestration.
-`nrx-train-backbone` retains the original backbone trainer.
 
 To evaluate the selected model with the shared benchmark, pass
 

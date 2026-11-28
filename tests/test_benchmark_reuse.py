@@ -28,8 +28,6 @@ class BenchmarkEntrypointTest(unittest.TestCase):
             cases = (
                 ("neural_rx.cli.benchmark", ["--experiment-phase", "latency", "--experiment-prbs", "4",
                  "--output-dir", str(Path(temporary) / "unused")], "Full experiments require"),
-                ("neural_rx.benchmark.smoke", ["--prbs", "0", "--candidate-checkpoint",
-                 str(ROOT / "models/unused_checkpoint")], "Invalid smoke-test PRB count"),
             )
             for cwd in (ROOT, Path(temporary)):
                 for name, arguments, message in cases:

@@ -14,8 +14,6 @@ for a retransmission after the CRC fails (late), plus unneeded requests. Writes 
 import json
 from pathlib import Path
 
-import numpy as np
-
 from controller import ANY_RECEIVER, FIT, HISTORY, TEST, load, operating_points, step_by_step
 
 HERE = Path(__file__).resolve().parent

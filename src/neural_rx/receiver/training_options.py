@@ -134,12 +134,3 @@ def resolve_preparation(args, effective_examples):
         raise ValueError("Each channel worker requires at least one channel slot")
 
 
-def preparation_arguments(args):
-    return ["--render-batch-tbs", str(args.render_batch_tbs),
-            "--data-gpu", "none" if args.data_gpu is None else str(args.data_gpu),
-            "--prefetch-examples", str(args.prefetch_examples),
-            "--channel-workers", str(args.channel_workers),
-            "--prefetch-memory-mib", str(args.prefetch_memory_mib),
-            "--replica-gpu", "none" if args.replica_gpu is None else str(args.replica_gpu),
-            "--replica-memory-mib", str(args.replica_memory_mib),
-            "--preparation-gpu-memory-mib", str(args.preparation_gpu_memory_mib)]

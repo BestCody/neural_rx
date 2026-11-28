@@ -12,7 +12,7 @@ from neural_rx.benchmark.protocol import load_benchmark_protocol, resolved_condi
 from neural_rx.benchmark.arrays import DECODED_LATENCY_DEFINITION
 from neural_rx.benchmark.scoring import crc_diagnostics, pooled_tbler, TBLER_DEFINITION
 from neural_rx.benchmark.generalization_protocol import seal_payload, verify_payload
-from neural_rx.provenance.sources import evaluation_source_records, validate_evaluation_sources
+from neural_rx.provenance.sources import evaluation_source_records
 from neural_rx.provenance.artifacts import atomic_json, file_sha256, validate_checkpoint_files
 
 from neural_rx.paths import ROOT
@@ -158,29 +158,6 @@ def make_manifest(protocol, role, checkpoint=None):
         field="manifest_sha256")
     validate_manifest(manifest, protocol)
     return manifest, {r["sha256"]: str(p) for r,p in zip(records,paths, strict=True)}, seed
-
-
-def verified_result(directory):
-    directory = Path(directory)
-    result = json.loads((directory/"results.json").read_text())
-    verify_payload(result, field="result_sha256")
-    protocol = json.loads((directory/"protocol.json").read_text())
-    verify_payload(protocol, field="protocol_sha256")
-    if result["protocol_sha256"] != protocol["protocol_sha256"]:
-        raise ValueError("Result protocol differs")
-    validate_evaluation_sources(protocol["runtime_sources"])
-    raw = "samples.npz" if result["phase"] == "latency" else "errors.npz"
-    if file_sha256(directory/raw) != result["raw_sha256"]:
-        raise ValueError("Result samples changed")
-    for name, expected in result.get("calibration_extension_sha256", {}).items():
-        if file_sha256(directory/name) != expected:
-            raise ValueError("Calibration extension samples changed")
-    for role, manifest in result["manifests"].items():
-        validate_manifest(manifest, protocol)
-        current, _, _ = make_manifest(protocol, role, result.get("checkpoint"))
-        if manifest != current:
-            raise ValueError("Evaluated receiver artifacts or settings changed; rerun the evaluation")
-    return result
 
 
 def make_benchmark_adapter(*, manifest, artifact_map, **kwargs):

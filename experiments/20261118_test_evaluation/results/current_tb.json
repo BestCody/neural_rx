@@ -3,64 +3,64 @@
   "natural_umi": {
    "required_snr_db": {
     "pilot_memory_emptied": 7.750637760349671,
-    "pilot_memory_current_tb": 7.943740694047325,
+    "pilot_memory_current_tb": 7.193948537703395,
     "pilot_memory": 7.047438632763773
    },
    "memory_gain_db": 0.703199127585898,
-   "gain_from_current_tb_only_db": -0.19310293369765485,
-   "gain_from_earlier_slots_db": 0.8963020612835528
+   "gain_from_current_tb_only_db": 0.5566892226462752,
+   "gain_from_earlier_slots_db": 0.1465099049396228
   },
   "controlled_topology_change": {
    "required_snr_db": {
     "pilot_memory_emptied": 7.715088937758486,
-    "pilot_memory_current_tb": 7.843908221935095,
+    "pilot_memory_current_tb": 7.112852910632355,
     "pilot_memory": 7.018160902523352
    },
    "memory_gain_db": 0.6969280352351337,
-   "gain_from_current_tb_only_db": -0.12881928417660937,
-   "gain_from_earlier_slots_db": 0.8257473194117431
+   "gain_from_current_tb_only_db": 0.6022360271261311,
+   "gain_from_earlier_slots_db": 0.09469200810900258
   },
   "schedule_gap_reentry": {
    "required_snr_db": {
     "pilot_memory_emptied": 8.89975085712011,
-    "pilot_memory_current_tb": 8.915201041719417,
+    "pilot_memory_current_tb": 8.337105978413584,
     "pilot_memory": 8.12396797825663
    },
    "memory_gain_db": 0.7757828788634793,
-   "gain_from_current_tb_only_db": -0.015450184599307804,
-   "gain_from_earlier_slots_db": 0.7912330634627871
+   "gain_from_current_tb_only_db": 0.562644878706525,
+   "gain_from_earlier_slots_db": 0.21313800015695428
   }
  },
  "power_control": {
   "natural_umi": {
    "required_snr_db": {
     "pilot_memory_emptied": 2.542230032761659,
-    "pilot_memory_current_tb": 2.6300370393888786,
+    "pilot_memory_current_tb": 1.9652233263000354,
     "pilot_memory": 1.7361755493204074
    },
    "memory_gain_db": 0.8060544834412517,
-   "gain_from_current_tb_only_db": -0.08780700662721941,
-   "gain_from_earlier_slots_db": 0.8938614900684712
+   "gain_from_current_tb_only_db": 0.5770067064616238,
+   "gain_from_earlier_slots_db": 0.22904777697962797
   },
   "controlled_topology_change": {
    "required_snr_db": {
     "pilot_memory_emptied": 2.896918672965402,
-    "pilot_memory_current_tb": 2.9993240642192176,
+    "pilot_memory_current_tb": 2.3215812441775485,
     "pilot_memory": 2.163116178927329
    },
    "memory_gain_db": 0.733802494038073,
-   "gain_from_current_tb_only_db": -0.10240539125381565,
-   "gain_from_earlier_slots_db": 0.8362078852918886
+   "gain_from_current_tb_only_db": 0.5753374287878534,
+   "gain_from_earlier_slots_db": 0.15846506525021953
   },
   "schedule_gap_reentry": {
    "required_snr_db": {
     "pilot_memory_emptied": 3.1077497414944912,
-    "pilot_memory_current_tb": 3.188708037706529,
+    "pilot_memory_current_tb": 2.541883360298011,
     "pilot_memory": 2.479894853591706
    },
    "memory_gain_db": 0.6278548879027852,
-   "gain_from_current_tb_only_db": -0.08095829621203787,
-   "gain_from_earlier_slots_db": 0.7088131841148231
+   "gain_from_current_tb_only_db": 0.5658663811964804,
+   "gain_from_earlier_slots_db": 0.06198850670630485
   }
  }
 }

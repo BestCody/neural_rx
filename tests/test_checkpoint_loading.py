@@ -12,12 +12,9 @@ import tensorflow as tf
 
 from neural_rx.receiver import training
 from neural_rx.receiver.checkpoints import recover_latest
-import neural_rx.benchmark.smoke as smoke
 import neural_rx.benchmark.adapters as adapters
 from neural_rx.benchmark.candidate import artifact_record, resolve_manifest_artifacts
-from neural_rx.benchmark.frozen import load_receiver_checkpoint_export, make_manifest, protocol_and_plan
-from neural_rx.benchmark.generalization_protocol import seal_payload
-from neural_rx.cli.campaign import verified_result
+from neural_rx.benchmark.frozen import load_receiver_checkpoint_export
 import neural_rx.backbone.core as core
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -121,31 +118,6 @@ class CheckpointLoadingTest(unittest.TestCase):
         (self.directory / "manifest.json").write_text(json.dumps(
             {"binding": {"sources": {}, "architecture": architecture, "seed": 0}, "update": 7, "files": files}))
 
-    def test_smoke_uses_the_exported_memory_architecture_for_both_path_forms(self):
-        weights = self.export(8)
-
-        class InspectedManifest(Exception):
-            pass
-
-        def inspect(protocol, role, checkpoint):
-            manifest, artifacts, seed = make_manifest(protocol, role, checkpoint)
-            self.assertEqual(Path(artifacts[manifest["checkpoints"][0]["sha256"]]), weights)
-            self.assertEqual(seed, manifest["checkpoints"][0]["training_seed"])
-            settings = self.directory / "cnn_autoencoder_finalist.json"
-            for path in (settings, self.directory / "manifest.json"):
-                self.assertIn(artifact_record(path), manifest["support_artifacts"])
-            self.assertEqual(json.loads(settings.read_text())["architecture"]["fit_tbs"], 8)
-            raise InspectedManifest
-
-        for path in (self.directory, weights):
-            with self.subTest(path=path), mock.patch("neural_rx.benchmark.frozen.make_manifest", side_effect=inspect), \
-                    mock.patch.object(tf.config, "list_physical_devices", return_value=[]), \
-                    mock.patch("sys.argv", ["smoke",
-                                           "--candidate-checkpoint", str(path), "--prbs", "4"]), \
-                    mock.patch.dict("os.environ", {}, clear=False):
-                with self.assertRaises(InspectedManifest):
-                    smoke.main()
-
     def test_export_rejects_configuration_missing_changed_or_bound_to_other_features(self):
         weights = self.export(8)
         settings_path = self.directory / "cnn_autoencoder_finalist.json"
@@ -160,56 +132,6 @@ class CheckpointLoadingTest(unittest.TestCase):
         settings_path.unlink()
         with self.assertRaises(FileNotFoundError):
             load_receiver_checkpoint_export(weights)
-
-    def test_result_reuse_checks_evaluated_configuration_even_after_export_is_resealed(self):
-        weights = self.export(8)
-        protocol, _ = protocol_and_plan("smoke", 4)
-        report = self.directory / "report"
-        report.mkdir()
-        np.savez(report / "errors.npz", errors=np.zeros(2, bool))
-        (report / "protocol.json").write_text(json.dumps(protocol))
-        manifests = {role: make_manifest(protocol, role, weights)[0]
-                     for role in ("candidate", "frozen_cold_k8")}
-        result = dict(phase="smoke", protocol_sha256=protocol["protocol_sha256"], manifests=manifests,
-                      raw_sha256=core.file_sha256(report / "errors.npz"))
-
-        def publish(checkpoint):
-            (report / "results.json").write_text(json.dumps(seal_payload(
-                dict(result, checkpoint=str(checkpoint)), field="result_sha256")))
-
-        for checkpoint in (self.directory, weights):
-            publish(checkpoint)
-            self.assertEqual(verified_result(report)["manifests"], manifests)
-        original_settings = (self.directory / "cnn_autoencoder_finalist.json").read_bytes()
-        original_manifest = (self.directory / "manifest.json").read_bytes()
-        original_weights = weights.read_bytes()
-        for changed in ("expiry", "capacity", "weights", "manifest", "missing_config_record"):
-            with self.subTest(changed=changed):
-                (self.directory / "cnn_autoencoder_finalist.json").write_bytes(original_settings)
-                (self.directory / "manifest.json").write_bytes(original_manifest)
-                weights.write_bytes(original_weights)
-                publish(self.directory)
-                if changed in ("expiry", "capacity"):
-                    settings = json.loads(original_settings)
-                    settings["benchmark_memory"]["expiry_tbs" if changed == "expiry" else "capacity"] += 1
-                    (self.directory / "cnn_autoencoder_finalist.json").write_text(json.dumps(settings))
-                    self.seal_export(8)
-                elif changed == "weights":
-                    weights.write_bytes(b"replacement weights")
-                    self.seal_export(8)
-                elif changed == "manifest":
-                    saved = json.loads(original_manifest)
-                    saved["update"] += 1
-                    (self.directory / "manifest.json").write_text(json.dumps(saved))
-                else:
-                    saved_result = json.loads((report / "results.json").read_text())
-                    candidate = saved_result["manifests"]["candidate"]
-                    candidate["support_artifacts"] = [r for r in candidate["support_artifacts"]
-                                                      if r["name"] != "cnn_autoencoder_finalist.json"]
-                    saved_result["manifests"]["candidate"] = seal_payload(candidate, field="manifest_sha256")
-                    (report / "results.json").write_text(json.dumps(seal_payload(saved_result, field="result_sha256")))
-                with self.assertRaisesRegex(ValueError, "artifacts or settings changed"):
-                    verified_result(report)
 
     def test_initializer_loads_configured_weights_in_both_supported_formats(self):
         expected = np.array([[7.]], np.float32)

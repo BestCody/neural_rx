@@ -41,7 +41,7 @@ The proposed NRX outperforms LS + LMMSE in all three conditions. LMMSE + K-Best,
 \end{table*}
 
 \subsection{Benefit of the Pilot Memory}
-Comparing the proposed NRX with its no-memory version isolates the memory, which significantly reduces the required SNR in all three conditions. Without its memory, the proposed NRX performs at most slightly worse than the retrained Large NRX, as its weights are trained for the refined estimates. The gain stems from the earlier slots. To show this, we let the channel filter predict every pilot from the current TB only, with its weights still fitted on the memory. The proposed NRX then performs even slightly worse than with its memory emptied, i.e., than with the LS estimate of the nearest pilot (Table~\ref{tab:required}, current TB only).
+Comparing the proposed NRX with its no-memory version isolates the memory, which significantly reduces the required SNR in all three conditions. Without its memory, the proposed NRX performs at most slightly worse than the retrained Large NRX, as its weights are trained for the refined estimates. The memory contributes in two ways. It provides the data on which the filter weights are fitted, and its entries add the estimates of earlier slots to the prediction. To separate the two, we let the channel filter predict every pilot from the current TB only, with its weights still fitted on the memory. This filter already yields most of the memory gain (Table~\ref{tab:required}, current TB only), and the estimates of earlier slots add the rest.
 
 \begin{figure}[t]
 \centering
@@ -50,7 +50,7 @@ Comparing the proposed NRX with its no-memory version isolates the memory, which
 \label{fig:doppler}
 \end{figure}
 
-The gain of the memory grows with the Doppler shift, as Fig.~\ref{fig:doppler} shows for UMi in the effective SNR, i.e., the SNR plus the mean power of the UE's effective channel over its TB in dB. On slow channels, the entries mainly average the noise of the LS estimates. On fast channels, the newest entry, from the previous slot, adds estimates before the first DMRS symbol of the current slot, where the current pilots only allow extrapolation.
+The gain of the memory grows with the Doppler shift, as Fig.~\ref{fig:doppler} shows for UMi in the effective SNR, i.e., the SNR plus the mean power of the UE's effective channel over its TB in dB. Without its memory, the NRX holds the LS estimate of the nearest pilot, which misses the channel's variation over the slot on fast channels. The fitted weights and the first-order model between the pilots follow this variation, as the fit adapts to each UE's Doppler shift.
 
 Table~\ref{tab:further} shows the TBLER on two further datasets at a fixed SNR per channel condition, which add TDL and UMa channels, closely spaced line-of-sight (LOS) UEs, near-far UEs, and, on the first dataset, channels ray-traced with Sionna RT~\cite{hoydis2023} in the Munich scene of Wiesmayr et al.~\cite{wiesmayr2025realtime}. The memory lowers TBLER in all cases but one. The proposed NRX outperforms the Large NRX with $N_{\mathrm{it}}=8$ for both TDL channels and for the UMa channels on both datasets, which it does not without its memory, whereas the Large NRX with $N_{\mathrm{it}}=8$ remains ahead in most other cases, most clearly for closely spaced LOS and near-far UEs.
 
